@@ -7,32 +7,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXTargetMachine.h"
+#include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "TargetInfo/MMIXTargetInfo.h"
-#include "llvm/MC/MCAsmInfoELF.h"
-#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
-#include <array>
-#include <cstdint>
 
 using namespace llvm;
-
-namespace {
-class MMIXMCAsmInfo : public MCAsmInfoELF {
-public:
-  explicit MMIXMCAsmInfo(const MCTargetOptions &Options)
-      : MCAsmInfoELF(Options) {
-    CodePointerSize = 8;
-    CalleeSaveStackSlotSize = 8;
-    IsLittleEndian = false;
-  }
-};
-} // namespace
-
-#define GET_SUBTARGETINFO_MC_DESC
-#include "MMIXGenSubtargetInfo.inc"
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
   return RM.value_or(Reloc::Static);
@@ -59,9 +40,8 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
   this->CMModel = getEffectiveCodeModel(CM);
   this->OptLevel = OL;
 
-  const StringRef CPUName = CPU.empty() ? "generic" : CPU;
-  AsmInfo = std::make_unique<MMIXMCAsmInfo>(Options.MCOptions);
-  MRI = std::make_unique<MCRegisterInfo>();
-  MII = std::make_unique<MCInstrInfo>();
-  STI.reset(createMMIXMCSubtargetInfoImpl(TT, CPUName, CPUName, FS));
+  MRI.reset(createMMIXMCRegisterInfo(TT));
+  MII.reset(createMMIXMCInstrInfo());
+  STI.reset(createMMIXMCSubtargetInfo(TT, CPU, FS));
+  AsmInfo.reset(T.createMCAsmInfo(*MRI, TT, Options.MCOptions));
 }

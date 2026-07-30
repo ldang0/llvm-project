@@ -8,10 +8,10 @@ add_public_tablegen_target(MMIXCommonTableGen)
 
 add_llvm_target(MMIXCodeGen
   MMIXSubtarget.cpp
-  MMIXTarget.cpp
   MMIXTargetMachine.cpp
 
   LINK_COMPONENTS
+  MMIXDesc
   MMIXInfo
   Support
   Target
@@ -20,4 +20,5 @@ add_llvm_target(MMIXCodeGen
   MMIX
   )
 
+add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

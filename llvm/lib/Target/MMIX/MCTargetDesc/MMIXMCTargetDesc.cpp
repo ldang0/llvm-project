@@ -1,0 +1,44 @@
+//===-- MMIXMCTargetDesc.cpp - MMIX target descriptions -------------------===//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+
+#include "MMIXMCTargetDesc.h"
+#include "MMIXMCAsmInfo.h"
+#include "TargetInfo/MMIXTargetInfo.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/Compiler.h"
+#include <array>
+#include <cstdint>
+
+using namespace llvm;
+
+#define GET_SUBTARGETINFO_MC_DESC
+#include "MMIXGenSubtargetInfo.inc"
+
+MCInstrInfo *llvm::createMMIXMCInstrInfo() { return new MCInstrInfo(); }
+
+MCRegisterInfo *llvm::createMMIXMCRegisterInfo(const Triple &TT) {
+  return new MCRegisterInfo();
+}
+
+MCSubtargetInfo *llvm::createMMIXMCSubtargetInfo(const Triple &TT,
+                                                 StringRef CPU, StringRef FS) {
+  const StringRef CPUName = CPU.empty() ? "generic" : CPU;
+  return createMMIXMCSubtargetInfoImpl(TT, CPUName, CPUName, FS);
+}
+
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
+  Target &T = getTheMMIXTarget();
+  RegisterMCAsmInfo<MMIXMCAsmInfo> X(T);
+  TargetRegistry::RegisterMCInstrInfo(T, createMMIXMCInstrInfo);
+  TargetRegistry::RegisterMCRegInfo(T, createMMIXMCRegisterInfo);
+  TargetRegistry::RegisterMCSubtargetInfo(T, createMMIXMCSubtargetInfo);
+}
