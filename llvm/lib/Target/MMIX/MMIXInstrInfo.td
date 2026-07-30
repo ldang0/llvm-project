@@ -102,3 +102,123 @@ foreach Mnemonic = [
   "ANDNH", "ANDNMH", "ANDNML", "ANDNL"
 ] in
   def Mnemonic : MMIXIntConst<Mnemonic>;
+
+// Integer memory operations use a register base and either a register or an
+// unsigned-byte offset. The load and store records keep width and signedness
+// variants distinct for the later MC and lowering work.
+class MMIXLoadReg<string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst),
+                      (ins GPR64Op:$base, GPR64Op:$offset),
+                      Mnemonic # " $dst, $base, $offset">;
+
+class MMIXLoadImm<string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst),
+                      (ins GPR64Op:$base, MMIXUImm8:$offset),
+                      Mnemonic # " $dst, $base, $offset">;
+
+class MMIXStoreReg<string Mnemonic>
+    : MMIXInstruction<(outs),
+                      (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
+                      Mnemonic # " $value, $base, $offset">;
+
+class MMIXStoreImm<string Mnemonic>
+    : MMIXInstruction<(outs),
+                      (ins GPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
+                      Mnemonic # " $value, $base, $offset">;
+
+foreach Mnemonic = [
+  "LDB", "LDBU", "LDW", "LDWU", "LDT", "LDTU", "LDO", "LDOU", "LDHT"
+] in {
+  def Mnemonic : MMIXLoadReg<Mnemonic>;
+  def Mnemonic # "I" : MMIXLoadImm<Mnemonic>;
+}
+
+foreach Mnemonic = [
+  "STB", "STBU", "STW", "STWU", "STT", "STTU", "STO", "STOU", "STHT"
+] in {
+  def Mnemonic : MMIXStoreReg<Mnemonic>;
+  def Mnemonic # "I" : MMIXStoreImm<Mnemonic>;
+}
+
+// CSWAP has the ordinary memory address forms but also updates its X operand
+// with the comparison result. The data dependency is left for later lowering.
+class MMIXCompareSwapReg
+    : MMIXInstruction<(outs GPR64Op:$result),
+                      (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
+                      "CSWAP $result, $base, $offset">;
+
+class MMIXCompareSwapImm
+    : MMIXInstruction<(outs GPR64Op:$result),
+                      (ins GPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
+                      "CSWAP $result, $base, $offset">;
+
+def CSWAP : MMIXCompareSwapReg;
+def CSWAPI : MMIXCompareSwapImm;
+
+class MMIXCondBranch<string Mnemonic>
+    : MMIXInstruction<(outs),
+                      (ins GPR64Op:$condition, MMIXBranchTarget:$target),
+                      Mnemonic # " $condition, $target">;
+
+foreach Mnemonic = ["BN", "BZ", "BP", "BOD", "BNN", "BNZ", "BNP", "BEV"] in {
+  def Mnemonic : MMIXCondBranch<Mnemonic>;
+  def Mnemonic # "B" : MMIXCondBranch<Mnemonic # "B">;
+}
+
+foreach Mnemonic = [
+  "PBN", "PBZ", "PBP", "PBOD", "PBNN", "PBNZ", "PBNP", "PBEV"
+] in {
+  def Mnemonic : MMIXCondBranch<Mnemonic>;
+  def Mnemonic # "B" : MMIXCondBranch<Mnemonic # "B">;
+}
+
+class MMIXJump<string Mnemonic>
+    : MMIXInstruction<(outs), (ins MMIXBranchTarget:$target),
+                      Mnemonic # " $target">;
+
+def JMP : MMIXJump<"JMP">;
+def JMPB : MMIXJump<"JMPB">;
+
+class MMIXGetAddress<string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXBranchTarget:$target),
+                      Mnemonic # " $dst, $target">;
+
+def GETA : MMIXGetAddress<"GETA">;
+def GETAB : MMIXGetAddress<"GETAB">;
+
+class MMIXPushJump<string Mnemonic>
+    : MMIXInstruction<(outs), (ins GPR64Op:$link, MMIXBranchTarget:$target),
+                      Mnemonic # " $link, $target">;
+
+def PUSHJ : MMIXPushJump<"PUSHJ">;
+def PUSHJB : MMIXPushJump<"PUSHJB">;
+
+class MMIXGoReg
+    : MMIXInstruction<(outs GPR64Op:$link),
+                      (ins GPR64Op:$base, GPR64Op:$offset),
+                      "GO $link, $base, $offset">;
+
+class MMIXGoImm
+    : MMIXInstruction<(outs GPR64Op:$link),
+                      (ins GPR64Op:$base, MMIXUImm8:$offset),
+                      "GO $link, $base, $offset">;
+
+def GO : MMIXGoReg;
+def GOI : MMIXGoImm;
+
+class MMIXPushGoReg
+    : MMIXInstruction<(outs),
+                      (ins GPR64Op:$count, GPR64Op:$base, GPR64Op:$offset),
+                      "PUSHGO $count, $base, $offset">;
+
+class MMIXPushGoImm
+    : MMIXInstruction<(outs),
+                      (ins GPR64Op:$count, GPR64Op:$base, MMIXUImm8:$offset),
+                      "PUSHGO $count, $base, $offset">;
+
+def PUSHGO : MMIXPushGoReg;
+def PUSHGOI : MMIXPushGoImm;
+
+def POP : MMIXInstruction<(outs),
+                          (ins MMIXUImm8:$count, MMIXUImm16:$target),
+                          "POP $count, $target">;
