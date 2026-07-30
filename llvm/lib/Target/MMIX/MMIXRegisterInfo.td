@@ -22,6 +22,10 @@ foreach I = 0-255 in
 def GPR64 : RegisterClass<"MMIX", [i64], 64,
                           (sequence "R%u", 0, 255)>;
 
+// MMIX uses the same 64-bit registers for integer and floating-point values.
+def FPR64 : RegisterClass<"MMIX", [f64], 64,
+                          (sequence "R%u", 0, 255)>;
+
 // MMIX special-register encodings are the values accepted by GET and PUT.
 class MMIXSpecialReg<bits<5> Encoding, string Name> : Register<Name> {
   let Namespace = "MMIX";
