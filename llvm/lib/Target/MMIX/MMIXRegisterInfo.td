@@ -21,3 +21,51 @@ foreach I = 0-255 in
 
 def GPR64 : RegisterClass<"MMIX", [i64], 64,
                           (sequence "R%u", 0, 255)>;
+
+// MMIX special-register encodings are the values accepted by GET and PUT.
+class MMIXSpecialReg<bits<5> Encoding, string Name> : Register<Name> {
+  let Namespace = "MMIX";
+  let PositionOrder = 1;
+  let HWEncoding{4-0} = Encoding;
+}
+
+def RA  : MMIXSpecialReg<21, "rA">;
+def RB  : MMIXSpecialReg<0,  "rB">;
+def RC  : MMIXSpecialReg<8,  "rC">;
+def RD  : MMIXSpecialReg<1,  "rD">;
+def RE  : MMIXSpecialReg<2,  "rE">;
+def RF  : MMIXSpecialReg<22, "rF">;
+def RG  : MMIXSpecialReg<19, "rG">;
+def RH  : MMIXSpecialReg<3,  "rH">;
+def RI  : MMIXSpecialReg<12, "rI">;
+def RJ  : MMIXSpecialReg<4,  "rJ">;
+def RK  : MMIXSpecialReg<15, "rK">;
+def RL  : MMIXSpecialReg<20, "rL">;
+def RM  : MMIXSpecialReg<5,  "rM">;
+def RN  : MMIXSpecialReg<9,  "rN">;
+def RO  : MMIXSpecialReg<10, "rO">;
+def RP  : MMIXSpecialReg<23, "rP">;
+def RQ  : MMIXSpecialReg<16, "rQ">;
+def RR  : MMIXSpecialReg<6,  "rR">;
+def RS  : MMIXSpecialReg<11, "rS">;
+def RT  : MMIXSpecialReg<13, "rT">;
+def RU  : MMIXSpecialReg<17, "rU">;
+def RV  : MMIXSpecialReg<18, "rV">;
+def RW  : MMIXSpecialReg<24, "rW">;
+def RX  : MMIXSpecialReg<25, "rX">;
+def RY  : MMIXSpecialReg<26, "rY">;
+def RZ  : MMIXSpecialReg<27, "rZ">;
+
+def RBB : MMIXSpecialReg<7,  "rBB">;
+def RTT : MMIXSpecialReg<14, "rTT">;
+def RWW : MMIXSpecialReg<28, "rWW">;
+def RXX : MMIXSpecialReg<29, "rXX">;
+def RYY : MMIXSpecialReg<30, "rYY">;
+def RZZ : MMIXSpecialReg<31, "rZZ">;
+
+def SPR64 : RegisterClass<"MMIX", [i64], 64,
+                          (add RA, RB, RC, RD, RE, RF, RG, RH, RI, RJ, RK, RL,
+                               RM, RN, RO, RP, RQ, RR, RS, RT, RU, RV, RW, RX,
+                               RY, RZ, RBB, RTT, RWW, RXX, RYY, RZZ)> {
+  let isAllocatable = false;
+}
