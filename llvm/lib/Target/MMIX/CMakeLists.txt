@@ -4,6 +4,7 @@ set(LLVM_TARGET_DEFINITIONS MMIX.td)
 
 tablegen(LLVM MMIXGenSubtargetInfo.inc -gen-subtarget)
 tablegen(LLVM MMIXGenRegisterInfo.inc -gen-register-info)
+tablegen(LLVM MMIXGenInstrInfo.inc -gen-instr-info)
 
 add_public_tablegen_target(MMIXCommonTableGen)
 

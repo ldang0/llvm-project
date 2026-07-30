@@ -26,6 +26,8 @@ def : Processor<"generic", NoItineraries, []>;
 
 include "MMIXRegisterInfo.td"
 
+defm : RemapAllTargetPseudoPointerOperands<GPR64>;
+
 //===----------------------------------------------------------------------===//
 // Instruction descriptions
 //===----------------------------------------------------------------------===//

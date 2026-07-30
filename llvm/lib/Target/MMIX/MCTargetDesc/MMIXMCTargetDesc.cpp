@@ -26,7 +26,14 @@ using namespace llvm;
 #define GET_REGINFO_MC_DESC
 #include "MMIXGenRegisterInfo.inc"
 
-MCInstrInfo *llvm::createMMIXMCInstrInfo() { return new MCInstrInfo(); }
+#define GET_INSTRINFO_MC_DESC
+#include "MMIXGenInstrInfo.inc"
+
+MCInstrInfo *llvm::createMMIXMCInstrInfo() {
+  MCInstrInfo *X = new MCInstrInfo();
+  InitMMIXMCInstrInfo(X);
+  return X;
+}
 
 MCRegisterInfo *llvm::createMMIXMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
