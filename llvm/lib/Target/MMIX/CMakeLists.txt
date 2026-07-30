@@ -7,7 +7,9 @@ tablegen(LLVM MMIXGenSubtargetInfo.inc -gen-subtarget)
 add_public_tablegen_target(MMIXCommonTableGen)
 
 add_llvm_target(MMIXCodeGen
+  MMIXSubtarget.cpp
   MMIXTarget.cpp
+  MMIXTargetMachine.cpp
 
   LINK_COMPONENTS
   MMIXInfo

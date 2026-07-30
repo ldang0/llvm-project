@@ -8,6 +8,5 @@
 
 #include "llvm/Support/Compiler.h"
 
-extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTarget() {}
-
-extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {}
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
+}
