@@ -28,4 +28,8 @@ MCSubtargetInfo *createMMIXMCSubtargetInfo(const Triple &TT, StringRef CPU,
 #define GET_SUBTARGETINFO_ENUM
 #include "MMIXGenSubtargetInfo.inc"
 
+// Defines symbolic names for MMIX registers.
+#define GET_REGINFO_ENUM
+#include "MMIXGenRegisterInfo.inc"
+
 #endif // LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXMCTARGETDESC_H

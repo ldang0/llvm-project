@@ -23,10 +23,15 @@ using namespace llvm;
 #define GET_SUBTARGETINFO_MC_DESC
 #include "MMIXGenSubtargetInfo.inc"
 
+#define GET_REGINFO_MC_DESC
+#include "MMIXGenRegisterInfo.inc"
+
 MCInstrInfo *llvm::createMMIXMCInstrInfo() { return new MCInstrInfo(); }
 
 MCRegisterInfo *llvm::createMMIXMCRegisterInfo(const Triple &TT) {
-  return new MCRegisterInfo();
+  MCRegisterInfo *X = new MCRegisterInfo();
+  InitMMIXMCRegisterInfo(X, 0);
+  return X;
 }
 
 MCSubtargetInfo *llvm::createMMIXMCSubtargetInfo(const Triple &TT,

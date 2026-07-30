@@ -3,6 +3,7 @@ add_llvm_component_group(MMIX)
 set(LLVM_TARGET_DEFINITIONS MMIX.td)
 
 tablegen(LLVM MMIXGenSubtargetInfo.inc -gen-subtarget)
+tablegen(LLVM MMIXGenRegisterInfo.inc -gen-register-info)
 
 add_public_tablegen_target(MMIXCommonTableGen)
 
