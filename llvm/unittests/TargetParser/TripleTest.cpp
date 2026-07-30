@@ -262,6 +262,11 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
   EXPECT_EQ(Triple::UnknownOS, T.getOS());
 
+  T = Triple("mmix-unknown-unknown");
+  EXPECT_EQ(Triple::mmix, T.getArch());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::UnknownOS, T.getOS());
+
   T = Triple("hsail-unknown-unknown");
   EXPECT_EQ(Triple::hsail, T.getArch());
   EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
@@ -2038,6 +2043,12 @@ TEST(TripleTest, BitWidthChecks) {
   EXPECT_TRUE(T.isArch64Bit());
   EXPECT_EQ(T.getArchPointerBitWidth(), 64U);
 
+  T.setArch(Triple::mmix);
+  EXPECT_FALSE(T.isArch16Bit());
+  EXPECT_FALSE(T.isArch32Bit());
+  EXPECT_TRUE(T.isArch64Bit());
+  EXPECT_EQ(T.getArchPointerBitWidth(), 64U);
+
   T.setArch(Triple::msp430);
   EXPECT_TRUE(T.isArch16Bit());
   EXPECT_FALSE(T.isArch32Bit());
@@ -2286,6 +2297,10 @@ TEST(TripleTest, BitWidthArchVariants) {
   EXPECT_EQ(Triple::mips64el, T.get64BitArchVariant().getArch());
   EXPECT_EQ(Triple::MipsSubArch_r6, T.get64BitArchVariant().getSubArch());
 
+  T.setArch(Triple::mmix);
+  EXPECT_EQ(Triple::UnknownArch, T.get32BitArchVariant().getArch());
+  EXPECT_EQ(Triple::mmix, T.get64BitArchVariant().getArch());
+
   T.setArch(Triple::ppc64);
   EXPECT_EQ(Triple::ppc, T.get32BitArchVariant().getArch());
   EXPECT_EQ(Triple::ppc64, T.get64BitArchVariant().getArch());
@@ -2446,6 +2461,11 @@ TEST(TripleTest, EndianArchVariants) {
   T = Triple("armeb");
   EXPECT_FALSE(T.isLittleEndian());
   T = Triple("thumbeb");
+  EXPECT_FALSE(T.isLittleEndian());
+
+  T.setArch(Triple::mmix);
+  EXPECT_EQ(Triple::mmix, T.getBigEndianArchVariant().getArch());
+  EXPECT_EQ(Triple::UnknownArch, T.getLittleEndianArchVariant().getArch());
   EXPECT_FALSE(T.isLittleEndian());
 
   T.setArch(Triple::bpfeb);
@@ -3073,6 +3093,7 @@ TEST(TripleTest, FileFormat) {
   EXPECT_EQ(Triple::ELF,
             Triple("loongarch32-unknown-unknown").getObjectFormat());
   EXPECT_EQ(Triple::ELF, Triple("loongarch64-unknown-linux").getObjectFormat());
+  EXPECT_EQ(Triple::ELF, Triple("mmix-unknown-unknown").getObjectFormat());
 
   Triple MSVCNormalized(Triple::normalize("i686-pc-windows-msvc-elf"));
   EXPECT_EQ(Triple::ELF, MSVCNormalized.getObjectFormat());
@@ -3792,6 +3813,12 @@ TEST(DataLayoutTest, UEFI) {
 
   // Test UEFI X86_64 Mangling Component.
   EXPECT_THAT(TT.computeDataLayout(), testing::HasSubstr("-m:w-"));
+}
+
+TEST(DataLayoutTest, MMIX) {
+  Triple TT = Triple("mmix-unknown-unknown");
+
+  EXPECT_EQ("E-m:e-p:64:64-i64:64-n64-S64", TT.computeDataLayout());
 }
 
 TEST(TripleTest, WindowsOrUEFI) {
