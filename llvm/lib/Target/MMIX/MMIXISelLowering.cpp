@@ -45,11 +45,25 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   // legal-width operations unavailable until their dedicated lowering task
   // defines the exact MMIX semantics.
   static constexpr unsigned IntegerOperations[] = {
-      ISD::MUL,  ISD::SDIV,  ISD::UDIV,   ISD::SREM,     ISD::UREM,
       ISD::ROTL, ISD::ROTR,  ISD::BSWAP,  ISD::CTPOP,    ISD::CTLZ,
       ISD::CTTZ, ISD::SETCC, ISD::SELECT, ISD::SELECT_CC};
   for (unsigned Opcode : IntegerOperations)
     RejectOperation(Opcode, MVT::i64);
+
+  setOperationAction(ISD::MULHU, MVT::i64, Expand);
+  setOperationAction(ISD::MULHS, MVT::i64, Expand);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i64, Custom);
+  setOperationAction(ISD::SMUL_LOHI, MVT::i64, Custom);
+  setOperationAction(ISD::UMULO, MVT::i64, Expand);
+  setOperationAction(ISD::SMULO, MVT::i64, Expand);
+
+  // MMIX's divide-by-zero and INT_MIN/-1 exceptional cases correspond to
+  // poison-producing LLVM inputs. All defined signed inputs need the quotient
+  // and remainder correction implemented by the custom SDIVREM lowering.
+  for (unsigned Opcode : {ISD::SDIV, ISD::UDIV, ISD::SREM, ISD::UREM})
+    setOperationAction(Opcode, MVT::i64, Expand);
+  setOperationAction(ISD::SDIVREM, MVT::i64, Custom);
+  setOperationAction(ISD::UDIVREM, MVT::i64, Custom);
 
   // Overflow-producing nodes must be expanded rather than selected as MMIX's
   // trapping signed arithmetic instructions. LLVM's nsw flag is poison
@@ -85,10 +99,65 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
 
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
-  report_fatal_error(
-      Twine("MMIX SelectionDAG operation is not implemented by this lowering "
-            "stage: ") +
-      Op->getOperationName(&DAG));
+  switch (Op.getOpcode()) {
+  case ISD::UMUL_LOHI:
+  case ISD::SMUL_LOHI:
+  case ISD::UDIVREM:
+  case ISD::SDIVREM:
+    break;
+  default:
+    report_fatal_error(
+        Twine("MMIX SelectionDAG operation is not implemented by this "
+              "lowering stage: ") +
+        Op->getOperationName(&DAG));
+  }
+
+  SDLoc DL(Op);
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  SDVTList PairVTs = DAG.getVTList(MVT::i64, MVT::i64);
+
+  switch (Op.getOpcode()) {
+  case ISD::UMUL_LOHI:
+    return DAG.getNode(MMIXISD::UMUL_LOHI, DL, PairVTs, LHS, RHS);
+  case ISD::SMUL_LOHI: {
+    SDValue Product = DAG.getNode(MMIXISD::UMUL_LOHI, DL, PairVTs, LHS, RHS);
+    SDValue Shift = DAG.getConstant(63, DL, MVT::i64);
+    SDValue LHSMask = DAG.getNode(ISD::SRA, DL, MVT::i64, LHS, Shift);
+    SDValue RHSMask = DAG.getNode(ISD::SRA, DL, MVT::i64, RHS, Shift);
+    SDValue LHSCorrection = DAG.getNode(ISD::AND, DL, MVT::i64, LHSMask, RHS);
+    SDValue RHSCorrection = DAG.getNode(ISD::AND, DL, MVT::i64, RHSMask, LHS);
+    SDValue High =
+        DAG.getNode(ISD::SUB, DL, MVT::i64, Product.getValue(1), LHSCorrection);
+    High = DAG.getNode(ISD::SUB, DL, MVT::i64, High, RHSCorrection);
+    return DAG.getMergeValues({Product, High}, DL);
+  }
+  case ISD::UDIVREM:
+    return DAG.getNode(MMIXISD::UDIVREM, DL, PairVTs, LHS, RHS);
+  case ISD::SDIVREM: {
+    SDValue Floor = DAG.getNode(MMIXISD::SDIVREM, DL, PairVTs, LHS, RHS);
+    SDValue Zero = DAG.getConstant(0, DL, MVT::i64);
+    SDValue Shift = DAG.getConstant(63, DL, MVT::i64);
+    SDValue SignDifference = DAG.getNode(ISD::XOR, DL, MVT::i64, LHS, RHS);
+    SignDifference = DAG.getNode(ISD::SRA, DL, MVT::i64, SignDifference, Shift);
+    SDValue NegativeRemainder =
+        DAG.getNode(ISD::SUB, DL, MVT::i64, Zero, Floor.getValue(1));
+    SDValue NonZeroRemainder = DAG.getNode(
+        ISD::OR, DL, MVT::i64, Floor.getValue(1), NegativeRemainder);
+    NonZeroRemainder =
+        DAG.getNode(ISD::SRA, DL, MVT::i64, NonZeroRemainder, Shift);
+    SDValue Correction =
+        DAG.getNode(ISD::AND, DL, MVT::i64, SignDifference, NonZeroRemainder);
+    SDValue Quotient = DAG.getNode(ISD::SUB, DL, MVT::i64, Floor, Correction);
+    SDValue RemainderCorrection =
+        DAG.getNode(ISD::AND, DL, MVT::i64, RHS, Correction);
+    SDValue Remainder = DAG.getNode(ISD::SUB, DL, MVT::i64, Floor.getValue(1),
+                                    RemainderCorrection);
+    return DAG.getMergeValues({Quotient, Remainder}, DL);
+  }
+  default:
+    llvm_unreachable("unexpected custom MMIX operation");
+  }
 }
 
 static bool hasUnsupportedArgumentFlags(const ISD::ArgFlagsTy &Flags) {

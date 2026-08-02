@@ -279,12 +279,18 @@ class MMIXIntConstOpcode<bits<8> Opcode, string Mnemonic>
 // have the architectural register and immediate variants listed here.
 def MUL : MMIXIntRegRegOpcode<0x18, "MUL">;
 def MULI : MMIXIntRegImmOpcode<0x19, "MUL">;
-def MULU : MMIXIntRegRegOpcode<0x1A, "MULU">;
-def MULUI : MMIXIntRegImmOpcode<0x1B, "MULU">;
-def DIV : MMIXIntRegRegOpcode<0x1C, "DIV">;
-def DIVI : MMIXIntRegImmOpcode<0x1D, "DIV">;
-def DIVU : MMIXIntRegRegOpcode<0x1E, "DIVU">;
-def DIVUI : MMIXIntRegImmOpcode<0x1F, "DIVU">;
+let Defs = [RH] in {
+  def MULU : MMIXIntRegRegOpcode<0x1A, "MULU">;
+  def MULUI : MMIXIntRegImmOpcode<0x1B, "MULU">;
+}
+let Defs = [RR] in {
+  def DIV : MMIXIntRegRegOpcode<0x1C, "DIV">;
+  def DIVI : MMIXIntRegImmOpcode<0x1D, "DIV">;
+}
+let Defs = [RR], Uses = [RD] in {
+  def DIVU : MMIXIntRegRegOpcode<0x1E, "DIVU">;
+  def DIVUI : MMIXIntRegImmOpcode<0x1F, "DIVU">;
+}
 def ADD : MMIXIntRegRegOpcode<0x20, "ADD">;
 def ADDI : MMIXIntRegImmOpcode<0x21, "ADD">;
 def ADDU : MMIXIntRegRegOpcode<0x22, "ADDU">;
@@ -360,6 +366,10 @@ def : Pat<(sub i64:$lhs, mmix_neg_uimm8:$rhs),
 def : Pat<(sub 0, i64:$rhs), (NEGU 0, $rhs)>;
 def : Pat<(sub i64:$lhs, i64:$rhs), (SUBU $lhs, $rhs)>;
 
+def : Pat<(mul i64:$lhs, mmix_uimm8:$rhs),
+          (MULUI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(mul i64:$lhs, i64:$rhs), (MULU $lhs, $rhs)>;
+
 def CSN : MMIXIntRegRegOpcode<0x60, "CSN">;
 def CSNI : MMIXIntRegImmOpcode<0x61, "CSN">;
 def CSZ : MMIXIntRegRegOpcode<0x62, "CSZ">;
@@ -422,6 +432,13 @@ def : Pat<(sra i64:$value, i64:$amount), (SR $value, $amount)>;
 def : Pat<(srl i64:$value, mmix_uimm6:$amount),
           (SRUI $value, mmix_uimm6:$amount)>;
 def : Pat<(srl i64:$value, i64:$amount), (SRU $value, $amount)>;
+
+def : Pat<(sext_inreg i64:$value, i8),
+          (SRI (SLUI $value, 56), 56)>;
+def : Pat<(sext_inreg i64:$value, i16),
+          (SRI (SLUI $value, 48), 48)>;
+def : Pat<(sext_inreg i64:$value, i32),
+          (SRI (SLUI $value, 32), 32)>;
 
 // Select complemented forms only when the complete Boolean identity is
 // present. The immediate forms encode the complement in their Z byte.
@@ -1403,7 +1420,7 @@ def GET : MMIXGet {
 }
 
 class MMIXPutReg
-    : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, GPR64Op:$src),
+    : MMIXMachineInstruction<(outs SPR64Op:$dst), (ins GPR64Op:$src),
                              "PUT $dst, $src"> {
   bits<5> dst;
   bits<8> src;
@@ -1414,7 +1431,7 @@ class MMIXPutReg
 }
 
 class MMIXPutImm
-    : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, MMIXUImm8:$src),
+    : MMIXMachineInstruction<(outs SPR64Op:$dst), (ins MMIXUImm8:$src),
                              "PUT $dst, $src"> {
   bits<5> dst;
   bits<8> src;
@@ -1474,6 +1491,10 @@ def LOAD_IMM64
     : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),
                             (ins i64imm:$value), ""> {
   let Pattern = [(set i64:$dst, imm:$value)];
+}
+
+def SET_RD_ZERO : MMIXPseudoInstruction<(outs), (ins), ""> {
+  let Defs = [RD];
 }
 
 let Defs = [R254], Uses = [R254], hasSideEffects = true in {

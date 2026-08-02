@@ -12,6 +12,7 @@
 #include "MMIXTargetMachine.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/InitializePasses.h"
+#include "llvm/Support/MathExtras.h"
 
 using namespace llvm;
 
@@ -29,9 +30,64 @@ private:
 // the lowering tasks that own their semantics.
 #include "MMIXGenDAGISel.inc"
 
+  void selectSpecialArithmetic(SDNode *Node) {
+    SDLoc DL(Node);
+    bool IsMultiply = Node->getOpcode() == MMIXISD::UMUL_LOHI;
+    bool IsUnsignedDivide = Node->getOpcode() == MMIXISD::UDIVREM;
+    SDValue RHS = Node->getOperand(1);
+    bool HasImmediate = false;
+    if (auto *Constant = dyn_cast<ConstantSDNode>(RHS)) {
+      HasImmediate = isUInt<8>(Constant->getZExtValue());
+      if (HasImmediate)
+        RHS = CurDAG->getTargetConstant(Constant->getZExtValue(), DL, MVT::i64);
+    }
+
+    unsigned Opcode;
+    MCRegister SpecialResult;
+    if (IsMultiply) {
+      Opcode = HasImmediate ? MMIX::MULUI : MMIX::MULU;
+      SpecialResult = MMIX::RH;
+    } else if (IsUnsignedDivide) {
+      Opcode = HasImmediate ? MMIX::DIVUI : MMIX::DIVU;
+      SpecialResult = MMIX::RR;
+    } else {
+      Opcode = HasImmediate ? MMIX::DIVI : MMIX::DIV;
+      SpecialResult = MMIX::RR;
+    }
+
+    SmallVector<SDValue, 3> Ops = {Node->getOperand(0), RHS};
+    if (IsUnsignedDivide) {
+      // A 64-bit LLVM dividend has no high half, so rD must be zero.
+      SDNode *SetRD = CurDAG->getMachineNode(MMIX::SET_RD_ZERO, DL, MVT::Glue);
+      Ops.push_back(SDValue(SetRD, 0));
+    }
+
+    // Glue prevents another special-register writer from being scheduled
+    // between the arithmetic instruction and a required GET.
+    SDNode *Arithmetic = CurDAG->getMachineNode(
+        Opcode, DL, CurDAG->getVTList(MVT::i64, MVT::Glue), Ops);
+
+    if (!SDValue(Node, 0).use_empty())
+      ReplaceUses(SDValue(Node, 0), SDValue(Arithmetic, 0));
+    if (!SDValue(Node, 1).use_empty()) {
+      SDValue SpecialReg = CurDAG->getRegister(SpecialResult, MVT::i64);
+      SDValue GetOps[] = {SpecialReg, SDValue(Arithmetic, 1)};
+      SDNode *Get = CurDAG->getMachineNode(MMIX::GET, DL, MVT::i64, GetOps);
+      ReplaceUses(SDValue(Node, 1), SDValue(Get, 0));
+    }
+    CurDAG->RemoveDeadNode(Node);
+  }
+
   void Select(SDNode *Node) override {
     if (Node->isMachineOpcode()) {
       Node->setNodeId(-1);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::UMUL_LOHI ||
+        Node->getOpcode() == MMIXISD::SDIVREM ||
+        Node->getOpcode() == MMIXISD::UDIVREM) {
+      selectSpecialArithmetic(Node);
       return;
     }
 

@@ -101,6 +101,15 @@ void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
 }
 
 bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  if (MI.getOpcode() == MMIX::SET_RD_ZERO) {
+    BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+            get(MMIX::PUTI))
+        .addDef(MMIX::RD)
+        .addImm(0);
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() != MMIX::LOAD_IMM64)
     return false;
 

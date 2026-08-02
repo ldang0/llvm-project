@@ -20,6 +20,9 @@ namespace MMIXISD {
 enum NodeType : unsigned {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   LOAD_STACK_ARG,
+  UMUL_LOHI,
+  SDIVREM,
+  UDIVREM,
   RET_GLUE,
   RET_VALUE_GLUE,
 };
