@@ -28,11 +28,33 @@ class MMIXImmediateOperand<int Width, bit Signed, string Range>
   string MMIXEncodingRange = Range;
 }
 
-def MMIXImm64 : MMIXImmediateOperand<64, true, "signed-64">;
-def MMIXUImm8 : MMIXImmediateOperand<8, false, "unsigned-8">;
-def MMIXUImm16 : MMIXImmediateOperand<16, false, "unsigned-16">;
-def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24">;
-def MMIXRoundingMode : MMIXImmediateOperand<2, false, "rounding-mode">;
+class MMIXImmediateParserOperand<string OperandName> : AsmOperandClass {
+  let Name = OperandName;
+  let RenderMethod = "addImmOperands";
+}
+
+def MMIXImm64AsmOperand : MMIXImmediateParserOperand<"MMIXImm64">;
+def MMIXUImm8AsmOperand : MMIXImmediateParserOperand<"MMIXUImm8">;
+def MMIXUImm16AsmOperand : MMIXImmediateParserOperand<"MMIXUImm16">;
+def MMIXUImm24AsmOperand : MMIXImmediateParserOperand<"MMIXUImm24">;
+def MMIXRoundingModeAsmOperand
+    : MMIXImmediateParserOperand<"MMIXRoundingMode">;
+
+def MMIXImm64 : MMIXImmediateOperand<64, true, "signed-64"> {
+  let ParserMatchClass = MMIXImm64AsmOperand;
+}
+def MMIXUImm8 : MMIXImmediateOperand<8, false, "unsigned-8"> {
+  let ParserMatchClass = MMIXUImm8AsmOperand;
+}
+def MMIXUImm16 : MMIXImmediateOperand<16, false, "unsigned-16"> {
+  let ParserMatchClass = MMIXUImm16AsmOperand;
+}
+def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24"> {
+  let ParserMatchClass = MMIXUImm24AsmOperand;
+}
+def MMIXRoundingMode : MMIXImmediateOperand<2, false, "rounding-mode"> {
+  let ParserMatchClass = MMIXRoundingModeAsmOperand;
+}
 
 class MMIXRegOrImmOperand<int Width, string Range>
     : Operand<i64> {
@@ -42,7 +64,13 @@ class MMIXRegOrImmOperand<int Width, string Range>
   string MMIXEncodingRange = Range;
 }
 
-def MMIXRegOrImm8 : MMIXRegOrImmOperand<8, "unsigned-8">;
+def MMIXRegOrImm8AsmOperand
+    : MMIXImmediateParserOperand<"MMIXRegOrImm8"> {
+  let RenderMethod = "addMMIXRegOrImm8Operands";
+}
+def MMIXRegOrImm8 : MMIXRegOrImmOperand<8, "unsigned-8"> {
+  let ParserMatchClass = MMIXRegOrImm8AsmOperand;
+}
 
 class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
   int MMIXEncodingWidth = Width;
@@ -54,10 +82,17 @@ class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
 }
 
+def MMIXBranchTargetAsmOperand
+    : MMIXImmediateParserOperand<"MMIXBranchTarget">;
+def MMIXJumpTargetAsmOperand : MMIXImmediateParserOperand<"MMIXJumpTarget">;
 def MMIXBranchTarget : MMIXPCRelativeOperand<16,
-                                             "signed-16-instruction-words">;
+                                             "signed-16-instruction-words"> {
+  let ParserMatchClass = MMIXBranchTargetAsmOperand;
+}
 def MMIXJumpTarget : MMIXPCRelativeOperand<24,
-                                           "signed-24-instruction-words">;
+                                           "signed-24-instruction-words"> {
+  let ParserMatchClass = MMIXJumpTargetAsmOperand;
+}
 
 class MMIXMemoryOffsetOperand<int Width, bit Signed, string Range>
     : Operand<i64> {
@@ -67,13 +102,19 @@ class MMIXMemoryOffsetOperand<int Width, bit Signed, string Range>
   string MMIXEncodingRange = Range;
 }
 
-def MMIXMemOffset8 : MMIXMemoryOffsetOperand<8, false, "unsigned-8">;
+def MMIXMemOffset8AsmOperand
+    : MMIXImmediateParserOperand<"MMIXMemOffset8">;
+def MMIXMemOffset8 : MMIXMemoryOffsetOperand<8, false, "unsigned-8"> {
+  let ParserMatchClass = MMIXMemOffset8AsmOperand;
+}
 
+def MMIXMemAddrAsmOperand : MMIXImmediateParserOperand<"MMIXMemAddr">;
 def MMIXMemAddr : Operand<i64> {
   int MMIXEncodingWidth = 8;
   bit MMIXEncodingSigned = false;
   string MMIXEncodingKind = "memory-address";
   string MMIXEncodingRange = "unsigned-8-offset";
+  let ParserMatchClass = MMIXMemAddrAsmOperand;
   let OperandType = "OPERAND_MEMORY";
 }
 

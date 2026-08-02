@@ -10,8 +10,10 @@
 #include "MMIXMCTargetDesc.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
@@ -19,6 +21,19 @@
 using namespace llvm;
 
 namespace {
+
+class MMIXELFObjectWriter : public MCELFObjectTargetWriter {
+public:
+  MMIXELFObjectWriter()
+      : MCELFObjectTargetWriter(/*Is64Bit=*/true, /*OSABI=*/0,
+                                ELF::EM_NONE, /*HasRelocationAddend=*/false) {}
+
+protected:
+  unsigned getRelocType(const MCFixup &, const MCValue &,
+                        bool) const override {
+    return 0;
+  }
+};
 
 class MMIXAsmBackend : public MCAsmBackend {
 public:
@@ -60,7 +75,7 @@ public:
 
   std::unique_ptr<MCObjectTargetWriter>
   createObjectTargetWriter() const override {
-    return nullptr;
+    return std::make_unique<MMIXELFObjectWriter>();
   }
 
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {

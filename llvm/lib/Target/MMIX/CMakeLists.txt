@@ -6,6 +6,7 @@ tablegen(LLVM MMIXGenSubtargetInfo.inc -gen-subtarget)
 tablegen(LLVM MMIXGenRegisterInfo.inc -gen-register-info)
 tablegen(LLVM MMIXGenInstrInfo.inc -gen-instr-info)
 tablegen(LLVM MMIXGenAsmWriter.inc -gen-asm-writer)
+tablegen(LLVM MMIXGenAsmMatcher.inc -gen-asm-matcher)
 
 add_public_tablegen_target(MMIXCommonTableGen)
 
@@ -14,6 +15,7 @@ add_llvm_target(MMIXCodeGen
   MMIXTargetMachine.cpp
 
   LINK_COMPONENTS
+  MMIXAsmParser
   MMIXDesc
   MMIXInfo
   Support
@@ -24,4 +26,5 @@ add_llvm_target(MMIXCodeGen
   )
 
 add_subdirectory(MCTargetDesc)
+add_subdirectory(AsmParser)
 add_subdirectory(TargetInfo)
