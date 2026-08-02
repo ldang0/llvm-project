@@ -9,6 +9,9 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MMIXSUBTARGET_H
 #define LLVM_LIB_TARGET_MMIX_MMIXSUBTARGET_H
 
+#include "MMIXFrameLowering.h"
+#include "MMIXISelLowering.h"
+#include "MMIXInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 
 #define GET_SUBTARGETINFO_HEADER
@@ -19,16 +22,30 @@ namespace llvm {
 class MMIXSubtarget : public MMIXGenSubtargetInfo {
   virtual void anchor();
 
-#define GET_SUBTARGETINFO_MACRO(ATTRIBUTE, DEFAULT, GETTER)                  \
+  MMIXInstrInfo InstrInfo;
+  MMIXFrameLowering FrameLowering;
+  MMIXTargetLowering TLInfo;
+
+#define GET_SUBTARGETINFO_MACRO(ATTRIBUTE, DEFAULT, GETTER)                    \
   bool ATTRIBUTE = DEFAULT;
 #include "MMIXGenSubtargetInfo.inc"
 
 public:
-  MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS);
+  MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
+                const TargetMachine &TM);
 
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
-  const TargetRegisterInfo *getRegisterInfo() const override { return nullptr; }
+  const MMIXInstrInfo *getInstrInfo() const override { return &InstrInfo; }
+  const MMIXFrameLowering *getFrameLowering() const override {
+    return &FrameLowering;
+  }
+  const MMIXRegisterInfo *getRegisterInfo() const override {
+    return &InstrInfo.getRegisterInfo();
+  }
+  const MMIXTargetLowering *getTargetLowering() const override {
+    return &TLInfo;
+  }
 };
 
 } // namespace llvm

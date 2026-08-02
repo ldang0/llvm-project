@@ -10,12 +10,13 @@
 #define LLVM_LIB_TARGET_MMIX_MMIXTARGETMACHINE_H
 
 #include "MMIXSubtarget.h"
-#include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 #include <optional>
 
 namespace llvm {
 
-class MMIXTargetMachine : public TargetMachine {
+class MMIXTargetMachine : public CodeGenTargetMachineImpl {
+  std::unique_ptr<TargetLoweringObjectFile> TLOF;
   MMIXSubtarget Subtarget;
 
 public:
@@ -24,6 +25,13 @@ public:
                     std::optional<Reloc::Model> RM,
                     std::optional<CodeModel::Model> CM, CodeGenOptLevel OL,
                     bool JIT);
+  ~MMIXTargetMachine() override;
+
+  TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+
+  TargetLoweringObjectFile *getObjFileLowering() const override {
+    return TLOF.get();
+  }
 
   const MMIXSubtarget *getSubtargetImpl(const Function &) const override {
     return &Subtarget;

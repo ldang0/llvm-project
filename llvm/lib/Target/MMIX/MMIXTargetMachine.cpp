@@ -7,10 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXTargetMachine.h"
-#include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIX.h"
 #include "TargetInfo/MMIXTargetInfo.h"
-#include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/TargetRegistry.h"
 
 using namespace llvm;
@@ -19,13 +19,9 @@ static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
   return RM.value_or(Reloc::Static);
 }
 
-static CodeModel::Model
-getEffectiveCodeModel(std::optional<CodeModel::Model> CM) {
-  return CM.value_or(CodeModel::Small);
-}
-
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTarget() {
   RegisterTargetMachine<MMIXTargetMachine> X(getTheMMIXTarget());
+  initializeMMIXDAGToDAGISelLegacyPass(*PassRegistry::getPassRegistry());
 }
 
 MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
@@ -34,14 +30,36 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
                                      std::optional<Reloc::Model> RM,
                                      std::optional<CodeModel::Model> CM,
                                      CodeGenOptLevel OL, bool JIT)
-    : TargetMachine(T, TT.computeDataLayout(), TT, CPU, FS, Options),
-      Subtarget(TT, CPU, FS) {
-  this->RM = getEffectiveRelocModel(RM);
-  this->CMModel = getEffectiveCodeModel(CM);
-  this->OptLevel = OL;
+    : CodeGenTargetMachineImpl(
+          T, TT.computeDataLayout(), TT, CPU, FS, Options,
+          getEffectiveRelocModel(RM),
+          llvm::getEffectiveCodeModel(CM, CodeModel::Small), OL),
+      TLOF(std::make_unique<TargetLoweringObjectFileELF>()),
+      Subtarget(TT, CPU, FS, *this) {
+  initAsmInfo();
+}
 
-  MRI.reset(createMMIXMCRegisterInfo(TT));
-  MII.reset(createMMIXMCInstrInfo());
-  STI.reset(createMMIXMCSubtargetInfo(TT, CPU, FS));
-  AsmInfo.reset(T.createMCAsmInfo(*MRI, TT, Options.MCOptions));
+MMIXTargetMachine::~MMIXTargetMachine() = default;
+
+namespace {
+
+class MMIXPassConfig final : public TargetPassConfig {
+public:
+  MMIXPassConfig(MMIXTargetMachine &TM, PassManagerBase &PM)
+      : TargetPassConfig(TM, PM) {}
+
+  MMIXTargetMachine &getMMIXTargetMachine() const {
+    return getTM<MMIXTargetMachine>();
+  }
+
+  bool addInstSelector() override {
+    addPass(createMMIXISelDag(getMMIXTargetMachine()));
+    return false;
+  }
+};
+
+} // namespace
+
+TargetPassConfig *MMIXTargetMachine::createPassConfig(PassManagerBase &PM) {
+  return new MMIXPassConfig(*this, PM);
 }

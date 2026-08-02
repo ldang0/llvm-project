@@ -21,6 +21,8 @@ using namespace llvm;
 
 void MMIXSubtarget::anchor() {}
 
-MMIXSubtarget::MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS)
+MMIXSubtarget::MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
+                             const TargetMachine &TM)
     : MMIXGenSubtargetInfo(TT, CPU.empty() ? "generic" : CPU,
-                           /*TuneCPU=*/CPU.empty() ? "generic" : CPU, FS) {}
+                           /*TuneCPU=*/CPU.empty() ? "generic" : CPU, FS),
+      InstrInfo(*this), FrameLowering(), TLInfo(TM, *this) {}
