@@ -319,6 +319,35 @@ def EIGHTADDUI : MMIXIntRegImmOpcode<0x2D, "8ADDU">;
 def SIXTEENADDU : MMIXIntRegRegOpcode<0x2E, "16ADDU">;
 def SIXTEENADDUI : MMIXIntRegImmOpcode<0x2F, "16ADDU">;
 
+def mmix_uimm8 : PatLeaf<(imm), [{
+  return isUInt<8>(N->getZExtValue());
+}]>;
+
+def mmix_neg_uimm8 : PatLeaf<(imm), [{
+  int64_t Value = N->getSExtValue();
+  return Value < 0 && Value >= -255;
+}]>;
+
+def mmix_neg_imm : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(-N->getSExtValue(), SDLoc(N), MVT::i64);
+}]>;
+
+// LLVM integer arithmetic wraps modulo 2^64 unless overflow makes the result
+// poison. Neither case permits the traps raised by MMIX ADD, SUB, and NEG, so
+// instruction selection exclusively uses their unsigned, nontrapping forms.
+def : Pat<(add i64:$lhs, mmix_uimm8:$rhs),
+          (ADDUI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(add i64:$lhs, mmix_neg_uimm8:$rhs),
+          (SUBUI $lhs, (mmix_neg_imm mmix_neg_uimm8:$rhs))>;
+def : Pat<(add i64:$lhs, i64:$rhs), (ADDU $lhs, $rhs)>;
+
+def : Pat<(sub i64:$lhs, mmix_uimm8:$rhs),
+          (SUBUI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(sub i64:$lhs, mmix_neg_uimm8:$rhs),
+          (ADDUI $lhs, (mmix_neg_imm mmix_neg_uimm8:$rhs))>;
+def : Pat<(sub 0, i64:$rhs), (NEGU 0, $rhs)>;
+def : Pat<(sub i64:$lhs, i64:$rhs), (SUBU $lhs, $rhs)>;
+
 def CSN : MMIXIntRegRegOpcode<0x60, "CSN">;
 def CSNI : MMIXIntRegImmOpcode<0x61, "CSN">;
 def CSZ : MMIXIntRegRegOpcode<0x62, "CSZ">;

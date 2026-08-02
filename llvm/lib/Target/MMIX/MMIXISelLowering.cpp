@@ -45,12 +45,18 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   // legal-width operations unavailable until their dedicated lowering task
   // defines the exact MMIX semantics.
   static constexpr unsigned IntegerOperations[] = {
-      ISD::ADD,  ISD::SUB,   ISD::MUL,    ISD::SDIV,     ISD::UDIV,  ISD::SREM,
-      ISD::UREM, ISD::AND,   ISD::OR,     ISD::XOR,      ISD::SHL,   ISD::SRA,
-      ISD::SRL,  ISD::ROTL,  ISD::ROTR,   ISD::BSWAP,    ISD::CTPOP, ISD::CTLZ,
-      ISD::CTTZ, ISD::SETCC, ISD::SELECT, ISD::SELECT_CC};
+      ISD::MUL,  ISD::SDIV, ISD::UDIV,  ISD::SREM,   ISD::UREM,
+      ISD::AND,  ISD::OR,   ISD::XOR,   ISD::SHL,    ISD::SRA,
+      ISD::SRL,  ISD::ROTL, ISD::ROTR,  ISD::BSWAP,  ISD::CTPOP,
+      ISD::CTLZ, ISD::CTTZ, ISD::SETCC, ISD::SELECT, ISD::SELECT_CC};
   for (unsigned Opcode : IntegerOperations)
     RejectOperation(Opcode, MVT::i64);
+
+  // Overflow-producing nodes must be expanded rather than selected as MMIX's
+  // trapping signed arithmetic instructions. LLVM's nsw flag is poison
+  // semantics and likewise does not authorize a hardware trap.
+  for (unsigned Opcode : {ISD::SADDO, ISD::UADDO, ISD::SSUBO, ISD::USUBO})
+    setOperationAction(Opcode, MVT::i64, Expand);
 
   static constexpr unsigned FloatingOperations[] = {
       ISD::ConstantFP, ISD::FADD,  ISD::FSUB,   ISD::FMUL,      ISD::FDIV,
