@@ -15,8 +15,8 @@ using namespace llvm;
 MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
                                        const MMIXSubtarget &STI)
     : TargetLowering(TM, STI) {
-  addRegisterClass(MVT::i64, &MMIX::GPR64RegClass);
-  addRegisterClass(MVT::f64, &MMIX::FPR64RegClass);
+  addRegisterClass(MVT::i64, &MMIX::GPR64CodeGenRegClass);
+  addRegisterClass(MVT::f64, &MMIX::FPR64CodeGenRegClass);
   computeRegisterProperties(STI.getRegisterInfo());
   setStackPointerRegisterToSaveRestore(MMIX::R254);
 }

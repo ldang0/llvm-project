@@ -26,6 +26,15 @@ def GPR64 : RegisterClass<"MMIX", [i64], 64,
 def FPR64 : RegisterClass<"MMIX", [f64], 64,
                           (sequence "R%u", 0, 255)>;
 
+// CodeGen uses only registers whose roles are fixed by the provisional ABI.
+// Caller-clobbered globals precede hardware-preserved locals in allocation
+// order. The architectural classes above remain complete for MC operands.
+def GPR64CodeGen : RegisterClass<"MMIX", [i64], 64,
+    (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
+
+def FPR64CodeGen : RegisterClass<"MMIX", [f64], 64,
+    (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
+
 // MMIX special-register encodings are the values accepted by GET and PUT.
 class MMIXSpecialReg<bits<5> Encoding, string Name> : Register<Name> {
   let Namespace = "MMIX";

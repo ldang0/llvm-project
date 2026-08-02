@@ -40,8 +40,9 @@ def : Processor<"generic", NoItineraries,
 //===----------------------------------------------------------------------===//
 
 include "MMIXRegisterInfo.td"
+include "MMIXCallingConv.td"
 
-defm : RemapAllTargetPseudoPointerOperands<GPR64>;
+defm : RemapAllTargetPseudoPointerOperands<GPR64CodeGen>;
 
 //===----------------------------------------------------------------------===//
 // Instruction descriptions

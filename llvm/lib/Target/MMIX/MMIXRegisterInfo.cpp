@@ -18,17 +18,32 @@ using namespace llvm;
 #define GET_REGINFO_TARGET_DESC
 #include "MMIXGenRegisterInfo.inc"
 
-MMIXRegisterInfo::MMIXRegisterInfo() : MMIXGenRegisterInfo(/*RA=*/0) {}
+MMIXRegisterInfo::MMIXRegisterInfo() : MMIXGenRegisterInfo(MMIX::RJ) {}
 
 const MCPhysReg *
 MMIXRegisterInfo::getCalleeSavedRegs(const MachineFunction *) const {
-  static const MCPhysReg CalleeSavedRegs[] = {0};
-  return CalleeSavedRegs;
+  return CSR_MMIX_SaveList;
+}
+
+const uint32_t *
+MMIXRegisterInfo::getCallPreservedMask(const MachineFunction &,
+                                       CallingConv::ID CC) const {
+  return CC == CallingConv::C ? CSR_MMIX_RegMask : nullptr;
 }
 
 BitVector MMIXRegisterInfo::getReservedRegs(const MachineFunction &) const {
-  // Task 31 replaces this conservative policy with the provisional ABI map.
-  return BitVector(getNumRegs(), true);
+  BitVector Reserved(getNumRegs(), true);
+
+  for (MCPhysReg Reg : MMIX::GPR64CodeGenRegClass)
+    Reserved.reset(Reg);
+
+  return Reserved;
+}
+
+const TargetRegisterClass *
+MMIXRegisterInfo::getPointerRegClass(unsigned Kind) const {
+  assert(Kind == 0 && "MMIX has only one pointer register kind");
+  return &MMIX::GPR64CodeGenRegClass;
 }
 
 bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator, int,
@@ -36,6 +51,6 @@ bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator, int,
   llvm_unreachable("MMIX frame-index elimination is not implemented");
 }
 
-Register MMIXRegisterInfo::getFrameRegister(const MachineFunction &) const {
-  return MMIX::R254;
+Register MMIXRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
+  return getFrameLowering(MF)->hasFP(MF) ? MMIX::R253 : MMIX::R254;
 }

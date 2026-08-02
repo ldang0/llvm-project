@@ -1,0 +1,23 @@
+# RUN: llc -mtriple=mmix -run-pass=greedy,virtregrewriter -o - %s \
+# RUN:   | FileCheck %s
+
+# CHECK-LABEL: name: register_info
+# CHECK: $r250 = SETL 1
+# CHECK: dead $r250 = ADDU killed $r250, $r250
+
+--- |
+  define void @register_info() {
+    ret void
+  }
+...
+---
+name:            register_info
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: gpr64codegen }
+  - { id: 1, class: gpr64codegen }
+body:             |
+  bb.0:
+    %0:gpr64codegen = SETL 1
+    %1:gpr64codegen = ADDU %0, %0
+...
