@@ -16,6 +16,7 @@ add_llvm_target(MMIXCodeGen
 
   LINK_COMPONENTS
   MMIXAsmParser
+  MMIXDisassembler
   MMIXDesc
   MMIXInfo
   Support
@@ -27,4 +28,5 @@ add_llvm_target(MMIXCodeGen
 
 add_subdirectory(MCTargetDesc)
 add_subdirectory(AsmParser)
+add_subdirectory(Disassembler)
 add_subdirectory(TargetInfo)
