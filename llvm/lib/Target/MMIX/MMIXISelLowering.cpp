@@ -86,13 +86,20 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
 
   static constexpr unsigned AddressOperations[] = {
       ISD::GlobalAddress, ISD::ExternalSymbol, ISD::BlockAddress,
-      ISD::ConstantPool,  ISD::JumpTable,      ISD::FrameIndex,
-      ISD::FRAMEADDR,     ISD::RETURNADDR,     ISD::DYNAMIC_STACKALLOC};
+      ISD::ConstantPool,  ISD::JumpTable,      ISD::FRAMEADDR,
+      ISD::RETURNADDR,    ISD::DYNAMIC_STACKALLOC};
   for (unsigned Opcode : AddressOperations)
     RejectOperation(Opcode, MVT::i64);
 
-  RejectOperation(ISD::LOAD, MVT::i64);
-  RejectOperation(ISD::STORE, MVT::i64);
+  setOperationAction(ISD::FrameIndex, MVT::i64, Legal);
+  setOperationAction(ISD::LOAD, MVT::i64, Legal);
+  setOperationAction(ISD::STORE, MVT::i64, Legal);
+  for (MVT MemVT : {MVT::i8, MVT::i16, MVT::i32}) {
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MemVT, Legal);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MemVT, Legal);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MemVT, Legal);
+    setTruncStoreAction(MVT::i64, MemVT, Legal);
+  }
   RejectOperation(ISD::LOAD, MVT::f64);
   RejectOperation(ISD::STORE, MVT::f64);
   setOperationAction(ISD::BR_CC, MVT::i64, Expand);
@@ -101,6 +108,13 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
   RejectOperation(ISD::STACKRESTORE, MVT::Other);
+}
+
+bool MMIXTargetLowering::allowsMisalignedMemoryAccesses(
+    EVT, unsigned, Align, MachineMemOperand::Flags, unsigned *) const {
+  // MMIX rounds a misaligned multi-byte address down instead of performing
+  // the byte sequence required by LLVM semantics. Let SelectionDAG expand it.
+  return false;
 }
 
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,

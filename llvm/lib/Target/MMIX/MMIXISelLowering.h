@@ -33,6 +33,10 @@ class MMIXTargetLowering final : public TargetLowering {
 public:
   MMIXTargetLowering(const TargetMachine &TM, const MMIXSubtarget &STI);
 
+  bool allowsMisalignedMemoryAccesses(
+      EVT VT, unsigned AddrSpace, Align Alignment,
+      MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
+      unsigned *Fast = nullptr) const override;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,

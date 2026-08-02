@@ -718,6 +718,54 @@ def STOUI : MMIXStoreImmOpcode<0xAF, "STOU">;
 def STHT : MMIXStoreRegOpcode<0xB2, "STHT">;
 def STHTI : MMIXStoreImmOpcode<0xB3, "STHT">;
 
+multiclass MMIXLoadPatterns<PatFrag LoadOp, Instruction RegOp,
+                            Instruction ImmOp> {
+  def : Pat<(i64 (LoadOp GPR64:$base)), (ImmOp GPR64:$base, 0)>;
+  def : Pat<(i64 (LoadOp (i64 frameindex:$base))),
+            (ImmOp (i64 (to_tframeindex $base)), 0)>;
+  def : Pat<(i64 (LoadOp (add GPR64:$base, mmix_uimm8:$offset))),
+            (ImmOp GPR64:$base, mmix_uimm8:$offset)>;
+  def : Pat<(i64 (LoadOp (add (i64 frameindex:$base),
+                              mmix_uimm8:$offset))),
+            (ImmOp (i64 (to_tframeindex $base)), mmix_uimm8:$offset)>;
+  def : Pat<(i64 (LoadOp (add GPR64:$base, GPR64:$offset))),
+            (RegOp GPR64:$base, GPR64:$offset)>;
+}
+
+defm : MMIXLoadPatterns<sextloadi8, LDB, LDBI>;
+defm : MMIXLoadPatterns<extloadi8, LDBU, LDBUI>;
+defm : MMIXLoadPatterns<zextloadi8, LDBU, LDBUI>;
+defm : MMIXLoadPatterns<sextloadi16, LDW, LDWI>;
+defm : MMIXLoadPatterns<extloadi16, LDWU, LDWUI>;
+defm : MMIXLoadPatterns<zextloadi16, LDWU, LDWUI>;
+defm : MMIXLoadPatterns<sextloadi32, LDT, LDTI>;
+defm : MMIXLoadPatterns<extloadi32, LDTU, LDTUI>;
+defm : MMIXLoadPatterns<zextloadi32, LDTU, LDTUI>;
+defm : MMIXLoadPatterns<load, LDOU, LDOUI>;
+
+multiclass MMIXStorePatterns<PatFrag StoreOp, Instruction RegOp,
+                             Instruction ImmOp> {
+  def : Pat<(StoreOp GPR64:$value, GPR64:$base),
+            (ImmOp GPR64:$value, GPR64:$base, 0)>;
+  def : Pat<(StoreOp GPR64:$value, (i64 frameindex:$base)),
+            (ImmOp GPR64:$value, (i64 (to_tframeindex $base)), 0)>;
+  def : Pat<(StoreOp GPR64:$value,
+                     (add GPR64:$base, mmix_uimm8:$offset)),
+            (ImmOp GPR64:$value, GPR64:$base, mmix_uimm8:$offset)>;
+  def : Pat<(StoreOp GPR64:$value,
+                     (add (i64 frameindex:$base), mmix_uimm8:$offset)),
+            (ImmOp GPR64:$value, (i64 (to_tframeindex $base)),
+                   mmix_uimm8:$offset)>;
+  def : Pat<(StoreOp GPR64:$value, (add GPR64:$base, GPR64:$offset)),
+            (RegOp GPR64:$value, GPR64:$base, GPR64:$offset)>;
+}
+
+// Unsigned stores truncate without MMIX's signed-store range exception.
+defm : MMIXStorePatterns<truncstorei8, STBU, STBUI>;
+defm : MMIXStorePatterns<truncstorei16, STWU, STWUI>;
+defm : MMIXStorePatterns<truncstorei32, STTU, STTUI>;
+defm : MMIXStorePatterns<store, STOU, STOUI>;
+
 // CSWAP uses the ordinary three-field memory form. Its comparison and result
 // dependency is left for later lowering.
 class MMIXCompareSwapReg
