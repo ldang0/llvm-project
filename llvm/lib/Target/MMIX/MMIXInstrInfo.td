@@ -36,6 +36,8 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   let InOperandList = ins;
   let AsmString = asmstr;
   let Size = 4;
+  string MMIXInventoryStatus = "modeled";
+  string MMIXInventoryFamily = "unclassified";
 }
 
 // The ordinary integer form has a register or unsigned-byte Z operand. The
@@ -44,29 +46,39 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
 class MMIXIntRegReg<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$lhs, GPR64Op:$rhs),
-                      Mnemonic # " $dst, $lhs, $rhs">;
+                      Mnemonic # " $dst, $lhs, $rhs"> {
+  let MMIXInventoryFamily = "integer";
+}
 
 class MMIXIntRegImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$lhs, MMIXUImm8:$rhs),
-                      Mnemonic # " $dst, $lhs, $rhs">;
+                      Mnemonic # " $dst, $lhs, $rhs"> {
+  let MMIXInventoryFamily = "integer";
+}
 
 // NEG and NEGU use an unsigned byte in the Y field even in their register-Z
 // form, unlike the ordinary X,Y,Z instruction family.
 class MMIXNegReg<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXUImm8:$lhs, GPR64Op:$rhs),
-                      Mnemonic # " $dst, $lhs, $rhs">;
+                      Mnemonic # " $dst, $lhs, $rhs"> {
+  let MMIXInventoryFamily = "integer";
+}
 
 class MMIXNegImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXUImm8:$lhs, MMIXUImm8:$rhs),
-                      Mnemonic # " $dst, $lhs, $rhs">;
+                      Mnemonic # " $dst, $lhs, $rhs"> {
+  let MMIXInventoryFamily = "integer";
+}
 
 class MMIXIntConst<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXUImm16:$value),
-                      Mnemonic # " $dst, $value">;
+                      Mnemonic # " $dst, $value"> {
+  let MMIXInventoryFamily = "integer";
+}
 
 // Arithmetic, shifts, comparisons, conditional sets, and bit operations all
 // have the architectural register and immediate variants listed here.
@@ -112,22 +124,30 @@ foreach Mnemonic = [
 class MMIXLoadReg<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$base, GPR64Op:$offset),
-                      Mnemonic # " $dst, $base, $offset">;
+                      Mnemonic # " $dst, $base, $offset"> {
+  let MMIXInventoryFamily = "memory";
+}
 
 class MMIXLoadImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$base, MMIXUImm8:$offset),
-                      Mnemonic # " $dst, $base, $offset">;
+                      Mnemonic # " $dst, $base, $offset"> {
+  let MMIXInventoryFamily = "memory";
+}
 
 class MMIXStoreReg<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
-                      Mnemonic # " $value, $base, $offset">;
+                      Mnemonic # " $value, $base, $offset"> {
+  let MMIXInventoryFamily = "memory";
+}
 
 class MMIXStoreImm<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
-                      Mnemonic # " $value, $base, $offset">;
+                      Mnemonic # " $value, $base, $offset"> {
+  let MMIXInventoryFamily = "memory";
+}
 
 foreach Mnemonic = [
   "LDB", "LDBU", "LDW", "LDWU", "LDT", "LDTU", "LDO", "LDOU", "LDHT"
@@ -148,12 +168,16 @@ foreach Mnemonic = [
 class MMIXCompareSwapReg
     : MMIXInstruction<(outs GPR64Op:$result),
                       (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
-                      "CSWAP $result, $base, $offset">;
+                      "CSWAP $result, $base, $offset"> {
+  let MMIXInventoryFamily = "memory";
+}
 
 class MMIXCompareSwapImm
     : MMIXInstruction<(outs GPR64Op:$result),
                       (ins GPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
-                      "CSWAP $result, $base, $offset">;
+                      "CSWAP $result, $base, $offset"> {
+  let MMIXInventoryFamily = "memory";
+}
 
 def CSWAP : MMIXCompareSwapReg;
 def CSWAPI : MMIXCompareSwapImm;
@@ -161,7 +185,9 @@ def CSWAPI : MMIXCompareSwapImm;
 class MMIXCondBranch<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$condition, MMIXBranchTarget:$target),
-                      Mnemonic # " $condition, $target">;
+                      Mnemonic # " $condition, $target"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 foreach Mnemonic = ["BN", "BZ", "BP", "BOD", "BNN", "BNZ", "BNP", "BEV"] in {
   def Mnemonic : MMIXCondBranch<Mnemonic>;
@@ -177,21 +203,27 @@ foreach Mnemonic = [
 
 class MMIXJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins MMIXBranchTarget:$target),
-                      Mnemonic # " $target">;
+                      Mnemonic # " $target"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 def JMP : MMIXJump<"JMP">;
 def JMPB : MMIXJump<"JMPB">;
 
 class MMIXGetAddress<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXBranchTarget:$target),
-                      Mnemonic # " $dst, $target">;
+                      Mnemonic # " $dst, $target"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 def GETA : MMIXGetAddress<"GETA">;
 def GETAB : MMIXGetAddress<"GETAB">;
 
 class MMIXPushJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins GPR64Op:$link, MMIXBranchTarget:$target),
-                      Mnemonic # " $link, $target">;
+                      Mnemonic # " $link, $target"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 def PUSHJ : MMIXPushJump<"PUSHJ">;
 def PUSHJB : MMIXPushJump<"PUSHJB">;
@@ -199,12 +231,16 @@ def PUSHJB : MMIXPushJump<"PUSHJB">;
 class MMIXGoReg
     : MMIXInstruction<(outs GPR64Op:$link),
                       (ins GPR64Op:$base, GPR64Op:$offset),
-                      "GO $link, $base, $offset">;
+                      "GO $link, $base, $offset"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 class MMIXGoImm
     : MMIXInstruction<(outs GPR64Op:$link),
                       (ins GPR64Op:$base, MMIXUImm8:$offset),
-                      "GO $link, $base, $offset">;
+                      "GO $link, $base, $offset"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 def GO : MMIXGoReg;
 def GOI : MMIXGoImm;
@@ -212,19 +248,25 @@ def GOI : MMIXGoImm;
 class MMIXPushGoReg
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$count, GPR64Op:$base, GPR64Op:$offset),
-                      "PUSHGO $count, $base, $offset">;
+                      "PUSHGO $count, $base, $offset"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 class MMIXPushGoImm
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$count, GPR64Op:$base, MMIXUImm8:$offset),
-                      "PUSHGO $count, $base, $offset">;
+                      "PUSHGO $count, $base, $offset"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 def PUSHGO : MMIXPushGoReg;
 def PUSHGOI : MMIXPushGoImm;
 
 def POP : MMIXInstruction<(outs),
                           (ins MMIXUImm8:$count, MMIXUImm16:$target),
-                          "POP $count, $target">;
+                          "POP $count, $target"> {
+  let MMIXInventoryFamily = "control-flow";
+}
 
 // Floating-point arithmetic operates on the 64-bit floating-point view of
 // the general-purpose register file. These operations have no immediate
@@ -232,7 +274,9 @@ def POP : MMIXInstruction<(outs),
 class MMIXFPBinary<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins FPR64Op:$lhs, FPR64Op:$rhs),
-                      Mnemonic # " $dst, $lhs, $rhs">;
+                      Mnemonic # " $dst, $lhs, $rhs"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 foreach Mnemonic = ["FADD", "FSUB", "FMUL", "FDIV", "FREM"] in
   def Mnemonic : MMIXFPBinary<Mnemonic>;
@@ -240,7 +284,9 @@ foreach Mnemonic = ["FADD", "FSUB", "FMUL", "FDIV", "FREM"] in
 class MMIXFPCompare<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins FPR64Op:$lhs, FPR64Op:$rhs),
-                      Mnemonic # " $dst, $lhs, $rhs">;
+                      Mnemonic # " $dst, $lhs, $rhs"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 foreach Mnemonic = [
   "FCMP", "FCMPE", "FUN", "FUNE", "FEQL", "FEQLE"
@@ -250,14 +296,18 @@ foreach Mnemonic = [
 class MMIXFPUnaryRounded<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, FPR64Op:$src),
-                      Mnemonic # " $dst, $round, $src">;
+                      Mnemonic # " $dst, $round, $src"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 def FSQRT : MMIXFPUnaryRounded<"FSQRT">;
 def FINT : MMIXFPUnaryRounded<"FINT">;
 
 class MMIXFix<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst), (ins FPR64Op:$src),
-                      Mnemonic # " $dst, $src">;
+                      Mnemonic # " $dst, $src"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 def FIX : MMIXFix<"FIX">;
 def FIXU : MMIXFix<"FIXU">;
@@ -265,12 +315,16 @@ def FIXU : MMIXFix<"FIXU">;
 class MMIXFloatFromIntReg<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, GPR64Op:$src),
-                      Mnemonic # " $dst, $round, $src">;
+                      Mnemonic # " $dst, $round, $src"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 class MMIXFloatFromIntImm<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, MMIXUImm8:$src),
-                      Mnemonic # " $dst, $round, $src">;
+                      Mnemonic # " $dst, $round, $src"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 foreach Mnemonic = ["FLOT", "FLOTU", "SFLOT", "SFLOTU"] in {
   def Mnemonic : MMIXFloatFromIntReg<Mnemonic>;
@@ -282,22 +336,30 @@ foreach Mnemonic = ["FLOT", "FLOTU", "SFLOT", "SFLOTU"] in {
 class MMIXFPLoadReg<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins GPR64Op:$base, GPR64Op:$offset),
-                      Mnemonic # " $dst, $base, $offset">;
+                      Mnemonic # " $dst, $base, $offset"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 class MMIXFPLoadImm<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins GPR64Op:$base, MMIXUImm8:$offset),
-                      Mnemonic # " $dst, $base, $offset">;
+                      Mnemonic # " $dst, $base, $offset"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 class MMIXFPStoreReg<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins FPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
-                      Mnemonic # " $value, $base, $offset">;
+                      Mnemonic # " $value, $base, $offset"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 class MMIXFPStoreImm<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins FPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
-                      Mnemonic # " $value, $base, $offset">;
+                      Mnemonic # " $value, $base, $offset"> {
+  let MMIXInventoryFamily = "floating-point";
+}
 
 def LDSF : MMIXFPLoadReg<"LDSF">;
 def LDSFI : MMIXFPLoadImm<"LDSF">;
@@ -310,6 +372,7 @@ def STSFI : MMIXFPStoreImm<"STSF">;
 class MMIXMachineInstruction<dag outs, dag ins, string asmstr>
     : MMIXInstruction<outs, ins, asmstr> {
   let hasSideEffects = true;
+  let MMIXInventoryFamily = "system";
 }
 
 class MMIXStoreConstantReg
