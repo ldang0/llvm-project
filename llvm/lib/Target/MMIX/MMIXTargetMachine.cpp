@@ -41,6 +41,16 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
 
 MMIXTargetMachine::~MMIXTargetMachine() = default;
 
+bool MMIXTargetMachine::addPassesToEmitFile(
+    PassManagerBase &PM, raw_pwrite_stream &Out, raw_pwrite_stream *DwoOut,
+    CodeGenFileType FileType, bool DisableVerify,
+    MachineModuleInfoWrapperPass *MMIWP) {
+  if (FileType == CodeGenFileType::ObjectFile)
+    return true;
+  return CodeGenTargetMachineImpl::addPassesToEmitFile(
+      PM, Out, DwoOut, FileType, DisableVerify, MMIWP);
+}
+
 namespace {
 
 class MMIXPassConfig final : public TargetPassConfig {

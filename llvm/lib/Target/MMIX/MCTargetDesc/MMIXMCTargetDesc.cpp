@@ -28,6 +28,7 @@ using namespace llvm;
 #include "MMIXGenRegisterInfo.inc"
 
 #define GET_INSTRINFO_MC_DESC
+#define ENABLE_INSTR_PREDICATE_VERIFIER
 #include "MMIXGenInstrInfo.inc"
 
 MCInstrInfo *llvm::createMMIXMCInstrInfo() {

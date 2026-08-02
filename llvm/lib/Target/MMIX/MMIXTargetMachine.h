@@ -27,6 +27,12 @@ public:
                     bool JIT);
   ~MMIXTargetMachine() override;
 
+  bool
+  addPassesToEmitFile(PassManagerBase &PM, raw_pwrite_stream &Out,
+                      raw_pwrite_stream *DwoOut, CodeGenFileType FileType,
+                      bool DisableVerify = true,
+                      MachineModuleInfoWrapperPass *MMIWP = nullptr) override;
+
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 
   TargetLoweringObjectFile *getObjFileLowering() const override {

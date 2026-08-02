@@ -1,0 +1,63 @@
+# RUN: llc -mtriple=mmix -start-after=prolog-epilog -verify-machineinstrs \
+# RUN:   -filetype=asm -o - %s | FileCheck %s
+
+# CHECK-LABEL: operands:
+# CHECK: SETL r1, 4660
+# CHECK-NEXT: ADDU r2, r1, 7
+# CHECK-NEXT: BN r2, [[TARGET:.LBB[0-9]+_1]]
+# CHECK: [[TARGET]]:
+# CHECK-NEXT: JMP [[TARGET]]
+
+# CHECK-LABEL: global_symbol:
+# CHECK: JMP external_function
+
+# CHECK-LABEL: external_symbol:
+# CHECK: JMP external_name
+
+--- |
+  declare void @external_function()
+
+  define void @operands() {
+    ret void
+  }
+
+  define void @global_symbol() {
+    ret void
+  }
+
+  define void @external_symbol() {
+    ret void
+  }
+...
+---
+name:            operands
+alignment:       4
+tracksRegLiveness: true
+selected:        true
+body:             |
+  bb.0:
+    $r1 = SETL 4660
+    $r2 = ADDUI $r1, 7
+    BN $r2, %bb.1
+
+  bb.1:
+    JMP %bb.1
+...
+---
+name:            global_symbol
+alignment:       4
+tracksRegLiveness: true
+selected:        true
+body:             |
+  bb.0:
+    JMP @external_function
+...
+---
+name:            external_symbol
+alignment:       4
+tracksRegLiveness: true
+selected:        true
+body:             |
+  bb.0:
+    JMP &external_name
+...

@@ -13,11 +13,13 @@ tablegen(LLVM MMIXGenMCCodeEmitter.inc -gen-emitter)
 add_public_tablegen_target(MMIXCommonTableGen)
 
 add_llvm_target(MMIXCodeGen
+  MMIXAsmPrinter.cpp
   MMIXFrameLowering.cpp
   MMIXInstrInfo.cpp
   MMIXISelDAGToDAG.cpp
   MMIXISelLowering.cpp
   MMIXRegisterInfo.cpp
+  MMIXMCInstLower.cpp
   MMIXSubtarget.cpp
   MMIXTargetMachine.cpp
 

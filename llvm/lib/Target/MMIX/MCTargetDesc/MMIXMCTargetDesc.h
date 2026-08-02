@@ -45,4 +45,7 @@ MCAsmBackend *createMMIXAsmBackend(const Target &T, const MCSubtargetInfo &STI,
 #define GET_INSTRINFO_ENUM
 #include "MMIXGenInstrInfo.inc"
 
+#define GET_INSTRINFO_MC_HELPER_DECLS
+#include "MMIXGenInstrInfo.inc"
+
 #endif // LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXMCTARGETDESC_H

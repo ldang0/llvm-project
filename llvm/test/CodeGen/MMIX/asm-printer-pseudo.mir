@@ -1,0 +1,20 @@
+# RUN: not --crash llc -mtriple=mmix -start-after=prolog-epilog \
+# RUN:   -filetype=asm -o /dev/null %s 2>&1 | FileCheck %s
+
+# CHECK: MMIX CodeGen pseudo reached canonical assembly emission
+
+--- |
+  define void @unexpanded_pseudo() {
+    ret void
+  }
+...
+---
+name:            unexpanded_pseudo
+tracksRegLiveness: true
+selected:        true
+body:             |
+  bb.0:
+    ADJCALLSTACKDOWN 8, 0, implicit-def $r254, implicit $r254
+    ADJCALLSTACKUP 8, 0, implicit-def $r254, implicit $r254
+    POP 0, 0
+...
