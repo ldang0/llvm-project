@@ -6,11 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIX.h"
 #include "MMIXTargetMachine.h"
-#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
-#include "llvm/IR/Function.h"
 #include "llvm/InitializePasses.h"
 
 using namespace llvm;
@@ -24,15 +23,17 @@ class MMIXDAGToDAGISel final : public SelectionDAGISel {
 public:
   explicit MMIXDAGToDAGISel(MMIXTargetMachine &TM) : SelectionDAGISel(TM) {}
 
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    MF.getFunction().getContext().emitError(
-        "MMIX instruction selection is not implemented");
-    return false;
-  }
-
 private:
-  void Select(SDNode *) override {
-    llvm_unreachable("MMIX instruction selection is not implemented");
+// Include the TableGen pattern matcher. Family-specific patterns are added by
+// the lowering tasks that own their semantics.
+#include "MMIXGenDAGISel.inc"
+
+  void Select(SDNode *Node) override {
+    if (Node->isMachineOpcode()) {
+      Node->setNodeId(-1);
+      return;
+    }
+    SelectCode(Node);
   }
 };
 

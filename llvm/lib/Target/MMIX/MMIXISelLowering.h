@@ -18,6 +18,13 @@ class MMIXSubtarget;
 class MMIXTargetLowering final : public TargetLowering {
 public:
   MMIXTargetLowering(const TargetMachine &TM, const MMIXSubtarget &STI);
+
+  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+  SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
+                               bool IsVarArg,
+                               const SmallVectorImpl<ISD::InputArg> &Ins,
+                               const SDLoc &DL, SelectionDAG &DAG,
+                               SmallVectorImpl<SDValue> &InVals) const override;
 };
 
 } // namespace llvm
