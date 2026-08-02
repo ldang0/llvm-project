@@ -422,3 +422,33 @@ def SAVE : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
                                   "SAVE $state">;
 def UNSAVE : MMIXMachineInstruction<(outs), (ins GPR64Op:$state),
                                     "UNSAVE $state">;
+
+// Keep pseudo instructions separate from architectural instructions.  This
+// base is intentionally not used by the current inventory until lowering and
+// expansion semantics are defined.
+class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
+    : MMIXInstruction<outs, ins, asmstr> {
+  let isPseudo = true;
+  let isCodeGenOnly = true;
+}
+
+// These records describe expansion relationships without installing parser or
+// printer aliases.  The canonical instruction records remain independently
+// available for later encoding and lowering work.
+class MMIXExpansionRelation<string Name, list<Instruction> Expansion> {
+  string MMIXExpansionName = Name;
+  list<Instruction> MMIXExpansionInstructions = Expansion;
+}
+
+class MMIXPseudoRelation<string PseudoName, list<Instruction> Expansion>
+    : MMIXExpansionRelation<PseudoName, Expansion> {
+  bit MMIXIsPseudo = true;
+}
+
+class MMIXAlias<string AliasName, list<Instruction> CanonicalInstructions>
+    : MMIXExpansionRelation<AliasName, CanonicalInstructions> {
+  bit MMIXIsAlias = true;
+}
+
+def MMIXSetAlias : MMIXAlias<"SET", [ORI]>;
+def MMIXLDAAlias : MMIXAlias<"LDA", [ADDU, ADDUI]>;

@@ -18,7 +18,22 @@ include "llvm/Target/Target.td"
 // MMIX supported processors
 //===----------------------------------------------------------------------===//
 
-def : Processor<"generic", NoItineraries, []>;
+// These features describe implementation capabilities.  They are metadata
+// only for now; instruction availability predicates will be added when the
+// target has subtarget-aware lowering and encoding support.
+def FeatureMMIXBase : SubtargetFeature<"base", "HasMMIXBase", "true",
+                                        "MMIX base ISA">;
+def FeatureMMIXSystem : SubtargetFeature<"system", "HasMMIXSystem", "true",
+                                          "MMIX system instructions">;
+def FeatureMMIXCache : SubtargetFeature<"cache", "HasMMIXCache", "true",
+                                         "MMIX cache-management instructions">;
+def FeatureMMIXVirtualMemory : SubtargetFeature<"virtual-memory",
+                                                 "HasMMIXVirtualMemory", "true",
+                                                 "MMIX virtual-memory instructions">;
+
+def : Processor<"generic", NoItineraries,
+                [FeatureMMIXBase, FeatureMMIXSystem, FeatureMMIXCache,
+                 FeatureMMIXVirtualMemory]>;
 
 //===----------------------------------------------------------------------===//
 // Registers

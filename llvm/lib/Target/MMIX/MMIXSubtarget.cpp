@@ -12,6 +12,9 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mmix-subtarget"
 
+#define GET_SUBTARGETINFO_ENUM
+#include "MMIXGenSubtargetInfo.inc"
+
 #define GET_SUBTARGETINFO_TARGET_DESC
 #define GET_SUBTARGETINFO_CTOR
 #include "MMIXGenSubtargetInfo.inc"

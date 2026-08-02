@@ -19,6 +19,10 @@ namespace llvm {
 class MMIXSubtarget : public MMIXGenSubtargetInfo {
   virtual void anchor();
 
+#define GET_SUBTARGETINFO_MACRO(ATTRIBUTE, DEFAULT, GETTER)                  \
+  bool ATTRIBUTE = DEFAULT;
+#include "MMIXGenSubtargetInfo.inc"
+
 public:
   MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS);
 
