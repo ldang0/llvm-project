@@ -2,6 +2,7 @@ add_llvm_component_library(LLVMMMIXDesc
   MMIXAsmBackend.cpp
   MMIXMCCodeEmitter.cpp
   MMIXMCAsmInfo.cpp
+  MMIXInstPrinter.cpp
   MMIXMCTargetDesc.cpp
 
   LINK_COMPONENTS

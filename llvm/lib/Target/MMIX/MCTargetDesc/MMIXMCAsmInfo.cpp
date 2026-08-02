@@ -15,5 +15,13 @@ MMIXMCAsmInfo::MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
     : MCAsmInfoELF(Options) {
   CodePointerSize = 8;
   CalleeSaveStackSlotSize = 8;
+  CommentString = "#";
+  Data8bitsDirective = "\t.byte\t";
+  Data16bitsDirective = "\t.2byte\t";
+  Data32bitsDirective = "\t.4byte\t";
+  Data64bitsDirective = "\t.8byte\t";
+  ZeroDirective = "\t.space\t";
+  MinInstAlignment = 4;
+  UsesELFSectionDirectiveForBSS = true;
   IsLittleEndian = false;
 }

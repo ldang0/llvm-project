@@ -8,6 +8,7 @@
 
 #include "MMIXMCTargetDesc.h"
 #include "MMIXMCAsmInfo.h"
+#include "MMIXInstPrinter.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -47,12 +48,21 @@ MCSubtargetInfo *llvm::createMMIXMCSubtargetInfo(const Triple &TT,
   return createMMIXMCSubtargetInfoImpl(TT, CPUName, CPUName, FS);
 }
 
+static MCInstPrinter *createMMIXMCInstPrinter(
+    const Triple &, unsigned SyntaxVariant, const MCAsmInfo &MAI,
+    const MCInstrInfo &MII, const MCRegisterInfo &MRI) {
+  if (SyntaxVariant != 0)
+    return nullptr;
+  return new MMIXInstPrinter(MAI, MII, MRI);
+}
+
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
   Target &T = getTheMMIXTarget();
   RegisterMCAsmInfo<MMIXMCAsmInfo> X(T);
   TargetRegistry::RegisterMCInstrInfo(T, createMMIXMCInstrInfo);
   TargetRegistry::RegisterMCRegInfo(T, createMMIXMCRegisterInfo);
   TargetRegistry::RegisterMCSubtargetInfo(T, createMMIXMCSubtargetInfo);
+  TargetRegistry::RegisterMCInstPrinter(T, createMMIXMCInstPrinter);
   TargetRegistry::RegisterMCCodeEmitter(T, createMMIXMCCodeEmitter);
   TargetRegistry::RegisterMCAsmBackend(T, createMMIXAsmBackend);
 }
