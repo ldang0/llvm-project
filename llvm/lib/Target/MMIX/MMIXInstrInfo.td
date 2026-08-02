@@ -1366,6 +1366,12 @@ class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
   let isCodeGenOnly = true;
 }
 
+def LOAD_IMM64
+    : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),
+                            (ins i64imm:$value), ""> {
+  let Pattern = [(set i64:$dst, imm:$value)];
+}
+
 let Defs = [R254], Uses = [R254], hasSideEffects = true in {
 def ADJCALLSTACKDOWN
     : MMIXPseudoInstruction<(outs),

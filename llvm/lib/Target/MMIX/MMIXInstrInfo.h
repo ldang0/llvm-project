@@ -35,6 +35,8 @@ public:
                  int64_t Amount,
                  MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const;
 
+  bool expandPostRAPseudo(MachineInstr &MI) const override;
+
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                    const DebugLoc &DL, Register DstReg, Register SrcReg,
                    bool KillSrc, bool RenamableDest = false,

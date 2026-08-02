@@ -22,6 +22,18 @@ MMIXInstrInfo::MMIXInstrInfo(const MMIXSubtarget &STI)
     : MMIXGenInstrInfo(STI, RI, MMIX::ADJCALLSTACKDOWN, MMIX::ADJCALLSTACKUP),
       RI() {}
 
+static int getSingleWydeIndex(uint64_t Value) {
+  int Index = -1;
+  for (int I = 0; I != 4; ++I) {
+    if (((Value >> (I * 16)) & 0xffff) == 0)
+      continue;
+    if (Index != -1)
+      return -1;
+    Index = I;
+  }
+  return Index == -1 ? 0 : Index;
+}
+
 void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator MBBI,
                                   const DebugLoc &DL, Register DstReg,
@@ -29,24 +41,73 @@ void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
                                   MachineInstr::MIFlag Flags) const {
   static constexpr unsigned SetOpcodes[] = {MMIX::SETL, MMIX::SETML,
                                             MMIX::SETMH, MMIX::SETH};
-  static constexpr unsigned OrOpcodes[] = {MMIX::ORL, MMIX::ORML, MMIX::ORMH,
-                                           MMIX::ORH};
+  static constexpr unsigned IncOpcodes[] = {MMIX::INCL, MMIX::INCML,
+                                            MMIX::INCMH, MMIX::INCH};
 
-  int HighestChunk = 3;
-  while (HighestChunk > 0 && ((Value >> (HighestChunk * 16)) & 0xffff) == 0)
-    --HighestChunk;
-
-  BuildMI(MBB, MBBI, DL, get(SetOpcodes[HighestChunk]), DstReg)
-      .addImm((Value >> (HighestChunk * 16)) & 0xffff)
-      .setMIFlag(Flags);
-
-  for (int Chunk = HighestChunk - 1; Chunk >= 0; --Chunk) {
-    uint64_t Part = (Value >> (Chunk * 16)) & 0xffff;
-    if (Part)
-      BuildMI(MBB, MBBI, DL, get(OrOpcodes[Chunk]), DstReg)
-          .addImm(Part)
-          .setMIFlag(Flags);
+  // Handle compact signed, shifted-wyde, and complemented forms before the
+  // generic SET-plus-INC sequence.
+  int64_t SignedValue = static_cast<int64_t>(Value);
+  if (SignedValue < 0 && SignedValue >= -255) {
+    BuildMI(MBB, MBBI, DL, get(MMIX::NEGUI), DstReg)
+        .addImm(0)
+        .addImm(-SignedValue)
+        .setMIFlag(Flags);
+    return;
   }
+
+  auto EmitSingleWyde = [&](uint64_t WydeValue) {
+    int Index = getSingleWydeIndex(WydeValue);
+    assert(Index >= 0 && "value is not a single wyde");
+    BuildMI(MBB, MBBI, DL, get(SetOpcodes[Index]), DstReg)
+        .addImm((WydeValue >> (Index * 16)) & 0xffff)
+        .setMIFlag(Flags);
+  };
+
+  if (getSingleWydeIndex(Value) >= 0) {
+    EmitSingleWyde(Value);
+    return;
+  }
+
+  uint64_t Magnitude = 0 - Value;
+  if (SignedValue < 0 && getSingleWydeIndex(Magnitude) >= 0) {
+    EmitSingleWyde(Magnitude);
+    BuildMI(MBB, MBBI, DL, get(MMIX::NEGU), DstReg)
+        .addImm(0)
+        .addReg(DstReg)
+        .setMIFlag(Flags);
+    return;
+  }
+
+  uint64_t Complement = ~Value;
+  if (getSingleWydeIndex(Complement) >= 0) {
+    EmitSingleWyde(Complement);
+    BuildMI(MBB, MBBI, DL, get(MMIX::NORI), DstReg)
+        .addReg(DstReg)
+        .addImm(0)
+        .setMIFlag(Flags);
+    return;
+  }
+
+  bool First = true;
+  for (int I = 0; I != 4; ++I) {
+    uint64_t Part = (Value >> (I * 16)) & 0xffff;
+    if (!Part)
+      continue;
+    BuildMI(MBB, MBBI, DL, get(First ? SetOpcodes[I] : IncOpcodes[I]), DstReg)
+        .addImm(Part)
+        .setMIFlag(Flags);
+    First = false;
+  }
+}
+
+bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  if (MI.getOpcode() != MMIX::LOAD_IMM64)
+    return false;
+
+  loadImmediate(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+                MI.getOperand(0).getReg(), uint64_t(MI.getOperand(1).getImm()));
+  MI.eraseFromParent();
+  return true;
 }
 
 void MMIXInstrInfo::adjustReg(MachineBasicBlock &MBB,
