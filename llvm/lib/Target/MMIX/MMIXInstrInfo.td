@@ -566,8 +566,16 @@ class MMIXFPBinary<string Mnemonic>
   let MMIXInventoryFamily = "floating-point";
 }
 
-foreach Mnemonic = ["FADD", "FSUB", "FMUL", "FDIV", "FREM"] in
-  def Mnemonic : MMIXFPBinary<Mnemonic>;
+class MMIXFPBinaryOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPBinary<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def FADD : MMIXFPBinaryOpcode<0x04, "FADD">;
+def FSUB : MMIXFPBinaryOpcode<0x06, "FSUB">;
+def FMUL : MMIXFPBinaryOpcode<0x10, "FMUL">;
+def FDIV : MMIXFPBinaryOpcode<0x14, "FDIV">;
+def FREM : MMIXFPBinaryOpcode<0x16, "FREM">;
 
 class MMIXFPCompare<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
@@ -576,10 +584,17 @@ class MMIXFPCompare<string Mnemonic>
   let MMIXInventoryFamily = "floating-point";
 }
 
-foreach Mnemonic = [
-  "FCMP", "FCMPE", "FUN", "FUNE", "FEQL", "FEQLE"
-] in
-  def Mnemonic : MMIXFPCompare<Mnemonic>;
+class MMIXFPCompareOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPCompare<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def FCMP  : MMIXFPCompareOpcode<0x01, "FCMP">;
+def FCMPE : MMIXFPCompareOpcode<0x11, "FCMPE">;
+def FUN   : MMIXFPCompareOpcode<0x02, "FUN">;
+def FUNE  : MMIXFPCompareOpcode<0x12, "FUNE">;
+def FEQL  : MMIXFPCompareOpcode<0x03, "FEQL">;
+def FEQLE : MMIXFPCompareOpcode<0x13, "FEQLE">;
 
 class MMIXFPUnaryRounded<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
@@ -588,8 +603,13 @@ class MMIXFPUnaryRounded<string Mnemonic>
   let MMIXInventoryFamily = "floating-point";
 }
 
-def FSQRT : MMIXFPUnaryRounded<"FSQRT">;
-def FINT : MMIXFPUnaryRounded<"FINT">;
+class MMIXFPUnaryRoundedOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPUnaryRounded<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def FSQRT : MMIXFPUnaryRoundedOpcode<0x15, "FSQRT">;
+def FINT  : MMIXFPUnaryRoundedOpcode<0x17, "FINT">;
 
 class MMIXFix<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst), (ins FPR64Op:$src),
@@ -597,14 +617,19 @@ class MMIXFix<string Mnemonic>
   let MMIXInventoryFamily = "floating-point";
 }
 
-def FIX : MMIXFix<"FIX">;
-def FIXU : MMIXFix<"FIXU">;
+class MMIXFixOpcode<bits<8> Opcode, string Mnemonic> : MMIXFix<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def FIX  : MMIXFixOpcode<0x05, "FIX">;
+def FIXU : MMIXFixOpcode<0x07, "FIXU">;
 
 class MMIXFloatFromIntReg<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, GPR64Op:$src),
                       Mnemonic # " $dst, $round, $src"> {
   let MMIXInventoryFamily = "floating-point";
+  string MMIXSourceForm = "register";
 }
 
 class MMIXFloatFromIntImm<string Mnemonic>
@@ -612,12 +637,27 @@ class MMIXFloatFromIntImm<string Mnemonic>
                       (ins MMIXRoundingMode:$round, MMIXUImm8:$src),
                       Mnemonic # " $dst, $round, $src"> {
   let MMIXInventoryFamily = "floating-point";
+  string MMIXSourceForm = "immediate";
 }
 
-foreach Mnemonic = ["FLOT", "FLOTU", "SFLOT", "SFLOTU"] in {
-  def Mnemonic : MMIXFloatFromIntReg<Mnemonic>;
-  def Mnemonic # "I" : MMIXFloatFromIntImm<Mnemonic>;
+class MMIXFloatFromIntRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFloatFromIntReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
 }
+
+class MMIXFloatFromIntImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFloatFromIntImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def FLOT   : MMIXFloatFromIntRegOpcode<0x08, "FLOT">;
+def FLOTI  : MMIXFloatFromIntImmOpcode<0x09, "FLOT">;
+def FLOTU  : MMIXFloatFromIntRegOpcode<0x0A, "FLOTU">;
+def FLOTUI : MMIXFloatFromIntImmOpcode<0x0B, "FLOTU">;
+def SFLOT  : MMIXFloatFromIntRegOpcode<0x0C, "SFLOT">;
+def SFLOTI : MMIXFloatFromIntImmOpcode<0x0D, "SFLOT">;
+def SFLOTU : MMIXFloatFromIntRegOpcode<0x0E, "SFLOTU">;
+def SFLOTUI : MMIXFloatFromIntImmOpcode<0x0F, "SFLOTU">;
 
 // Short floating-point values are converted to and from the 64-bit floating
 // representation when crossing memory.
