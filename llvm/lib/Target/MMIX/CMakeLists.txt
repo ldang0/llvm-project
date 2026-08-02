@@ -8,6 +8,7 @@ tablegen(LLVM MMIXGenInstrInfo.inc -gen-instr-info)
 tablegen(LLVM MMIXGenAsmWriter.inc -gen-asm-writer)
 tablegen(LLVM MMIXGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM MMIXGenDisassemblerTables.inc -gen-disassembler)
+tablegen(LLVM MMIXGenMCCodeEmitter.inc -gen-emitter)
 
 add_public_tablegen_target(MMIXCommonTableGen)
 

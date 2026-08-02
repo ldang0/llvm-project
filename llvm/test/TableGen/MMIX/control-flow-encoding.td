@@ -59,6 +59,10 @@ assert !eq(MMIXBranchTarget.MMIXFixupKind, "pc-relative"),
        "branch targets must carry PC-relative fixup metadata";
 assert !eq(MMIXBranchTarget.MMIXFixupScale, 4),
        "branch targets must use instruction-word scaling";
+assert !eq(MMIXBranchTarget.EncoderMethod, "getPCRelativeOpValue"),
+       "branch targets must use the MMIX PC-relative encoder";
+assert !eq(MMIXJumpTarget.EncoderMethod, "getPCRelativeOpValue"),
+       "jump targets must use the MMIX PC-relative encoder";
 assert !eq(MMIXBranchTarget.DecoderMethod, "decodePCRelativeOperand"),
        "branch targets must use the MMIX PC-relative decoder";
 assert !eq(MMIXJumpTarget.DecoderMethod, "decodePCRelativeOperand"),

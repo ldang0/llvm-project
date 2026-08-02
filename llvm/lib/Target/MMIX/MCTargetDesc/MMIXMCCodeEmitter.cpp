@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MMIXBaseInfo.h"
 #include "MMIXFixupKinds.h"
 #include "MMIXMCTargetDesc.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -15,6 +16,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/EndianStream.h"
 #include <cassert>
 #include <cstdint>
 
@@ -22,82 +24,30 @@ using namespace llvm;
 
 namespace {
 
-static unsigned getMMIXOpcode(const MCInstrInfo &MCII, const MCInst &MI) {
-  return MCII.get(MI.getOpcode()).TSFlags & 0xff;
-}
-
-static bool isBranch(unsigned Opcode) {
-  return Opcode >= 0x40 && Opcode <= 0x5f;
-}
-
-static bool isLongPCRelative(unsigned Opcode) {
-  return Opcode >= 0xf0 && Opcode <= 0xf5;
-}
-
-static bool isShortPCRelative(unsigned Opcode) {
-  return isBranch(Opcode) || (Opcode >= 0xf2 && Opcode <= 0xf5);
-}
-
-static bool isBackward(unsigned Opcode) {
-  return (Opcode >= 0x41 && Opcode <= 0x5f && (Opcode & 1)) || Opcode == 0xf1 ||
-         Opcode == 0xf3 || Opcode == 0xf5;
-}
-
 class MMIXMCCodeEmitter : public MCCodeEmitter {
   const MCInstrInfo &MCII;
   const MCRegisterInfo &MRI;
   MCContext &Ctx;
 
-  unsigned getMachineOpValue(const MCOperand &MO) const {
-    if (MO.isReg())
-      return MRI.getEncodingValue(MO.getReg());
-    if (MO.isImm())
-      return static_cast<unsigned>(MO.getImm());
-    return 0;
-  }
+  uint64_t getBinaryCodeForInstr(const MCInst &MI,
+                                 SmallVectorImpl<MCFixup> &Fixups,
+                                 const MCSubtargetInfo &STI) const;
 
-  MCFixupKind getPCRelativeFixup(unsigned Opcode) const {
-    if (isShortPCRelative(Opcode))
-      return isBackward(Opcode) ? MMIX::fixup_mmix_branch_backward
-                                : MMIX::fixup_mmix_branch_forward;
-    return isBackward(Opcode) ? MMIX::fixup_mmix_jump_backward
-                              : MMIX::fixup_mmix_jump_forward;
-  }
+  unsigned getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                             SmallVectorImpl<MCFixup> &Fixups,
+                             const MCSubtargetInfo &STI) const;
 
-  static unsigned getOperandShift(unsigned Opcode, unsigned Operand) {
-    if (isBranch(Opcode))
-      return Operand == 1 ? 0 : 16;
-    if (Opcode == 0xf0 || Opcode == 0xf1)
-      return 0;
-    if (Opcode >= 0xf2 && Opcode <= 0xf5)
-      return Operand == 0 ? 16 : 0;
-    if (Opcode == 0xf8)
-      return Operand == 0 ? 16 : 0;
-    if (Opcode >= 0xe0 && Opcode <= 0xef && Operand == 1)
-      return 0;
-    if (Opcode == 0xfc || Opcode == 0xf9 || Opcode == 0xfb)
-      return 0;
-    if (Opcode == 0xfe && Operand == 1)
-      return 0;
-    if ((Opcode == 0xf6 || Opcode == 0xf7) && Operand == 1)
-      return 0;
-    return 16 - 8 * Operand;
-  }
+  unsigned getPCRelativeOpValue(const MCInst &MI, unsigned OpNo,
+                                SmallVectorImpl<MCFixup> &Fixups,
+                                const MCSubtargetInfo &STI) const;
 
-  static unsigned getOperandWidth(unsigned Opcode, unsigned Operand) {
-    if (isBranch(Opcode) && Operand == 1)
-      return 16;
-    if (Opcode == 0xf0 || Opcode == 0xf1)
-      return 24;
-    if (Opcode >= 0xf2 && Opcode <= 0xf5 && Operand == 1)
-      return 16;
-    if (Opcode == 0xf8 && Operand == 1)
-      return 16;
-    if (Opcode >= 0xe0 && Opcode <= 0xef && Operand == 1)
-      return 16;
-    if (Opcode == 0xfc)
-      return 24;
-    return 8;
+  static MCFixupKind getPCRelativeFixup(uint64_t TSFlags) {
+    const bool IsBackward = TSFlags & MMIXII::PCRelativeBackward;
+    if (MMIXII::getPCRelativeWidth(TSFlags) == 16)
+      return IsBackward ? MMIX::fixup_mmix_branch_backward
+                        : MMIX::fixup_mmix_branch_forward;
+    return IsBackward ? MMIX::fixup_mmix_jump_backward
+                      : MMIX::fixup_mmix_jump_forward;
   }
 
 public:
@@ -106,52 +56,60 @@ public:
 
   void encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
-                         const MCSubtargetInfo &) const override {
-    const unsigned Opcode = getMMIXOpcode(MCII, MI);
-    uint32_t Word = Opcode << 24;
-
-    assert(MI.getNumOperands() <= 3 && "MMIX instructions have three fields");
-    for (unsigned I = 0; I < MI.getNumOperands(); ++I) {
-      const MCOperand &MO = MI.getOperand(I);
-      const unsigned Shift = getOperandShift(Opcode, I);
-      const unsigned Width = getOperandWidth(Opcode, I);
-      const uint32_t Mask = (1u << Width) - 1;
-
-      if (MO.isExpr()) {
-        if (!isBranch(Opcode) && !isLongPCRelative(Opcode)) {
-          Ctx.reportError(MI.getLoc(),
-                          "MMIX expression operand is not relocatable");
-          continue;
-        }
-        Fixups.push_back(
-            MCFixup::create(0, MO.getExpr(), getPCRelativeFixup(Opcode), true));
-        continue;
-      }
-
-      if (MO.isImm() && (isBranch(Opcode) || isLongPCRelative(Opcode))) {
-        const unsigned PCRelWidth = isShortPCRelative(Opcode) ? 16 : 24;
-        const int64_t Min = isBackward(Opcode)
-                                ? -(int64_t(1) << PCRelWidth)
-                                : 0;
-        const int64_t Max = isBackward(Opcode)
-                                ? -1
-                                : (int64_t(1) << PCRelWidth) - 1;
-        if (MO.getImm() < Min || MO.getImm() > Max) {
-          Ctx.reportError(MI.getLoc(),
-                          "MMIX PC-relative operand is out of range");
-          continue;
-        }
-      }
-
-      Word |= (getMachineOpValue(MO) & Mask) << Shift;
-    }
-
-    CB.push_back(static_cast<char>(Word >> 24));
-    CB.push_back(static_cast<char>(Word >> 16));
-    CB.push_back(static_cast<char>(Word >> 8));
-    CB.push_back(static_cast<char>(Word));
+                         const MCSubtargetInfo &STI) const override {
+    const uint32_t Word = getBinaryCodeForInstr(MI, Fixups, STI);
+    support::endian::write<uint32_t>(CB, Word, llvm::endianness::big);
   }
 };
+
+unsigned
+MMIXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
+                                     SmallVectorImpl<MCFixup> & /*Fixups*/,
+                                     const MCSubtargetInfo & /*STI*/) const {
+  if (MO.isReg())
+    return MRI.getEncodingValue(MO.getReg());
+  if (MO.isImm())
+    return static_cast<unsigned>(MO.getImm());
+
+  Ctx.reportError(MI.getLoc(), "MMIX expression operand is not relocatable");
+  return 0;
+}
+
+unsigned
+MMIXMCCodeEmitter::getPCRelativeOpValue(const MCInst &MI, unsigned OpNo,
+                                        SmallVectorImpl<MCFixup> &Fixups,
+                                        const MCSubtargetInfo & /*STI*/) const {
+  const MCOperand &MO = MI.getOperand(OpNo);
+  const uint64_t TSFlags = MCII.get(MI.getOpcode()).TSFlags;
+  const unsigned Width = MMIXII::getPCRelativeWidth(TSFlags);
+  assert((Width == 16 || Width == 24) &&
+         "unexpected MMIX PC-relative field width");
+
+  if (MO.isExpr()) {
+    Fixups.push_back(MCFixup::create(
+        0, MO.getExpr(), getPCRelativeFixup(TSFlags), /*IsPCRel=*/true));
+    return 0;
+  }
+
+  if (!MO.isImm()) {
+    Ctx.reportError(MI.getLoc(),
+                    "MMIX PC-relative operand is not an immediate");
+    return 0;
+  }
+
+  const bool IsBackward = TSFlags & MMIXII::PCRelativeBackward;
+  const int64_t Min = IsBackward ? -(int64_t(1) << Width) : 0;
+  const int64_t Max =
+      IsBackward ? -1 : static_cast<int64_t>((uint64_t(1) << Width) - 1);
+  if (MO.getImm() < Min || MO.getImm() > Max) {
+    Ctx.reportError(MI.getLoc(), "MMIX PC-relative operand is out of range");
+    return 0;
+  }
+
+  return static_cast<unsigned>(MO.getImm());
+}
+
+#include "MMIXGenMCCodeEmitter.inc"
 
 } // namespace
 

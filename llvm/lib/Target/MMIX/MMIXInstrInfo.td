@@ -90,6 +90,7 @@ class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
   string MMIXEncodingRange = Range;
   string MMIXFixupKind = "pc-relative";
   int MMIXFixupScale = 4;
+  let EncoderMethod = "getPCRelativeOpValue";
   let DecoderMethod = "decodePCRelativeOperand";
   let OperandType = "OPERAND_PCREL";
 }
