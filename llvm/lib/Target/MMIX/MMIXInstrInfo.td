@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// Common operand categories. These definitions intentionally contain no
-// encoding or parser methods; those are added with the corresponding MC
+// Common operand categories. Encoding fields are defined by the instruction
+// base below; operand-specific bindings are added with the corresponding MC
 // instruction families.
 def GPR64Op : RegisterOperand<GPR64>;
 def FPR64Op : RegisterOperand<FPR64>;
@@ -28,14 +28,25 @@ def MMIXMemAddr : Operand<i64> {
   let OperandType = "OPERAND_MEMORY";
 }
 
-// Base record for architectural MMIX instructions. Concrete instruction
-// families supply operand lists, assembly spelling, and later encodings.
+// MMIX instructions are fixed-width 32-bit words stored in big-endian byte
+// order. In TableGen bit numbering, the first byte is Inst{31-24}, followed by
+// the X, Y, and Z bytes. The default zero opcode is intentional until a
+// concrete instruction family assigns its MMIXware opcode.
 class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   let Namespace = "MMIX";
   let OutOperandList = outs;
   let InOperandList = ins;
   let AsmString = asmstr;
   let Size = 4;
+  bits<32> Inst;
+  bits<8> MMIXOpcode = 0;
+  bits<8> MMIXX = 0;
+  bits<8> MMIXY = 0;
+  bits<8> MMIXZ = 0;
+  let Inst{31-24} = MMIXOpcode;
+  let Inst{23-16} = MMIXX;
+  let Inst{15-8} = MMIXY;
+  let Inst{7-0} = MMIXZ;
   string MMIXInventoryStatus = "modeled";
   string MMIXInventoryFamily = "unclassified";
 }
