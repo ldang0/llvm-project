@@ -1,4 +1,4 @@
-# RUN: llc -mtriple=mmix -start-after=prolog-epilog -verify-machineinstrs \
+# RUN: llc -mtriple=mmix -start-after=block-placement -verify-machineinstrs \
 # RUN:   -filetype=asm -o - %s | FileCheck %s
 
 # CHECK-LABEL: operands:
@@ -6,7 +6,7 @@
 # CHECK-NEXT: ADDU r2, r1, 7
 # CHECK-NEXT: BN r2, [[TARGET:.LBB[0-9]+_1]]
 # CHECK: [[TARGET]]:
-# CHECK-NEXT: JMP [[TARGET]]
+# CHECK-NEXT: JMPB [[TARGET]]
 
 # CHECK-LABEL: global_symbol:
 # CHECK: JMP external_function
@@ -38,10 +38,10 @@ body:             |
   bb.0:
     $r1 = SETL 4660
     $r2 = ADDUI $r1, 7
-    BN $r2, %bb.1
+    PseudoB $r2, %bb.1, 0
 
   bb.1:
-    JMP %bb.1
+    PseudoJMP %bb.1
 ...
 ---
 name:            global_symbol

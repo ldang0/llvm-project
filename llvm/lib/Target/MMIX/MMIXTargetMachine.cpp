@@ -66,6 +66,12 @@ public:
     addPass(createMMIXISelDag(getMMIXTargetMachine()));
     return false;
   }
+
+  void addPreEmitPass() override {
+    // Expand an out-of-range 16-bit conditional branch into an inverted nearby
+    // condition plus a 24-bit JMP before final direction selection.
+    addPass(&BranchRelaxationPassID);
+  }
 };
 
 } // namespace

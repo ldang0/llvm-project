@@ -31,15 +31,15 @@ public:
   StringRef getPassName() const override { return "MMIX Assembly Printer"; }
 
   void emitInstruction(const MachineInstr *MI) override {
-    if (MI->isPseudo())
+    if (MI->isPseudo() && MI->getOpcode() != MMIX::PseudoB &&
+        MI->getOpcode() != MMIX::PseudoJMP)
       report_fatal_error(
           "MMIX CodeGen pseudo reached canonical assembly emission");
 
-    MMIX_MC::verifyInstructionPredicates(MI->getOpcode(),
-                                         getSubtargetInfo().getFeatureBits());
-
     MCInst OutMI;
     MMIXMCInstLower(OutContext, *this).lower(*MI, OutMI);
+    MMIX_MC::verifyInstructionPredicates(OutMI.getOpcode(),
+                                         getSubtargetInfo().getFeatureBits());
     EmitToStreamer(*OutStreamer, OutMI);
   }
 };

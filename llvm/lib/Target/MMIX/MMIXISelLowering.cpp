@@ -16,6 +16,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <limits>
 
 using namespace llvm;
 
@@ -35,6 +36,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setMinFunctionAlignment(Align(4));
   setPrefFunctionAlignment(Align(4));
   setMaxAtomicSizeInBitsSupported(0);
+  setMinimumJumpTableEntries(std::numeric_limits<unsigned>::max());
 
   auto RejectOperation = [this](unsigned Opcode, MVT VT) {
     setOperationAction(Opcode, VT, Custom);
@@ -93,10 +95,10 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   RejectOperation(ISD::STORE, MVT::i64);
   RejectOperation(ISD::LOAD, MVT::f64);
   RejectOperation(ISD::STORE, MVT::f64);
-  RejectOperation(ISD::BR_CC, MVT::i64);
+  setOperationAction(ISD::BR_CC, MVT::i64, Expand);
   RejectOperation(ISD::BR_CC, MVT::f64);
-  RejectOperation(ISD::BRCOND, MVT::Other);
-  RejectOperation(ISD::BR_JT, MVT::Other);
+  setOperationAction(ISD::BRCOND, MVT::Other, Legal);
+  setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
   RejectOperation(ISD::STACKRESTORE, MVT::Other);
 }

@@ -1564,6 +1564,62 @@ class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
   let isCodeGenOnly = true;
 }
 
+// Block layout determines whether MMIX must use a forward or backward opcode.
+// Keep CodeGen branches direction-neutral and resolve them only during final
+// MachineInstr-to-MCInst lowering. PseudoB's predicate is a direction-neutral
+// index in architectural condition order: N, Z, P, OD, NN, NZ, NP, EV.
+let isBranch = true, isTerminator = true in {
+  def PseudoB
+      : MMIXPseudoInstruction<
+            (outs), (ins GPR64Op:$condition, MMIXBranchTarget:$target,
+                         MMIXImm64:$predicate), ""> {
+    let Size = 4;
+  }
+}
+
+let isBranch = true, isTerminator = true, isBarrier = true in {
+  def PseudoJMP
+      : MMIXPseudoInstruction<(outs), (ins MMIXJumpTarget:$target), ""> {
+    let Size = 4;
+    let Pattern = [(br bb:$target)];
+  }
+}
+
+def : Pat<(brcond i64:$condition, bb:$target),
+          (PseudoB $condition, bb:$target, 5)>;
+
+class MMIXBranchCCPat<PatFrag condition, Instruction compare,
+                      bits<8> predicate>
+    : Pat<(brcond (condition i64:$lhs, i64:$rhs), bb:$target),
+          (PseudoB (compare $lhs, $rhs), bb:$target, predicate)>;
+
+def : MMIXBranchCCPat<setlt,  CMP,  0>;
+def : MMIXBranchCCPat<setle,  CMP,  6>;
+def : MMIXBranchCCPat<setgt,  CMP,  2>;
+def : MMIXBranchCCPat<setge,  CMP,  4>;
+def : MMIXBranchCCPat<setult, CMPU, 0>;
+def : MMIXBranchCCPat<setule, CMPU, 6>;
+def : MMIXBranchCCPat<setugt, CMPU, 2>;
+def : MMIXBranchCCPat<setuge, CMPU, 4>;
+def : MMIXBranchCCPat<seteq,  CMPU, 1>;
+def : MMIXBranchCCPat<setne,  CMPU, 5>;
+
+class MMIXBranchCCImmPat<PatFrag condition, Instruction compare,
+                         bits<8> predicate>
+    : Pat<(brcond (condition i64:$lhs, mmix_uimm8:$rhs), bb:$target),
+          (PseudoB (compare $lhs, mmix_uimm8:$rhs), bb:$target, predicate)>;
+
+def : MMIXBranchCCImmPat<setlt,  CMPI,  0>;
+def : MMIXBranchCCImmPat<setle,  CMPI,  6>;
+def : MMIXBranchCCImmPat<setgt,  CMPI,  2>;
+def : MMIXBranchCCImmPat<setge,  CMPI,  4>;
+def : MMIXBranchCCImmPat<setult, CMPUI, 0>;
+def : MMIXBranchCCImmPat<setule, CMPUI, 6>;
+def : MMIXBranchCCImmPat<setugt, CMPUI, 2>;
+def : MMIXBranchCCImmPat<setuge, CMPUI, 4>;
+def : MMIXBranchCCImmPat<seteq,  CMPUI, 1>;
+def : MMIXBranchCCImmPat<setne,  CMPUI, 5>;
+
 def LOAD_IMM64
     : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),
                             (ins i64imm:$value), ""> {

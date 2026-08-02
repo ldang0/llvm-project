@@ -11,7 +11,9 @@
 #include "MMIXSubtarget.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
@@ -117,6 +119,150 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
                 MI.getOperand(0).getReg(), uint64_t(MI.getOperand(1).getImm()));
   MI.eraseFromParent();
   return true;
+}
+
+static bool isMMIXBranch(unsigned Opcode) {
+  return Opcode == MMIX::PseudoB || Opcode == MMIX::PseudoJMP;
+}
+
+bool MMIXInstrInfo::analyzeBranch(
+    MachineBasicBlock &MBB, MachineBasicBlock *&TBB, MachineBasicBlock *&FBB,
+    SmallVectorImpl<MachineOperand> &Cond, bool AllowModify) const {
+  auto I = MBB.end();
+  while (I != MBB.begin()) {
+    --I;
+    if (I->isDebugInstr())
+      continue;
+    if (!isUnpredicatedTerminator(*I))
+      break;
+    if (!isMMIXBranch(I->getOpcode()))
+      return true;
+
+    if (I->getOpcode() == MMIX::PseudoJMP) {
+      if (AllowModify) {
+        MBB.erase(std::next(I), MBB.end());
+        Cond.clear();
+        FBB = nullptr;
+        if (MBB.isLayoutSuccessor(I->getOperand(0).getMBB())) {
+          TBB = nullptr;
+          I->eraseFromParent();
+          I = MBB.end();
+          continue;
+        }
+      }
+      TBB = I->getOperand(0).getMBB();
+      continue;
+    }
+
+    if (!Cond.empty())
+      return true;
+    FBB = TBB;
+    TBB = I->getOperand(1).getMBB();
+    Cond.push_back(I->getOperand(0));
+    Cond.push_back(I->getOperand(2));
+  }
+  return false;
+}
+
+unsigned MMIXInstrInfo::removeBranch(MachineBasicBlock &MBB,
+                                     int *BytesRemoved) const {
+  unsigned Count = 0;
+  auto I = MBB.end();
+  while (I != MBB.begin()) {
+    --I;
+    if (I->isDebugInstr())
+      continue;
+    if (!isMMIXBranch(I->getOpcode()))
+      break;
+    I->eraseFromParent();
+    I = MBB.end();
+    ++Count;
+  }
+  if (BytesRemoved)
+    *BytesRemoved = Count * 4;
+  return Count;
+}
+
+unsigned MMIXInstrInfo::insertBranch(MachineBasicBlock &MBB,
+                                     MachineBasicBlock *TBB,
+                                     MachineBasicBlock *FBB,
+                                     ArrayRef<MachineOperand> Cond,
+                                     const DebugLoc &DL,
+                                     int *BytesAdded) const {
+  assert(TBB && "cannot insert a fallthrough branch");
+  unsigned Count = 1;
+  if (Cond.empty()) {
+    assert(!FBB && "unconditional branch cannot have a false target");
+    BuildMI(&MBB, DL, get(MMIX::PseudoJMP)).addMBB(TBB);
+  } else {
+    assert(Cond.size() == 2 && Cond[0].isReg() && Cond[1].isImm() &&
+           "invalid MMIX branch condition");
+    BuildMI(&MBB, DL, get(MMIX::PseudoB))
+        .add(Cond[0])
+        .addMBB(TBB)
+        .addImm(Cond[1].getImm());
+    if (FBB) {
+      BuildMI(&MBB, DL, get(MMIX::PseudoJMP)).addMBB(FBB);
+      ++Count;
+    }
+  }
+  if (BytesAdded)
+    *BytesAdded = Count * 4;
+  return Count;
+}
+
+bool MMIXInstrInfo::reverseBranchCondition(
+    SmallVectorImpl<MachineOperand> &Cond) const {
+  if (Cond.size() != 2 || !Cond[1].isImm())
+    return true;
+  if (Cond[1].getImm() < 0 || Cond[1].getImm() > 7)
+    return true;
+  Cond[1].setImm(Cond[1].getImm() ^ 4);
+  return false;
+}
+
+bool MMIXInstrInfo::isBranchOffsetInRange(unsigned BranchOpc,
+                                          int64_t BrOffset) const {
+  int64_t MaxOffset;
+  if (BranchOpc == MMIX::PseudoB)
+    MaxOffset = 0xffff * 4;
+  else if (BranchOpc == MMIX::PseudoJMP)
+    MaxOffset = 0xffffff * 4;
+  else
+    llvm_unreachable("unknown MMIX CodeGen branch");
+  return BrOffset >= -MaxOffset && BrOffset <= MaxOffset;
+}
+
+unsigned MMIXInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
+  if (MI.getOpcode() == TargetOpcode::INLINEASM ||
+      MI.getOpcode() == TargetOpcode::INLINEASM_BR) {
+    const MachineFunction *MF = MI.getParent()->getParent();
+    return getInlineAsmLength(MI.getOperand(0).getSymbolName(),
+                              MF->getTarget().getMCAsmInfo());
+  }
+  if (MI.getOpcode() == TargetOpcode::BUNDLE)
+    return getInstBundleSize(MI);
+  return MI.getDesc().getSize();
+}
+
+MachineBasicBlock *
+MMIXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
+  if (MI.getOpcode() == MMIX::PseudoB)
+    return MI.getOperand(1).getMBB();
+  if (MI.getOpcode() == MMIX::PseudoJMP)
+    return MI.getOperand(0).getMBB();
+  return nullptr;
+}
+
+void MMIXInstrInfo::insertIndirectBranch(
+    MachineBasicBlock &, MachineBasicBlock &, MachineBasicBlock &,
+    const DebugLoc &, int64_t BrOffset, RegScavenger *) const {
+  // Current MMIX CodeGen only has direct block branches. Address
+  // materialization for a function larger than JMP/JMPB's 24-bit word reach
+  // belongs to the later relocation and code-model work.
+  report_fatal_error(Twine("MMIX function exceeds the 24-bit direct branch "
+                           "range: ") +
+                     Twine(BrOffset));
 }
 
 void MMIXInstrInfo::adjustReg(MachineBasicBlock &MBB,
