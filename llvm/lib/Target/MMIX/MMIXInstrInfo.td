@@ -16,6 +16,7 @@ def SPR64Op : RegisterOperand<SPR64>;
 def MMIXImm64 : Operand<i64>;
 def MMIXUImm8 : Operand<i64>;
 def MMIXUImm16 : Operand<i64>;
+def MMIXRoundingMode : Operand<i64>;
 
 def MMIXBranchTarget : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
@@ -222,3 +223,81 @@ def PUSHGOI : MMIXPushGoImm;
 def POP : MMIXInstruction<(outs),
                           (ins MMIXUImm8:$count, MMIXUImm16:$target),
                           "POP $count, $target">;
+
+// Floating-point arithmetic operates on the 64-bit floating-point view of
+// the general-purpose register file. These operations have no immediate
+// variants in the MMIX instruction set.
+class MMIXFPBinary<string Mnemonic>
+    : MMIXInstruction<(outs FPR64Op:$dst),
+                      (ins FPR64Op:$lhs, FPR64Op:$rhs),
+                      Mnemonic # " $dst, $lhs, $rhs">;
+
+foreach Mnemonic = ["FADD", "FSUB", "FMUL", "FDIV", "FREM"] in
+  def Mnemonic : MMIXFPBinary<Mnemonic>;
+
+class MMIXFPCompare<string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst),
+                      (ins FPR64Op:$lhs, FPR64Op:$rhs),
+                      Mnemonic # " $dst, $lhs, $rhs">;
+
+foreach Mnemonic = [
+  "FCMP", "FCMPE", "FUN", "FUNE", "FEQL", "FEQLE"
+] in
+  def Mnemonic : MMIXFPCompare<Mnemonic>;
+
+class MMIXFPUnaryRounded<string Mnemonic>
+    : MMIXInstruction<(outs FPR64Op:$dst),
+                      (ins MMIXRoundingMode:$round, FPR64Op:$src),
+                      Mnemonic # " $dst, $round, $src">;
+
+def FSQRT : MMIXFPUnaryRounded<"FSQRT">;
+def FINT : MMIXFPUnaryRounded<"FINT">;
+
+class MMIXFix<string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst), (ins FPR64Op:$src),
+                      Mnemonic # " $dst, $src">;
+
+def FIX : MMIXFix<"FIX">;
+def FIXU : MMIXFix<"FIXU">;
+
+class MMIXFloatFromIntReg<string Mnemonic>
+    : MMIXInstruction<(outs FPR64Op:$dst),
+                      (ins MMIXRoundingMode:$round, GPR64Op:$src),
+                      Mnemonic # " $dst, $round, $src">;
+
+class MMIXFloatFromIntImm<string Mnemonic>
+    : MMIXInstruction<(outs FPR64Op:$dst),
+                      (ins MMIXRoundingMode:$round, MMIXUImm8:$src),
+                      Mnemonic # " $dst, $round, $src">;
+
+foreach Mnemonic = ["FLOT", "FLOTU", "SFLOT", "SFLOTU"] in {
+  def Mnemonic : MMIXFloatFromIntReg<Mnemonic>;
+  def Mnemonic # "I" : MMIXFloatFromIntImm<Mnemonic>;
+}
+
+// Short floating-point values are converted to and from the 64-bit floating
+// representation when crossing memory.
+class MMIXFPLoadReg<string Mnemonic>
+    : MMIXInstruction<(outs FPR64Op:$dst),
+                      (ins GPR64Op:$base, GPR64Op:$offset),
+                      Mnemonic # " $dst, $base, $offset">;
+
+class MMIXFPLoadImm<string Mnemonic>
+    : MMIXInstruction<(outs FPR64Op:$dst),
+                      (ins GPR64Op:$base, MMIXUImm8:$offset),
+                      Mnemonic # " $dst, $base, $offset">;
+
+class MMIXFPStoreReg<string Mnemonic>
+    : MMIXInstruction<(outs),
+                      (ins FPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
+                      Mnemonic # " $value, $base, $offset">;
+
+class MMIXFPStoreImm<string Mnemonic>
+    : MMIXInstruction<(outs),
+                      (ins FPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
+                      Mnemonic # " $value, $base, $offset">;
+
+def LDSF : MMIXFPLoadReg<"LDSF">;
+def LDSFI : MMIXFPLoadImm<"LDSF">;
+def STSF : MMIXFPStoreReg<"STSF">;
+def STSFI : MMIXFPStoreImm<"STSF">;
