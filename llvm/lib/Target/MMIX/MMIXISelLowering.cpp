@@ -46,9 +46,13 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   // defines the exact MMIX semantics.
   static constexpr unsigned IntegerOperations[] = {
       ISD::ROTL, ISD::ROTR,  ISD::BSWAP,  ISD::CTPOP,    ISD::CTLZ,
-      ISD::CTTZ, ISD::SETCC, ISD::SELECT, ISD::SELECT_CC};
+      ISD::CTTZ};
   for (unsigned Opcode : IntegerOperations)
     RejectOperation(Opcode, MVT::i64);
+
+  setOperationAction(ISD::SETCC, MVT::i64, Legal);
+  setOperationAction(ISD::SELECT, MVT::i64, Legal);
+  setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
 
   setOperationAction(ISD::MULHU, MVT::i64, Expand);
   setOperationAction(ISD::MULHS, MVT::i64, Expand);

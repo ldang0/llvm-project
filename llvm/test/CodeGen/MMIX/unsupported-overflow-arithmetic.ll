@@ -1,8 +1,13 @@
-; RUN: not --crash llc -mtriple=mmix -filetype=asm %s -o /dev/null 2>&1 | FileCheck %s
+; RUN: llc -mtriple=mmix -verify-machineinstrs -filetype=asm %s -o - | FileCheck %s
 
 ; Overflow-reporting arithmetic is expanded without selecting MMIX's trapping
-; signed instructions. Comparison lowering will complete this expansion.
-; CHECK: MMIX SelectionDAG operation is not implemented by this lowering stage: setcc
+; signed instructions.
+; CHECK-LABEL: unsigned_add_overflow:
+; CHECK-NOT:   ADD {{[^U]}}
+; CHECK:       ADDU
+; CHECK:       CMPU
+; CHECK:       ZSN
+; CHECK:       POP 0, 0
 
 declare { i64, i1 } @llvm.uadd.with.overflow.i64(i64, i64)
 

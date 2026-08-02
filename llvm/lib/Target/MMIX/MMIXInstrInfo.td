@@ -260,6 +260,39 @@ class MMIXIntRegImmOpcode<bits<8> Opcode, string Mnemonic>
   let MMIXOpcode = Opcode;
 }
 
+// CS* keeps the old X register when its condition is false. Model that X
+// operand as both an input and an output so register allocation preserves the
+// architectural two-address dependency.
+class MMIXCondSetRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst),
+                      (ins GPR64Op:$old, GPR64Op:$cond, GPR64Op:$value),
+                      Mnemonic # " $dst, $cond, $value"> {
+  bits<8> dst;
+  bits<8> cond;
+  bits<8> value;
+  let MMIXX = dst;
+  let MMIXY = cond;
+  let MMIXZ = value;
+  let MMIXOpcode = Opcode;
+  let Constraints = "$dst = $old";
+  let MMIXInventoryFamily = "integer";
+}
+
+class MMIXCondSetImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXInstruction<(outs GPR64Op:$dst),
+                      (ins GPR64Op:$old, GPR64Op:$cond, MMIXUImm8:$value),
+                      Mnemonic # " $dst, $cond, $value"> {
+  bits<8> dst;
+  bits<8> cond;
+  bits<8> value;
+  let MMIXX = dst;
+  let MMIXY = cond;
+  let MMIXZ = value;
+  let MMIXOpcode = Opcode;
+  let Constraints = "$dst = $old";
+  let MMIXInventoryFamily = "integer";
+}
+
 class MMIXNegRegOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXNegReg<Mnemonic> {
   let MMIXOpcode = Opcode;
@@ -370,22 +403,22 @@ def : Pat<(mul i64:$lhs, mmix_uimm8:$rhs),
           (MULUI $lhs, mmix_uimm8:$rhs)>;
 def : Pat<(mul i64:$lhs, i64:$rhs), (MULU $lhs, $rhs)>;
 
-def CSN : MMIXIntRegRegOpcode<0x60, "CSN">;
-def CSNI : MMIXIntRegImmOpcode<0x61, "CSN">;
-def CSZ : MMIXIntRegRegOpcode<0x62, "CSZ">;
-def CSZI : MMIXIntRegImmOpcode<0x63, "CSZ">;
-def CSP : MMIXIntRegRegOpcode<0x64, "CSP">;
-def CSPI : MMIXIntRegImmOpcode<0x65, "CSP">;
-def CSOD : MMIXIntRegRegOpcode<0x66, "CSOD">;
-def CSODI : MMIXIntRegImmOpcode<0x67, "CSOD">;
-def CSNN : MMIXIntRegRegOpcode<0x68, "CSNN">;
-def CSNNI : MMIXIntRegImmOpcode<0x69, "CSNN">;
-def CSNZ : MMIXIntRegRegOpcode<0x6A, "CSNZ">;
-def CSNZI : MMIXIntRegImmOpcode<0x6B, "CSNZ">;
-def CSNP : MMIXIntRegRegOpcode<0x6C, "CSNP">;
-def CSNPI : MMIXIntRegImmOpcode<0x6D, "CSNP">;
-def CSEV : MMIXIntRegRegOpcode<0x6E, "CSEV">;
-def CSEVI : MMIXIntRegImmOpcode<0x6F, "CSEV">;
+def CSN : MMIXCondSetRegOpcode<0x60, "CSN">;
+def CSNI : MMIXCondSetImmOpcode<0x61, "CSN">;
+def CSZ : MMIXCondSetRegOpcode<0x62, "CSZ">;
+def CSZI : MMIXCondSetImmOpcode<0x63, "CSZ">;
+def CSP : MMIXCondSetRegOpcode<0x64, "CSP">;
+def CSPI : MMIXCondSetImmOpcode<0x65, "CSP">;
+def CSOD : MMIXCondSetRegOpcode<0x66, "CSOD">;
+def CSODI : MMIXCondSetImmOpcode<0x67, "CSOD">;
+def CSNN : MMIXCondSetRegOpcode<0x68, "CSNN">;
+def CSNNI : MMIXCondSetImmOpcode<0x69, "CSNN">;
+def CSNZ : MMIXCondSetRegOpcode<0x6A, "CSNZ">;
+def CSNZI : MMIXCondSetImmOpcode<0x6B, "CSNZ">;
+def CSNP : MMIXCondSetRegOpcode<0x6C, "CSNP">;
+def CSNPI : MMIXCondSetImmOpcode<0x6D, "CSNP">;
+def CSEV : MMIXCondSetRegOpcode<0x6E, "CSEV">;
+def CSEVI : MMIXCondSetImmOpcode<0x6F, "CSEV">;
 def ZSN : MMIXIntRegRegOpcode<0x70, "ZSN">;
 def ZSNI : MMIXIntRegImmOpcode<0x71, "ZSN">;
 def ZSZ : MMIXIntRegRegOpcode<0x72, "ZSZ">;
@@ -402,6 +435,50 @@ def ZSNP : MMIXIntRegRegOpcode<0x7C, "ZSNP">;
 def ZSNPI : MMIXIntRegImmOpcode<0x7D, "ZSNP">;
 def ZSEV : MMIXIntRegRegOpcode<0x7E, "ZSEV">;
 def ZSEVI : MMIXIntRegImmOpcode<0x7F, "ZSEV">;
+
+// CMP and CMPU produce -1, 0, or 1. A zero-set instruction then maps the
+// requested relation to LLVM's canonical 0-or-1 Boolean representation.
+def : Pat<(setlt i64:$lhs, i64:$rhs), (ZSNI (CMP $lhs, $rhs), 1)>;
+def : Pat<(setle i64:$lhs, i64:$rhs), (ZSNPI (CMP $lhs, $rhs), 1)>;
+def : Pat<(setgt i64:$lhs, i64:$rhs), (ZSPI (CMP $lhs, $rhs), 1)>;
+def : Pat<(setge i64:$lhs, i64:$rhs), (ZSNNI (CMP $lhs, $rhs), 1)>;
+def : Pat<(setult i64:$lhs, i64:$rhs), (ZSNI (CMPU $lhs, $rhs), 1)>;
+def : Pat<(setule i64:$lhs, i64:$rhs), (ZSNPI (CMPU $lhs, $rhs), 1)>;
+def : Pat<(setugt i64:$lhs, i64:$rhs), (ZSPI (CMPU $lhs, $rhs), 1)>;
+def : Pat<(setuge i64:$lhs, i64:$rhs), (ZSNNI (CMPU $lhs, $rhs), 1)>;
+def : Pat<(seteq i64:$lhs, i64:$rhs), (ZSZI (CMPU $lhs, $rhs), 1)>;
+def : Pat<(setne i64:$lhs, i64:$rhs), (ZSNZI (CMPU $lhs, $rhs), 1)>;
+
+def : Pat<(setlt i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNI (CMPI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setle i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNPI (CMPI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setgt i64:$lhs, mmix_uimm8:$rhs),
+          (ZSPI (CMPI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setge i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNNI (CMPI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setult i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNI (CMPUI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setule i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNPI (CMPUI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setugt i64:$lhs, mmix_uimm8:$rhs),
+          (ZSPI (CMPUI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setuge i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNNI (CMPUI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(seteq i64:$lhs, mmix_uimm8:$rhs),
+          (ZSZI (CMPUI $lhs, mmix_uimm8:$rhs), 1)>;
+def : Pat<(setne i64:$lhs, mmix_uimm8:$rhs),
+          (ZSNZI (CMPUI $lhs, mmix_uimm8:$rhs), 1)>;
+
+// CSNZ selects its value for every true LLVM condition. When the false value
+// is encodable instead, CSZ reverses the choice and keeps the true register in
+// the tied destination.
+def : Pat<(select i64:$cond, i64:$true, i64:$false),
+          (CSNZ $false, $cond, $true)>;
+def : Pat<(select i64:$cond, mmix_uimm8:$true, i64:$false),
+          (CSNZI $false, $cond, mmix_uimm8:$true)>;
+def : Pat<(select i64:$cond, i64:$true, mmix_uimm8:$false),
+          (CSZI $true, $cond, mmix_uimm8:$false)>;
 
 def OR : MMIXIntRegRegOpcode<0xC0, "OR">;
 def ORI : MMIXIntRegImmOpcode<0xC1, "OR">;
