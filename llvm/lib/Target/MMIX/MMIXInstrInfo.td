@@ -319,19 +319,63 @@ class MMIXStoreImm<string Mnemonic>
   let MMIXInventoryFamily = "memory";
 }
 
-foreach Mnemonic = [
-  "LDB", "LDBU", "LDW", "LDWU", "LDT", "LDTU", "LDO", "LDOU", "LDHT"
-] in {
-  def Mnemonic : MMIXLoadReg<Mnemonic>;
-  def Mnemonic # "I" : MMIXLoadImm<Mnemonic>;
+class MMIXLoadRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXLoadReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
 }
 
-foreach Mnemonic = [
-  "STB", "STBU", "STW", "STWU", "STT", "STTU", "STO", "STOU", "STHT"
-] in {
-  def Mnemonic : MMIXStoreReg<Mnemonic>;
-  def Mnemonic # "I" : MMIXStoreImm<Mnemonic>;
+class MMIXLoadImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXLoadImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
 }
+
+class MMIXStoreRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXStoreReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXStoreImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXStoreImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def LDB : MMIXLoadRegOpcode<0x80, "LDB">;
+def LDBI : MMIXLoadImmOpcode<0x81, "LDB">;
+def LDBU : MMIXLoadRegOpcode<0x82, "LDBU">;
+def LDBUI : MMIXLoadImmOpcode<0x83, "LDBU">;
+def LDW : MMIXLoadRegOpcode<0x84, "LDW">;
+def LDWI : MMIXLoadImmOpcode<0x85, "LDW">;
+def LDWU : MMIXLoadRegOpcode<0x86, "LDWU">;
+def LDWUI : MMIXLoadImmOpcode<0x87, "LDWU">;
+def LDT : MMIXLoadRegOpcode<0x88, "LDT">;
+def LDTI : MMIXLoadImmOpcode<0x89, "LDT">;
+def LDTU : MMIXLoadRegOpcode<0x8A, "LDTU">;
+def LDTUI : MMIXLoadImmOpcode<0x8B, "LDTU">;
+def LDO : MMIXLoadRegOpcode<0x8C, "LDO">;
+def LDOI : MMIXLoadImmOpcode<0x8D, "LDO">;
+def LDOU : MMIXLoadRegOpcode<0x8E, "LDOU">;
+def LDOUI : MMIXLoadImmOpcode<0x8F, "LDOU">;
+def LDHT : MMIXLoadRegOpcode<0x92, "LDHT">;
+def LDHTI : MMIXLoadImmOpcode<0x93, "LDHT">;
+
+def STB : MMIXStoreRegOpcode<0xA0, "STB">;
+def STBI : MMIXStoreImmOpcode<0xA1, "STB">;
+def STBU : MMIXStoreRegOpcode<0xA2, "STBU">;
+def STBUI : MMIXStoreImmOpcode<0xA3, "STBU">;
+def STW : MMIXStoreRegOpcode<0xA4, "STW">;
+def STWI : MMIXStoreImmOpcode<0xA5, "STW">;
+def STWU : MMIXStoreRegOpcode<0xA6, "STWU">;
+def STWUI : MMIXStoreImmOpcode<0xA7, "STWU">;
+def STT : MMIXStoreRegOpcode<0xA8, "STT">;
+def STTI : MMIXStoreImmOpcode<0xA9, "STT">;
+def STTU : MMIXStoreRegOpcode<0xAA, "STTU">;
+def STTUI : MMIXStoreImmOpcode<0xAB, "STTU">;
+def STO : MMIXStoreRegOpcode<0xAC, "STO">;
+def STOI : MMIXStoreImmOpcode<0xAD, "STO">;
+def STOU : MMIXStoreRegOpcode<0xAE, "STOU">;
+def STOUI : MMIXStoreImmOpcode<0xAF, "STOU">;
+def STHT : MMIXStoreRegOpcode<0xB2, "STHT">;
+def STHTI : MMIXStoreImmOpcode<0xB3, "STHT">;
 
 // CSWAP has the ordinary memory address forms but also updates its X operand
 // with the comparison result. The data dependency is left for later lowering.
@@ -350,8 +394,18 @@ class MMIXCompareSwapImm
   let MMIXInventoryFamily = "memory";
 }
 
-def CSWAP : MMIXCompareSwapReg;
-def CSWAPI : MMIXCompareSwapImm;
+class MMIXCompareSwapRegOpcode<bits<8> Opcode>
+    : MMIXCompareSwapReg {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXCompareSwapImmOpcode<bits<8> Opcode>
+    : MMIXCompareSwapImm {
+  let MMIXOpcode = Opcode;
+}
+
+def CSWAP : MMIXCompareSwapRegOpcode<0x94>;
+def CSWAPI : MMIXCompareSwapImmOpcode<0x95>;
 
 class MMIXCondBranch<string Mnemonic>
     : MMIXInstruction<(outs),
@@ -533,10 +587,30 @@ class MMIXFPStoreImm<string Mnemonic>
   let MMIXInventoryFamily = "floating-point";
 }
 
-def LDSF : MMIXFPLoadReg<"LDSF">;
-def LDSFI : MMIXFPLoadImm<"LDSF">;
-def STSF : MMIXFPStoreReg<"STSF">;
-def STSFI : MMIXFPStoreImm<"STSF">;
+class MMIXFPLoadRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPLoadReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXFPLoadImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPLoadImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXFPStoreRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPStoreReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXFPStoreImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXFPStoreImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def LDSF : MMIXFPLoadRegOpcode<0x90, "LDSF">;
+def LDSFI : MMIXFPLoadImmOpcode<0x91, "LDSF">;
+def STSF : MMIXFPStoreRegOpcode<0xB0, "STSF">;
+def STSFI : MMIXFPStoreImmOpcode<0xB1, "STSF">;
 
 // Machine-control instructions are intentionally modeled as side-effecting
 // operations. They are available to MC and target-specific mechanisms, but
@@ -559,8 +633,18 @@ class MMIXStoreConstantImm
                                   MMIXMemOffset8:$offset),
                              "STCO $value, $base, $offset">;
 
-def STCO : MMIXStoreConstantReg;
-def STCOI : MMIXStoreConstantImm;
+class MMIXStoreConstantRegOpcode<bits<8> Opcode>
+    : MMIXStoreConstantReg {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXStoreConstantImmOpcode<bits<8> Opcode>
+    : MMIXStoreConstantImm {
+  let MMIXOpcode = Opcode;
+}
+
+def STCO : MMIXStoreConstantRegOpcode<0xB4>;
+def STCOI : MMIXStoreConstantImmOpcode<0xB5>;
 
 class MMIXCacheReg<string Mnemonic>
     : MMIXMachineInstruction<(outs),
@@ -601,10 +685,30 @@ class MMIXUncachedStoreImm<string Mnemonic>
                                   MMIXMemOffset8:$offset),
                              Mnemonic # " $value, $base, $offset">;
 
-def LDUNC : MMIXUncachedLoad<"LDUNC">;
-def LDUNCI : MMIXUncachedLoadImm<"LDUNC">;
-def STUNC : MMIXUncachedStore<"STUNC">;
-def STUNCI : MMIXUncachedStoreImm<"STUNC">;
+class MMIXUncachedLoadOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXUncachedLoad<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXUncachedLoadImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXUncachedLoadImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXUncachedStoreOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXUncachedStore<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXUncachedStoreImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXUncachedStoreImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def LDUNC : MMIXUncachedLoadOpcode<0x96, "LDUNC">;
+def LDUNCI : MMIXUncachedLoadImmOpcode<0x97, "LDUNC">;
+def STUNC : MMIXUncachedStoreOpcode<0xB6, "STUNC">;
+def STUNCI : MMIXUncachedStoreImmOpcode<0xB7, "STUNC">;
 
 class MMIXVirtualTranslationReg
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
