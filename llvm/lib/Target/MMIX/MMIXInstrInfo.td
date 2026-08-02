@@ -130,8 +130,9 @@ def MMIXMemAddr : Operand<i64> {
 
 // MMIX instructions are fixed-width 32-bit words stored in big-endian byte
 // order. In TableGen bit numbering, the first byte is Inst{31-24}, followed by
-// the X, Y, and Z bytes. The default zero opcode is intentional until a
-// concrete instruction family assigns its MMIXware opcode.
+// the X, Y, and Z bytes. Concrete instruction formats bind every operand and
+// fixed field below so the same Inst description can drive generated encoders
+// and decoders.
 class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   let Namespace = "MMIX";
   let OutOperandList = outs;
@@ -140,9 +141,9 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   let Size = 4;
   bits<32> Inst;
   bits<8> MMIXOpcode = 0;
-  bits<8> MMIXX = 0;
-  bits<8> MMIXY = 0;
-  bits<8> MMIXZ = 0;
+  bits<8> MMIXX;
+  bits<8> MMIXY;
+  bits<8> MMIXZ;
   let Inst{31-24} = MMIXOpcode;
   let Inst{23-16} = MMIXX;
   let Inst{15-8} = MMIXY;
@@ -159,6 +160,12 @@ class MMIXIntRegReg<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$lhs, GPR64Op:$rhs),
                       Mnemonic # " $dst, $lhs, $rhs"> {
+  bits<8> dst;
+  bits<8> lhs;
+  bits<8> rhs;
+  let MMIXX = dst;
+  let MMIXY = lhs;
+  let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
 }
 
@@ -166,6 +173,12 @@ class MMIXIntRegImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$lhs, MMIXUImm8:$rhs),
                       Mnemonic # " $dst, $lhs, $rhs"> {
+  bits<8> dst;
+  bits<8> lhs;
+  bits<8> rhs;
+  let MMIXX = dst;
+  let MMIXY = lhs;
+  let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
 }
 
@@ -175,6 +188,12 @@ class MMIXNegReg<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXUImm8:$lhs, GPR64Op:$rhs),
                       Mnemonic # " $dst, $lhs, $rhs"> {
+  bits<8> dst;
+  bits<8> lhs;
+  bits<8> rhs;
+  let MMIXX = dst;
+  let MMIXY = lhs;
+  let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
 }
 
@@ -182,6 +201,12 @@ class MMIXNegImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXUImm8:$lhs, MMIXUImm8:$rhs),
                       Mnemonic # " $dst, $lhs, $rhs"> {
+  bits<8> dst;
+  bits<8> lhs;
+  bits<8> rhs;
+  let MMIXX = dst;
+  let MMIXY = lhs;
+  let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
 }
 
@@ -189,6 +214,11 @@ class MMIXIntConst<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXUImm16:$value),
                       Mnemonic # " $dst, $value"> {
+  bits<8> dst;
+  bits<16> value;
+  let MMIXX = dst;
+  let MMIXY = value{15-8};
+  let MMIXZ = value{7-0};
   let MMIXInventoryFamily = "integer";
 }
 
@@ -351,6 +381,12 @@ class MMIXLoadReg<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$base, GPR64Op:$offset),
                       Mnemonic # " $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -358,6 +394,12 @@ class MMIXLoadImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                       Mnemonic # " $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -365,6 +407,12 @@ class MMIXStoreReg<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
                       Mnemonic # " $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -373,6 +421,12 @@ class MMIXStoreImm<string Mnemonic>
                       (ins GPR64Op:$value, GPR64Op:$base,
                            MMIXMemOffset8:$offset),
                       Mnemonic # " $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -440,6 +494,12 @@ class MMIXCompareSwapReg
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
                       "CSWAP $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -448,6 +508,12 @@ class MMIXCompareSwapImm
                       (ins GPR64Op:$value, GPR64Op:$base,
                            MMIXMemOffset8:$offset),
                            "CSWAP $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -468,6 +534,11 @@ class MMIXCondBranch<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$condition, MMIXBranchTarget:$target),
                       Mnemonic # " $condition, $target"> {
+  bits<8> condition;
+  bits<16> target;
+  let MMIXX = condition;
+  let MMIXY = target{15-8};
+  let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -513,6 +584,10 @@ def PBEVB : MMIXCondBranchOpcode<0x5F, "PBEVB">;
 class MMIXJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins MMIXJumpTarget:$target),
                       Mnemonic # " $target"> {
+  bits<24> target;
+  let MMIXX = target{23-16};
+  let MMIXY = target{15-8};
+  let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -524,8 +599,13 @@ def JMP  : MMIXJumpOpcode<0xF0, "JMP">;
 def JMPB : MMIXJumpOpcode<0xF1, "JMPB">;
 
 class MMIXGetAddress<string Mnemonic>
-    : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXJumpTarget:$target),
+    : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXBranchTarget:$target),
                       Mnemonic # " $dst, $target"> {
+  bits<8> dst;
+  bits<16> target;
+  let MMIXX = dst;
+  let MMIXY = target{15-8};
+  let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -540,6 +620,11 @@ def GETAB : MMIXGetAddressOpcode<0xF5, "GETAB">;
 class MMIXPushJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins GPR64Op:$link, MMIXBranchTarget:$target),
                       Mnemonic # " $link, $target"> {
+  bits<8> link;
+  bits<16> target;
+  let MMIXX = link;
+  let MMIXY = target{15-8};
+  let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -555,6 +640,12 @@ class MMIXGoReg
     : MMIXInstruction<(outs GPR64Op:$link),
                       (ins GPR64Op:$base, GPR64Op:$offset),
                       "GO $link, $base, $offset"> {
+  bits<8> link;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = link;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -562,6 +653,12 @@ class MMIXGoImm
     : MMIXInstruction<(outs GPR64Op:$link),
                       (ins GPR64Op:$base, MMIXUImm8:$offset),
                       "GO $link, $base, $offset"> {
+  bits<8> link;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = link;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -580,6 +677,12 @@ class MMIXPushGoReg
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$count, GPR64Op:$base, GPR64Op:$offset),
                       "PUSHGO $count, $base, $offset"> {
+  bits<8> count;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = count;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -587,6 +690,12 @@ class MMIXPushGoImm
     : MMIXInstruction<(outs),
                       (ins GPR64Op:$count, GPR64Op:$base, MMIXUImm8:$offset),
                       "PUSHGO $count, $base, $offset"> {
+  bits<8> count;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = count;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -604,6 +713,11 @@ def PUSHGOI : MMIXPushGoImmOpcode<0xBF>;
 class MMIXPop : MMIXInstruction<(outs),
                                 (ins MMIXUImm8:$count, MMIXUImm16:$target),
                                 "POP $count, $target"> {
+  bits<8> count;
+  bits<16> target;
+  let MMIXX = count;
+  let MMIXY = target{15-8};
+  let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
 }
 
@@ -618,6 +732,12 @@ class MMIXFPBinary<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins FPR64Op:$lhs, FPR64Op:$rhs),
                       Mnemonic # " $dst, $lhs, $rhs"> {
+  bits<8> dst;
+  bits<8> lhs;
+  bits<8> rhs;
+  let MMIXX = dst;
+  let MMIXY = lhs;
+  let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -636,6 +756,12 @@ class MMIXFPCompare<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins FPR64Op:$lhs, FPR64Op:$rhs),
                       Mnemonic # " $dst, $lhs, $rhs"> {
+  bits<8> dst;
+  bits<8> lhs;
+  bits<8> rhs;
+  let MMIXX = dst;
+  let MMIXY = lhs;
+  let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -655,6 +781,13 @@ class MMIXFPUnaryRounded<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, FPR64Op:$src),
                       Mnemonic # " $dst, $round, $src"> {
+  bits<8> dst;
+  bits<3> round;
+  bits<8> src;
+  let MMIXX = dst;
+  let MMIXY{7-3} = 0;
+  let MMIXY{2-0} = round;
+  let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -670,6 +803,13 @@ class MMIXFix<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, FPR64Op:$src),
                       Mnemonic # " $dst, $round, $src"> {
+  bits<8> dst;
+  bits<3> round;
+  bits<8> src;
+  let MMIXX = dst;
+  let MMIXY{7-3} = 0;
+  let MMIXY{2-0} = round;
+  let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -684,6 +824,13 @@ class MMIXFloatFromIntReg<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, GPR64Op:$src),
                       Mnemonic # " $dst, $round, $src"> {
+  bits<8> dst;
+  bits<3> round;
+  bits<8> src;
+  let MMIXX = dst;
+  let MMIXY{7-3} = 0;
+  let MMIXY{2-0} = round;
+  let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   string MMIXSourceForm = "register";
 }
@@ -692,6 +839,13 @@ class MMIXFloatFromIntImm<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins MMIXRoundingMode:$round, MMIXUImm8:$src),
                       Mnemonic # " $dst, $round, $src"> {
+  bits<8> dst;
+  bits<3> round;
+  bits<8> src;
+  let MMIXX = dst;
+  let MMIXY{7-3} = 0;
+  let MMIXY{2-0} = round;
+  let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   string MMIXSourceForm = "immediate";
 }
@@ -721,6 +875,12 @@ class MMIXFPLoadReg<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins GPR64Op:$base, GPR64Op:$offset),
                       Mnemonic # " $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -728,6 +888,12 @@ class MMIXFPLoadImm<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
                       (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                       Mnemonic # " $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -735,6 +901,12 @@ class MMIXFPStoreReg<string Mnemonic>
     : MMIXInstruction<(outs),
                       (ins FPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
                       Mnemonic # " $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -743,6 +915,12 @@ class MMIXFPStoreImm<string Mnemonic>
                       (ins FPR64Op:$value, GPR64Op:$base,
                            MMIXMemOffset8:$offset),
                       Mnemonic # " $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -784,13 +962,27 @@ class MMIXStoreConstantReg
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$value, GPR64Op:$base,
                                   GPR64Op:$offset),
-                             "STCO $value, $base, $offset">;
+                             "STCO $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXStoreConstantImm
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$value, GPR64Op:$base,
                                   MMIXMemOffset8:$offset),
-                             "STCO $value, $base, $offset">;
+                             "STCO $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXStoreConstantRegOpcode<bits<8> Opcode>
     : MMIXStoreConstantReg {
@@ -809,13 +1001,27 @@ class MMIXCacheReg<string Mnemonic>
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$count, GPR64Op:$base,
                                   GPR64Op:$offset),
-                             Mnemonic # " $count, $base, $offset">;
+                             Mnemonic # " $count, $base, $offset"> {
+  bits<8> count;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = count;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXCacheImm<string Mnemonic>
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$count, GPR64Op:$base,
                                   MMIXMemOffset8:$offset),
-                             Mnemonic # " $count, $base, $offset">;
+                             Mnemonic # " $count, $base, $offset"> {
+  bits<8> count;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = count;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXCacheRegOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXCacheReg<Mnemonic> {
@@ -841,24 +1047,52 @@ def SYNCIDI : MMIXCacheImmOpcode<0xBD, "SYNCID">;
 class MMIXUncachedLoad<string Mnemonic>
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
                              (ins GPR64Op:$base, GPR64Op:$offset),
-                             Mnemonic # " $dst, $base, $offset">;
+                             Mnemonic # " $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXUncachedLoadImm<string Mnemonic>
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
                              (ins GPR64Op:$base, MMIXMemOffset8:$offset),
-                             Mnemonic # " $dst, $base, $offset">;
+                             Mnemonic # " $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXUncachedStore<string Mnemonic>
     : MMIXMachineInstruction<(outs),
                              (ins GPR64Op:$value, GPR64Op:$base,
                                   GPR64Op:$offset),
-                             Mnemonic # " $value, $base, $offset">;
+                             Mnemonic # " $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXUncachedStoreImm<string Mnemonic>
     : MMIXMachineInstruction<(outs),
                              (ins GPR64Op:$value, GPR64Op:$base,
                                   MMIXMemOffset8:$offset),
-                             Mnemonic # " $value, $base, $offset">;
+                             Mnemonic # " $value, $base, $offset"> {
+  bits<8> value;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = value;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXUncachedLoadOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXUncachedLoad<Mnemonic> {
@@ -888,12 +1122,26 @@ def STUNCI : MMIXUncachedStoreImmOpcode<0xB7, "STUNC">;
 class MMIXVirtualTranslationReg
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
                              (ins GPR64Op:$base, GPR64Op:$offset),
-                             "LDVTS $dst, $base, $offset">;
+                             "LDVTS $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXVirtualTranslationImm
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
                              (ins GPR64Op:$base, MMIXMemOffset8:$offset),
-                             "LDVTS $dst, $base, $offset">;
+                             "LDVTS $dst, $base, $offset"> {
+  bits<8> dst;
+  bits<8> base;
+  bits<8> offset;
+  let MMIXX = dst;
+  let MMIXY = base;
+  let MMIXZ = offset;
+}
 
 class MMIXVirtualTranslationRegOpcode<bits<8> Opcode>
     : MMIXVirtualTranslationReg {
@@ -909,7 +1157,13 @@ def LDVTS  : MMIXVirtualTranslationRegOpcode<0x98>;
 def LDVTSI : MMIXVirtualTranslationImmOpcode<0x99>;
 
 class MMIXSync : MMIXMachineInstruction<(outs), (ins MMIXSyncMode:$mode),
-                                        "SYNC $mode">;
+                                        "SYNC $mode"> {
+  bits<3> mode;
+  let MMIXX = 0;
+  let MMIXY = 0;
+  let MMIXZ{7-3} = 0;
+  let MMIXZ{2-0} = mode;
+}
 
 def SYNC : MMIXSync {
   let MMIXOpcode = 0xFC;
@@ -918,7 +1172,14 @@ def SYNC : MMIXSync {
 class MMIXSwym : MMIXMachineInstruction<
     (outs),
     (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
-    "SWYM $x, $y, $z">;
+    "SWYM $x, $y, $z"> {
+  bits<8> x;
+  bits<8> y;
+  bits<8> z;
+  let MMIXX = x;
+  let MMIXY = y;
+  let MMIXZ = z;
+}
 
 def SWYM : MMIXSwym {
   let MMIXOpcode = 0xFD;
@@ -928,7 +1189,14 @@ class MMIXTrapInstruction<string Mnemonic>
     : MMIXMachineInstruction<
           (outs),
           (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
-          Mnemonic # " $x, $y, $z">;
+          Mnemonic # " $x, $y, $z"> {
+  bits<8> x;
+  bits<8> y;
+  bits<8> z;
+  let MMIXX = x;
+  let MMIXY = y;
+  let MMIXZ = z;
+}
 
 class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXTrapInstruction<Mnemonic> {
@@ -939,14 +1207,27 @@ def TRAP : MMIXTrapInstructionOpcode<0x00, "TRAP">;
 def TRIP : MMIXTrapInstructionOpcode<0xFF, "TRIP">;
 
 class MMIXResume : MMIXMachineInstruction<(outs), (ins MMIXResumeMode:$mode),
-                                           "RESUME $mode">;
+                                           "RESUME $mode"> {
+  bits<1> mode;
+  let MMIXX = 0;
+  let MMIXY = 0;
+  let MMIXZ{7-1} = 0;
+  let MMIXZ{0} = mode;
+}
 
 def RESUME : MMIXResume {
   let MMIXOpcode = 0xF9;
 }
 
 class MMIXGet : MMIXMachineInstruction<(outs GPR64Op:$dst), (ins SPR64Op:$src),
-                                        "GET $dst, $src">;
+                                        "GET $dst, $src"> {
+  bits<8> dst;
+  bits<5> src;
+  let MMIXX = dst;
+  let MMIXY = 0;
+  let MMIXZ{7-5} = 0;
+  let MMIXZ{4-0} = src;
+}
 
 def GET : MMIXGet {
   let MMIXOpcode = 0xFE;
@@ -954,11 +1235,25 @@ def GET : MMIXGet {
 
 class MMIXPutReg
     : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, GPR64Op:$src),
-                             "PUT $dst, $src">;
+                             "PUT $dst, $src"> {
+  bits<5> dst;
+  bits<8> src;
+  let MMIXX{7-5} = 0;
+  let MMIXX{4-0} = dst;
+  let MMIXY = 0;
+  let MMIXZ = src;
+}
 
 class MMIXPutImm
     : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, MMIXUImm8:$src),
-                             "PUT $dst, $src">;
+                             "PUT $dst, $src"> {
+  bits<5> dst;
+  bits<8> src;
+  let MMIXX{7-5} = 0;
+  let MMIXX{4-0} = dst;
+  let MMIXY = 0;
+  let MMIXZ = src;
+}
 
 class MMIXPutRegOpcode<bits<8> Opcode> : MMIXPutReg {
   let MMIXOpcode = Opcode;
@@ -972,9 +1267,19 @@ def PUT  : MMIXPutRegOpcode<0xF6>;
 def PUTI : MMIXPutImmOpcode<0xF7>;
 
 class MMIXSave : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
-                                         "SAVE $state">;
+                                         "SAVE $state"> {
+  bits<8> state;
+  let MMIXX = state;
+  let MMIXY = 0;
+  let MMIXZ = 0;
+}
 class MMIXUnsave : MMIXMachineInstruction<(outs), (ins GPR64Op:$state),
-                                           "UNSAVE $state">;
+                                           "UNSAVE $state"> {
+  bits<8> state;
+  let MMIXX = 0;
+  let MMIXY = 0;
+  let MMIXZ = state;
+}
 
 def SAVE : MMIXSave {
   let MMIXOpcode = 0xFA;
