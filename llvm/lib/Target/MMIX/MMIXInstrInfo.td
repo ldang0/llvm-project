@@ -135,43 +135,157 @@ class MMIXIntConst<string Mnemonic>
   let MMIXInventoryFamily = "integer";
 }
 
+class MMIXIntRegRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXIntRegReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXIntRegImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXIntRegImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXNegRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXNegReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXNegImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXNegImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXIntConstOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXIntConst<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
 // Arithmetic, shifts, comparisons, conditional sets, and bit operations all
 // have the architectural register and immediate variants listed here.
-foreach Mnemonic = [
-  "MUL", "MULU", "DIV", "DIVU",
-  "ADD", "ADDU", "SUB", "SUBU",
-  "CMP", "CMPU", "SL", "SLU", "SR", "SRU",
-  "CSN", "CSZ", "CSP", "CSOD", "CSNN", "CSNZ", "CSNP", "CSEV",
-  "ZSN", "ZSZ", "ZSP", "ZSOD", "ZSNN", "ZSNZ", "ZSNP", "ZSEV",
-  "OR", "ORN", "NOR", "XOR", "AND", "ANDN", "NAND", "NXOR",
-  "BDIF", "WDIF", "TDIF", "ODIF",
-  "MUX", "SADD", "MOR", "MXOR"
-] in {
-  def Mnemonic : MMIXIntRegReg<Mnemonic>;
-  def Mnemonic # "I" : MMIXIntRegImm<Mnemonic>;
-}
+def MUL : MMIXIntRegRegOpcode<0x18, "MUL">;
+def MULI : MMIXIntRegImmOpcode<0x19, "MUL">;
+def MULU : MMIXIntRegRegOpcode<0x1A, "MULU">;
+def MULUI : MMIXIntRegImmOpcode<0x1B, "MULU">;
+def DIV : MMIXIntRegRegOpcode<0x1C, "DIV">;
+def DIVI : MMIXIntRegImmOpcode<0x1D, "DIV">;
+def DIVU : MMIXIntRegRegOpcode<0x1E, "DIVU">;
+def DIVUI : MMIXIntRegImmOpcode<0x1F, "DIVU">;
+def ADD : MMIXIntRegRegOpcode<0x20, "ADD">;
+def ADDI : MMIXIntRegImmOpcode<0x21, "ADD">;
+def ADDU : MMIXIntRegRegOpcode<0x22, "ADDU">;
+def ADDUI : MMIXIntRegImmOpcode<0x23, "ADDU">;
+def SUB : MMIXIntRegRegOpcode<0x24, "SUB">;
+def SUBI : MMIXIntRegImmOpcode<0x25, "SUB">;
+def SUBU : MMIXIntRegRegOpcode<0x26, "SUBU">;
+def SUBUI : MMIXIntRegImmOpcode<0x27, "SUBU">;
+def CMP : MMIXIntRegRegOpcode<0x30, "CMP">;
+def CMPI : MMIXIntRegImmOpcode<0x31, "CMP">;
+def CMPU : MMIXIntRegRegOpcode<0x32, "CMPU">;
+def CMPUI : MMIXIntRegImmOpcode<0x33, "CMPU">;
+def NEG : MMIXNegRegOpcode<0x34, "NEG">;
+def NEGI : MMIXNegImmOpcode<0x35, "NEG">;
+def NEGU : MMIXNegRegOpcode<0x36, "NEGU">;
+def NEGUI : MMIXNegImmOpcode<0x37, "NEGU">;
+def SL : MMIXIntRegRegOpcode<0x38, "SL">;
+def SLI : MMIXIntRegImmOpcode<0x39, "SL">;
+def SLU : MMIXIntRegRegOpcode<0x3A, "SLU">;
+def SLUI : MMIXIntRegImmOpcode<0x3B, "SLU">;
+def SR : MMIXIntRegRegOpcode<0x3C, "SR">;
+def SRI : MMIXIntRegImmOpcode<0x3D, "SR">;
+def SRU : MMIXIntRegRegOpcode<0x3E, "SRU">;
+def SRUI : MMIXIntRegImmOpcode<0x3F, "SRU">;
 
-def TWOADDU : MMIXIntRegReg<"2ADDU">;
-def TWOADDUI : MMIXIntRegImm<"2ADDU">;
-def FOURADDU : MMIXIntRegReg<"4ADDU">;
-def FOURADDUI : MMIXIntRegImm<"4ADDU">;
-def EIGHTADDU : MMIXIntRegReg<"8ADDU">;
-def EIGHTADDUI : MMIXIntRegImm<"8ADDU">;
-def SIXTEENADDU : MMIXIntRegReg<"16ADDU">;
-def SIXTEENADDUI : MMIXIntRegImm<"16ADDU">;
+def TWOADDU : MMIXIntRegRegOpcode<0x28, "2ADDU">;
+def TWOADDUI : MMIXIntRegImmOpcode<0x29, "2ADDU">;
+def FOURADDU : MMIXIntRegRegOpcode<0x2A, "4ADDU">;
+def FOURADDUI : MMIXIntRegImmOpcode<0x2B, "4ADDU">;
+def EIGHTADDU : MMIXIntRegRegOpcode<0x2C, "8ADDU">;
+def EIGHTADDUI : MMIXIntRegImmOpcode<0x2D, "8ADDU">;
+def SIXTEENADDU : MMIXIntRegRegOpcode<0x2E, "16ADDU">;
+def SIXTEENADDUI : MMIXIntRegImmOpcode<0x2F, "16ADDU">;
 
-foreach Mnemonic = ["NEG", "NEGU"] in {
-  def Mnemonic : MMIXNegReg<Mnemonic>;
-  def Mnemonic # "I" : MMIXNegImm<Mnemonic>;
-}
+def CSN : MMIXIntRegRegOpcode<0x60, "CSN">;
+def CSNI : MMIXIntRegImmOpcode<0x61, "CSN">;
+def CSZ : MMIXIntRegRegOpcode<0x62, "CSZ">;
+def CSZI : MMIXIntRegImmOpcode<0x63, "CSZ">;
+def CSP : MMIXIntRegRegOpcode<0x64, "CSP">;
+def CSPI : MMIXIntRegImmOpcode<0x65, "CSP">;
+def CSOD : MMIXIntRegRegOpcode<0x66, "CSOD">;
+def CSODI : MMIXIntRegImmOpcode<0x67, "CSOD">;
+def CSNN : MMIXIntRegRegOpcode<0x68, "CSNN">;
+def CSNNI : MMIXIntRegImmOpcode<0x69, "CSNN">;
+def CSNZ : MMIXIntRegRegOpcode<0x6A, "CSNZ">;
+def CSNZI : MMIXIntRegImmOpcode<0x6B, "CSNZ">;
+def CSNP : MMIXIntRegRegOpcode<0x6C, "CSNP">;
+def CSNPI : MMIXIntRegImmOpcode<0x6D, "CSNP">;
+def CSEV : MMIXIntRegRegOpcode<0x6E, "CSEV">;
+def CSEVI : MMIXIntRegImmOpcode<0x6F, "CSEV">;
+def ZSN : MMIXIntRegRegOpcode<0x70, "ZSN">;
+def ZSNI : MMIXIntRegImmOpcode<0x71, "ZSN">;
+def ZSZ : MMIXIntRegRegOpcode<0x72, "ZSZ">;
+def ZSZI : MMIXIntRegImmOpcode<0x73, "ZSZ">;
+def ZSP : MMIXIntRegRegOpcode<0x74, "ZSP">;
+def ZSPI : MMIXIntRegImmOpcode<0x75, "ZSP">;
+def ZSOD : MMIXIntRegRegOpcode<0x76, "ZSOD">;
+def ZSODI : MMIXIntRegImmOpcode<0x77, "ZSOD">;
+def ZSNN : MMIXIntRegRegOpcode<0x78, "ZSNN">;
+def ZSNNI : MMIXIntRegImmOpcode<0x79, "ZSNN">;
+def ZSNZ : MMIXIntRegRegOpcode<0x7A, "ZSNZ">;
+def ZSNZI : MMIXIntRegImmOpcode<0x7B, "ZSNZ">;
+def ZSNP : MMIXIntRegRegOpcode<0x7C, "ZSNP">;
+def ZSNPI : MMIXIntRegImmOpcode<0x7D, "ZSNP">;
+def ZSEV : MMIXIntRegRegOpcode<0x7E, "ZSEV">;
+def ZSEVI : MMIXIntRegImmOpcode<0x7F, "ZSEV">;
 
-foreach Mnemonic = [
-  "SETH", "SETMH", "SETML", "SETL",
-  "INCH", "INCMH", "INCML", "INCL",
-  "ORH", "ORMH", "ORML", "ORL",
-  "ANDNH", "ANDNMH", "ANDNML", "ANDNL"
-] in
-  def Mnemonic : MMIXIntConst<Mnemonic>;
+def OR : MMIXIntRegRegOpcode<0xC0, "OR">;
+def ORI : MMIXIntRegImmOpcode<0xC1, "OR">;
+def ORN : MMIXIntRegRegOpcode<0xC2, "ORN">;
+def ORNI : MMIXIntRegImmOpcode<0xC3, "ORN">;
+def NOR : MMIXIntRegRegOpcode<0xC4, "NOR">;
+def NORI : MMIXIntRegImmOpcode<0xC5, "NOR">;
+def XOR : MMIXIntRegRegOpcode<0xC6, "XOR">;
+def XORI : MMIXIntRegImmOpcode<0xC7, "XOR">;
+def AND : MMIXIntRegRegOpcode<0xC8, "AND">;
+def ANDI : MMIXIntRegImmOpcode<0xC9, "AND">;
+def ANDN : MMIXIntRegRegOpcode<0xCA, "ANDN">;
+def ANDNI : MMIXIntRegImmOpcode<0xCB, "ANDN">;
+def NAND : MMIXIntRegRegOpcode<0xCC, "NAND">;
+def NANDI : MMIXIntRegImmOpcode<0xCD, "NAND">;
+def NXOR : MMIXIntRegRegOpcode<0xCE, "NXOR">;
+def NXORI : MMIXIntRegImmOpcode<0xCF, "NXOR">;
+def BDIF : MMIXIntRegRegOpcode<0xD0, "BDIF">;
+def BDIFI : MMIXIntRegImmOpcode<0xD1, "BDIF">;
+def WDIF : MMIXIntRegRegOpcode<0xD2, "WDIF">;
+def WDIFI : MMIXIntRegImmOpcode<0xD3, "WDIF">;
+def TDIF : MMIXIntRegRegOpcode<0xD4, "TDIF">;
+def TDIFI : MMIXIntRegImmOpcode<0xD5, "TDIF">;
+def ODIF : MMIXIntRegRegOpcode<0xD6, "ODIF">;
+def ODIFI : MMIXIntRegImmOpcode<0xD7, "ODIF">;
+def MUX : MMIXIntRegRegOpcode<0xD8, "MUX">;
+def MUXI : MMIXIntRegImmOpcode<0xD9, "MUX">;
+def SADD : MMIXIntRegRegOpcode<0xDA, "SADD">;
+def SADDI : MMIXIntRegImmOpcode<0xDB, "SADD">;
+def MOR : MMIXIntRegRegOpcode<0xDC, "MOR">;
+def MORI : MMIXIntRegImmOpcode<0xDD, "MOR">;
+def MXOR : MMIXIntRegRegOpcode<0xDE, "MXOR">;
+def MXORI : MMIXIntRegImmOpcode<0xDF, "MXOR">;
+
+def SETH : MMIXIntConstOpcode<0xE0, "SETH">;
+def SETMH : MMIXIntConstOpcode<0xE1, "SETMH">;
+def SETML : MMIXIntConstOpcode<0xE2, "SETML">;
+def SETL : MMIXIntConstOpcode<0xE3, "SETL">;
+def INCH : MMIXIntConstOpcode<0xE4, "INCH">;
+def INCMH : MMIXIntConstOpcode<0xE5, "INCMH">;
+def INCML : MMIXIntConstOpcode<0xE6, "INCML">;
+def INCL : MMIXIntConstOpcode<0xE7, "INCL">;
+def ORH : MMIXIntConstOpcode<0xE8, "ORH">;
+def ORMH : MMIXIntConstOpcode<0xE9, "ORMH">;
+def ORML : MMIXIntConstOpcode<0xEA, "ORML">;
+def ORL : MMIXIntConstOpcode<0xEB, "ORL">;
+def ANDNH : MMIXIntConstOpcode<0xEC, "ANDNH">;
+def ANDNMH : MMIXIntConstOpcode<0xED, "ANDNMH">;
+def ANDNML : MMIXIntConstOpcode<0xEE, "ANDNML">;
+def ANDNL : MMIXIntConstOpcode<0xEF, "ANDNL">;
 
 // Integer memory operations use a register base and either a register or an
 // unsigned-byte offset. The load and store records keep width and signedness
