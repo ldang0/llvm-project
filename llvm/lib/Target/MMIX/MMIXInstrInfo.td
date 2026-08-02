@@ -761,10 +761,26 @@ class MMIXCacheImm<string Mnemonic>
                                   MMIXMemOffset8:$offset),
                              Mnemonic # " $count, $base, $offset">;
 
-foreach Mnemonic = ["PRELD", "PREGO", "PREST", "SYNCD", "SYNCID"] in {
-  def Mnemonic : MMIXCacheReg<Mnemonic>;
-  def Mnemonic # "I" : MMIXCacheImm<Mnemonic>;
+class MMIXCacheRegOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXCacheReg<Mnemonic> {
+  let MMIXOpcode = Opcode;
 }
+
+class MMIXCacheImmOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXCacheImm<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def PRELD   : MMIXCacheRegOpcode<0x9A, "PRELD">;
+def PRELDI  : MMIXCacheImmOpcode<0x9B, "PRELD">;
+def PREGO   : MMIXCacheRegOpcode<0x9C, "PREGO">;
+def PREGOI  : MMIXCacheImmOpcode<0x9D, "PREGO">;
+def PREST   : MMIXCacheRegOpcode<0xBA, "PREST">;
+def PRESTI  : MMIXCacheImmOpcode<0xBB, "PREST">;
+def SYNCD   : MMIXCacheRegOpcode<0xB8, "SYNCD">;
+def SYNCDI  : MMIXCacheImmOpcode<0xB9, "SYNCD">;
+def SYNCID  : MMIXCacheRegOpcode<0xBC, "SYNCID">;
+def SYNCIDI : MMIXCacheImmOpcode<0xBD, "SYNCID">;
 
 class MMIXUncachedLoad<string Mnemonic>
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
@@ -823,16 +839,34 @@ class MMIXVirtualTranslationImm
                              (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                              "LDVTS $dst, $base, $offset">;
 
-def LDVTS : MMIXVirtualTranslationReg;
-def LDVTSI : MMIXVirtualTranslationImm;
+class MMIXVirtualTranslationRegOpcode<bits<8> Opcode>
+    : MMIXVirtualTranslationReg {
+  let MMIXOpcode = Opcode;
+}
 
-def SYNC : MMIXMachineInstruction<(outs), (ins MMIXUImm24:$mode),
-                                   "SYNC $mode">;
+class MMIXVirtualTranslationImmOpcode<bits<8> Opcode>
+    : MMIXVirtualTranslationImm {
+  let MMIXOpcode = Opcode;
+}
 
-def SWYM : MMIXMachineInstruction<
+def LDVTS  : MMIXVirtualTranslationRegOpcode<0x98>;
+def LDVTSI : MMIXVirtualTranslationImmOpcode<0x99>;
+
+class MMIXSync : MMIXMachineInstruction<(outs), (ins MMIXUImm24:$mode),
+                                        "SYNC $mode">;
+
+def SYNC : MMIXSync {
+  let MMIXOpcode = 0xFC;
+}
+
+class MMIXSwym : MMIXMachineInstruction<
     (outs),
     (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
     "SWYM $x, $y, $z">;
+
+def SWYM : MMIXSwym {
+  let MMIXOpcode = 0xFD;
+}
 
 class MMIXTrapInstruction<string Mnemonic>
     : MMIXMachineInstruction<
@@ -840,14 +874,27 @@ class MMIXTrapInstruction<string Mnemonic>
           (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
           Mnemonic # " $x, $y, $z">;
 
-def TRAP : MMIXTrapInstruction<"TRAP">;
-def TRIP : MMIXTrapInstruction<"TRIP">;
+class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXTrapInstruction<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
 
-def RESUME : MMIXMachineInstruction<(outs), (ins MMIXUImm8:$mode),
-                                     "RESUME $mode">;
+def TRAP : MMIXTrapInstructionOpcode<0x00, "TRAP">;
+def TRIP : MMIXTrapInstructionOpcode<0xFF, "TRIP">;
 
-def GET : MMIXMachineInstruction<(outs GPR64Op:$dst), (ins SPR64Op:$src),
-                                 "GET $dst, $src">;
+class MMIXResume : MMIXMachineInstruction<(outs), (ins MMIXUImm8:$mode),
+                                           "RESUME $mode">;
+
+def RESUME : MMIXResume {
+  let MMIXOpcode = 0xF9;
+}
+
+class MMIXGet : MMIXMachineInstruction<(outs GPR64Op:$dst), (ins SPR64Op:$src),
+                                        "GET $dst, $src">;
+
+def GET : MMIXGet {
+  let MMIXOpcode = 0xFE;
+}
 
 class MMIXPutReg
     : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, GPR64Op:$src),
@@ -857,8 +904,16 @@ class MMIXPutImm
     : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, MMIXUImm8:$src),
                              "PUT $dst, $src">;
 
-def PUT : MMIXPutReg;
-def PUTI : MMIXPutImm;
+class MMIXPutRegOpcode<bits<8> Opcode> : MMIXPutReg {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXPutImmOpcode<bits<8> Opcode> : MMIXPutImm {
+  let MMIXOpcode = Opcode;
+}
+
+def PUT  : MMIXPutRegOpcode<0xF6>;
+def PUTI : MMIXPutImmOpcode<0xF7>;
 
 class MMIXSave : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
                                          "SAVE $state">;
