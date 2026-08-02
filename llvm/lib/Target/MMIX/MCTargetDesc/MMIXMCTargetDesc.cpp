@@ -53,4 +53,6 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
   TargetRegistry::RegisterMCInstrInfo(T, createMMIXMCInstrInfo);
   TargetRegistry::RegisterMCRegInfo(T, createMMIXMCRegisterInfo);
   TargetRegistry::RegisterMCSubtargetInfo(T, createMMIXMCSubtargetInfo);
+  TargetRegistry::RegisterMCCodeEmitter(T, createMMIXMCCodeEmitter);
+  TargetRegistry::RegisterMCAsmBackend(T, createMMIXAsmBackend);
 }

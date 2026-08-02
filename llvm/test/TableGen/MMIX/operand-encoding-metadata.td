@@ -25,8 +25,11 @@ assert !eq(MMIXRoundingMode.MMIXEncodingWidth, 2),
 assert !eq(MMIXBranchTarget.MMIXEncodingKind, "pc-relative"),
        "MMIX branch targets must be PC-relative";
 assert !eq(MMIXBranchTarget.MMIXEncodingRange,
-           "signed-8-instruction-words"),
+           "signed-16-instruction-words"),
        "MMIX branch target range metadata is incorrect";
+assert !eq(MMIXJumpTarget.MMIXEncodingRange,
+           "signed-24-instruction-words"),
+       "MMIX jump target range metadata is incorrect";
 assert !eq(MMIXMemOffset8.MMIXEncodingKind, "memory-offset"),
        "MMIX memory offsets must have a dedicated operand kind";
 assert !eq(MMIXRegOrImm8.MMIXEncodingKind, "register-or-immediate"),

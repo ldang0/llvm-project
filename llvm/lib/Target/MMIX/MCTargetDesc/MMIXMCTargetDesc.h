@@ -14,14 +14,23 @@
 namespace llvm {
 
 class MCInstrInfo;
+class MCCodeEmitter;
+class MCAsmBackend;
+class MCContext;
 class MCRegisterInfo;
 class MCSubtargetInfo;
+class MCTargetOptions;
+class Target;
 class Triple;
 
 MCInstrInfo *createMMIXMCInstrInfo();
 MCRegisterInfo *createMMIXMCRegisterInfo(const Triple &TT);
 MCSubtargetInfo *createMMIXMCSubtargetInfo(const Triple &TT, StringRef CPU,
                                            StringRef FS);
+MCCodeEmitter *createMMIXMCCodeEmitter(const MCInstrInfo &MCII, MCContext &Ctx);
+MCAsmBackend *createMMIXAsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                   const MCRegisterInfo &MRI,
+                                   const MCTargetOptions &Options);
 
 } // namespace llvm
 

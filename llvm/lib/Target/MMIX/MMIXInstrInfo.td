@@ -54,7 +54,10 @@ class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
 }
 
-def MMIXBranchTarget : MMIXPCRelativeOperand<8, "signed-8-instruction-words">;
+def MMIXBranchTarget : MMIXPCRelativeOperand<16,
+                                             "signed-16-instruction-words">;
+def MMIXJumpTarget : MMIXPCRelativeOperand<24,
+                                           "signed-24-instruction-words">;
 
 class MMIXMemoryOffsetOperand<int Width, bit Signed, string Range>
     : Operand<i64> {
@@ -93,6 +96,7 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   let Inst{23-16} = MMIXX;
   let Inst{15-8} = MMIXY;
   let Inst{7-0} = MMIXZ;
+  let TSFlags{7-0} = MMIXOpcode;
   string MMIXInventoryStatus = "modeled";
   string MMIXInventoryFamily = "unclassified";
 }
@@ -456,7 +460,7 @@ def PBEV  : MMIXCondBranchOpcode<0x5E, "PBEV">;
 def PBEVB : MMIXCondBranchOpcode<0x5F, "PBEVB">;
 
 class MMIXJump<string Mnemonic>
-    : MMIXInstruction<(outs), (ins MMIXBranchTarget:$target),
+    : MMIXInstruction<(outs), (ins MMIXJumpTarget:$target),
                       Mnemonic # " $target"> {
   let MMIXInventoryFamily = "control-flow";
 }
@@ -469,7 +473,7 @@ def JMP  : MMIXJumpOpcode<0xF0, "JMP">;
 def JMPB : MMIXJumpOpcode<0xF1, "JMPB">;
 
 class MMIXGetAddress<string Mnemonic>
-    : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXBranchTarget:$target),
+    : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXJumpTarget:$target),
                       Mnemonic # " $dst, $target"> {
   let MMIXInventoryFamily = "control-flow";
 }

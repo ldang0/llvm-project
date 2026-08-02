@@ -51,8 +51,10 @@ assert !eq(UNSAVE.MMIXOpcode, 0xFB), "UNSAVE opcode is incorrect";
 
 assert !eq(MMIXBranchTarget.MMIXEncodingKind, "pc-relative"),
        "branch targets must be PC-relative";
-assert !eq(MMIXBranchTarget.MMIXEncodingWidth, 8),
-       "branch targets must use an 8-bit displacement";
+assert !eq(MMIXBranchTarget.MMIXEncodingWidth, 16),
+       "branch targets must use a 16-bit displacement";
+assert !eq(MMIXJumpTarget.MMIXEncodingWidth, 24),
+       "jump targets must use a 24-bit displacement";
 assert !eq(MMIXBranchTarget.MMIXFixupKind, "pc-relative"),
        "branch targets must carry PC-relative fixup metadata";
 assert !eq(MMIXBranchTarget.MMIXFixupScale, 4),
