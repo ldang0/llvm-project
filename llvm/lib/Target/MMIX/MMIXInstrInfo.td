@@ -49,6 +49,8 @@ class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
   bit MMIXEncodingSigned = true;
   string MMIXEncodingKind = "pc-relative";
   string MMIXEncodingRange = Range;
+  string MMIXFixupKind = "pc-relative";
+  int MMIXFixupScale = 4;
   let OperandType = "OPERAND_PCREL";
 }
 
@@ -414,17 +416,44 @@ class MMIXCondBranch<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-foreach Mnemonic = ["BN", "BZ", "BP", "BOD", "BNN", "BNZ", "BNP", "BEV"] in {
-  def Mnemonic : MMIXCondBranch<Mnemonic>;
-  def Mnemonic # "B" : MMIXCondBranch<Mnemonic # "B">;
+class MMIXCondBranchOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXCondBranch<Mnemonic> {
+  let MMIXOpcode = Opcode;
 }
 
-foreach Mnemonic = [
-  "PBN", "PBZ", "PBP", "PBOD", "PBNN", "PBNZ", "PBNP", "PBEV"
-] in {
-  def Mnemonic : MMIXCondBranch<Mnemonic>;
-  def Mnemonic # "B" : MMIXCondBranch<Mnemonic # "B">;
-}
+def BN   : MMIXCondBranchOpcode<0x40, "BN">;
+def BNB  : MMIXCondBranchOpcode<0x41, "BNB">;
+def BZ   : MMIXCondBranchOpcode<0x42, "BZ">;
+def BZB  : MMIXCondBranchOpcode<0x43, "BZB">;
+def BP   : MMIXCondBranchOpcode<0x44, "BP">;
+def BPB  : MMIXCondBranchOpcode<0x45, "BPB">;
+def BOD  : MMIXCondBranchOpcode<0x46, "BOD">;
+def BODB : MMIXCondBranchOpcode<0x47, "BODB">;
+def BNN  : MMIXCondBranchOpcode<0x48, "BNN">;
+def BNNB : MMIXCondBranchOpcode<0x49, "BNNB">;
+def BNZ  : MMIXCondBranchOpcode<0x4A, "BNZ">;
+def BNZB : MMIXCondBranchOpcode<0x4B, "BNZB">;
+def BNP  : MMIXCondBranchOpcode<0x4C, "BNP">;
+def BNPB : MMIXCondBranchOpcode<0x4D, "BNPB">;
+def BEV  : MMIXCondBranchOpcode<0x4E, "BEV">;
+def BEVB : MMIXCondBranchOpcode<0x4F, "BEVB">;
+
+def PBN   : MMIXCondBranchOpcode<0x50, "PBN">;
+def PBNB  : MMIXCondBranchOpcode<0x51, "PBNB">;
+def PBZ   : MMIXCondBranchOpcode<0x52, "PBZ">;
+def PBZB  : MMIXCondBranchOpcode<0x53, "PBZB">;
+def PBP   : MMIXCondBranchOpcode<0x54, "PBP">;
+def PBPB  : MMIXCondBranchOpcode<0x55, "PBPB">;
+def PBOD  : MMIXCondBranchOpcode<0x56, "PBOD">;
+def PBODB : MMIXCondBranchOpcode<0x57, "PBODB">;
+def PBNN  : MMIXCondBranchOpcode<0x58, "PBNN">;
+def PBNNB : MMIXCondBranchOpcode<0x59, "PBNNB">;
+def PBNZ  : MMIXCondBranchOpcode<0x5A, "PBNZ">;
+def PBNZB : MMIXCondBranchOpcode<0x5B, "PBNZB">;
+def PBNP  : MMIXCondBranchOpcode<0x5C, "PBNP">;
+def PBNPB : MMIXCondBranchOpcode<0x5D, "PBNPB">;
+def PBEV  : MMIXCondBranchOpcode<0x5E, "PBEV">;
+def PBEVB : MMIXCondBranchOpcode<0x5F, "PBEVB">;
 
 class MMIXJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins MMIXBranchTarget:$target),
@@ -432,8 +461,12 @@ class MMIXJump<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-def JMP : MMIXJump<"JMP">;
-def JMPB : MMIXJump<"JMPB">;
+class MMIXJumpOpcode<bits<8> Opcode, string Mnemonic> : MMIXJump<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def JMP  : MMIXJumpOpcode<0xF0, "JMP">;
+def JMPB : MMIXJumpOpcode<0xF1, "JMPB">;
 
 class MMIXGetAddress<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXBranchTarget:$target),
@@ -441,8 +474,13 @@ class MMIXGetAddress<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-def GETA : MMIXGetAddress<"GETA">;
-def GETAB : MMIXGetAddress<"GETAB">;
+class MMIXGetAddressOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXGetAddress<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def GETA  : MMIXGetAddressOpcode<0xF4, "GETA">;
+def GETAB : MMIXGetAddressOpcode<0xF5, "GETAB">;
 
 class MMIXPushJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins GPR64Op:$link, MMIXBranchTarget:$target),
@@ -450,8 +488,13 @@ class MMIXPushJump<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-def PUSHJ : MMIXPushJump<"PUSHJ">;
-def PUSHJB : MMIXPushJump<"PUSHJB">;
+class MMIXPushJumpOpcode<bits<8> Opcode, string Mnemonic>
+    : MMIXPushJump<Mnemonic> {
+  let MMIXOpcode = Opcode;
+}
+
+def PUSHJ  : MMIXPushJumpOpcode<0xF2, "PUSHJ">;
+def PUSHJB : MMIXPushJumpOpcode<0xF3, "PUSHJB">;
 
 class MMIXGoReg
     : MMIXInstruction<(outs GPR64Op:$link),
@@ -467,8 +510,16 @@ class MMIXGoImm
   let MMIXInventoryFamily = "control-flow";
 }
 
-def GO : MMIXGoReg;
-def GOI : MMIXGoImm;
+class MMIXGoRegOpcode<bits<8> Opcode> : MMIXGoReg {
+  let MMIXOpcode = Opcode;
+}
+
+class MMIXGoImmOpcode<bits<8> Opcode> : MMIXGoImm {
+  let MMIXOpcode = Opcode;
+}
+
+def GO  : MMIXGoRegOpcode<0x9E>;
+def GOI : MMIXGoImmOpcode<0x9F>;
 
 class MMIXPushGoReg
     : MMIXInstruction<(outs),
@@ -484,13 +535,25 @@ class MMIXPushGoImm
   let MMIXInventoryFamily = "control-flow";
 }
 
-def PUSHGO : MMIXPushGoReg;
-def PUSHGOI : MMIXPushGoImm;
+class MMIXPushGoRegOpcode<bits<8> Opcode> : MMIXPushGoReg {
+  let MMIXOpcode = Opcode;
+}
 
-def POP : MMIXInstruction<(outs),
-                          (ins MMIXUImm8:$count, MMIXUImm16:$target),
-                          "POP $count, $target"> {
+class MMIXPushGoImmOpcode<bits<8> Opcode> : MMIXPushGoImm {
+  let MMIXOpcode = Opcode;
+}
+
+def PUSHGO  : MMIXPushGoRegOpcode<0xBE>;
+def PUSHGOI : MMIXPushGoImmOpcode<0xBF>;
+
+class MMIXPop : MMIXInstruction<(outs),
+                                (ins MMIXUImm8:$count, MMIXUImm16:$target),
+                                "POP $count, $target"> {
   let MMIXInventoryFamily = "control-flow";
+}
+
+def POP : MMIXPop {
+  let MMIXOpcode = 0xF8;
 }
 
 // Floating-point arithmetic operates on the 64-bit floating-point view of
@@ -757,10 +820,17 @@ class MMIXPutImm
 def PUT : MMIXPutReg;
 def PUTI : MMIXPutImm;
 
-def SAVE : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
-                                  "SAVE $state">;
-def UNSAVE : MMIXMachineInstruction<(outs), (ins GPR64Op:$state),
-                                    "UNSAVE $state">;
+class MMIXSave : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
+                                         "SAVE $state">;
+class MMIXUnsave : MMIXMachineInstruction<(outs), (ins GPR64Op:$state),
+                                           "UNSAVE $state">;
+
+def SAVE : MMIXSave {
+  let MMIXOpcode = 0xFA;
+}
+def UNSAVE : MMIXUnsave {
+  let MMIXOpcode = 0xFB;
+}
 
 // Keep pseudo instructions separate from architectural instructions.  This
 // base is intentionally not used by the current inventory until lowering and
