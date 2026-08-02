@@ -6,25 +6,69 @@
 //
 //===----------------------------------------------------------------------===//
 
-// Common operand categories. Encoding fields are defined by the instruction
-// base below; operand-specific bindings are added with the corresponding MC
-// instruction families.
-def GPR64Op : RegisterOperand<GPR64>;
-def FPR64Op : RegisterOperand<FPR64>;
-def SPR64Op : RegisterOperand<SPR64>;
+// Common operand categories. These records carry the architectural encoding
+// constraints used by later MC emitters and parsers, without installing any
+// target-specific parser or encoder methods yet.
+class MMIXRegisterOperand<RegisterClassLike RegClass, int Width>
+    : RegisterOperand<RegClass> {
+  int MMIXEncodingWidth = Width;
+  bit MMIXEncodingSigned = false;
+  string MMIXEncodingKind = "register";
+}
 
-def MMIXImm64 : Operand<i64>;
-def MMIXUImm8 : Operand<i64>;
-def MMIXUImm16 : Operand<i64>;
-def MMIXUImm24 : Operand<i64>;
-def MMIXRoundingMode : Operand<i64>;
-def MMIXRegOrImm8 : Operand<i64>;
+def GPR64Op : MMIXRegisterOperand<GPR64, 8>;
+def FPR64Op : MMIXRegisterOperand<FPR64, 8>;
+def SPR64Op : MMIXRegisterOperand<SPR64, 5>;
 
-def MMIXBranchTarget : Operand<OtherVT> {
+class MMIXImmediateOperand<int Width, bit Signed, string Range>
+    : Operand<i64> {
+  int MMIXEncodingWidth = Width;
+  bit MMIXEncodingSigned = Signed;
+  string MMIXEncodingKind = "immediate";
+  string MMIXEncodingRange = Range;
+}
+
+def MMIXImm64 : MMIXImmediateOperand<64, true, "signed-64">;
+def MMIXUImm8 : MMIXImmediateOperand<8, false, "unsigned-8">;
+def MMIXUImm16 : MMIXImmediateOperand<16, false, "unsigned-16">;
+def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24">;
+def MMIXRoundingMode : MMIXImmediateOperand<2, false, "rounding-mode">;
+
+class MMIXRegOrImmOperand<int Width, string Range>
+    : Operand<i64> {
+  int MMIXEncodingWidth = Width;
+  bit MMIXEncodingSigned = false;
+  string MMIXEncodingKind = "register-or-immediate";
+  string MMIXEncodingRange = Range;
+}
+
+def MMIXRegOrImm8 : MMIXRegOrImmOperand<8, "unsigned-8">;
+
+class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
+  int MMIXEncodingWidth = Width;
+  bit MMIXEncodingSigned = true;
+  string MMIXEncodingKind = "pc-relative";
+  string MMIXEncodingRange = Range;
   let OperandType = "OPERAND_PCREL";
 }
 
+def MMIXBranchTarget : MMIXPCRelativeOperand<8, "signed-8-instruction-words">;
+
+class MMIXMemoryOffsetOperand<int Width, bit Signed, string Range>
+    : Operand<i64> {
+  int MMIXEncodingWidth = Width;
+  bit MMIXEncodingSigned = Signed;
+  string MMIXEncodingKind = "memory-offset";
+  string MMIXEncodingRange = Range;
+}
+
+def MMIXMemOffset8 : MMIXMemoryOffsetOperand<8, false, "unsigned-8">;
+
 def MMIXMemAddr : Operand<i64> {
+  int MMIXEncodingWidth = 8;
+  bit MMIXEncodingSigned = false;
+  string MMIXEncodingKind = "memory-address";
+  string MMIXEncodingRange = "unsigned-8-offset";
   let OperandType = "OPERAND_MEMORY";
 }
 
@@ -141,7 +185,7 @@ class MMIXLoadReg<string Mnemonic>
 
 class MMIXLoadImm<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
-                      (ins GPR64Op:$base, MMIXUImm8:$offset),
+                      (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                       Mnemonic # " $dst, $base, $offset"> {
   let MMIXInventoryFamily = "memory";
 }
@@ -155,7 +199,8 @@ class MMIXStoreReg<string Mnemonic>
 
 class MMIXStoreImm<string Mnemonic>
     : MMIXInstruction<(outs),
-                      (ins GPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
+                      (ins GPR64Op:$value, GPR64Op:$base,
+                           MMIXMemOffset8:$offset),
                       Mnemonic # " $value, $base, $offset"> {
   let MMIXInventoryFamily = "memory";
 }
@@ -185,7 +230,8 @@ class MMIXCompareSwapReg
 
 class MMIXCompareSwapImm
     : MMIXInstruction<(outs GPR64Op:$result),
-                      (ins GPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
+                      (ins GPR64Op:$value, GPR64Op:$base,
+                           MMIXMemOffset8:$offset),
                       "CSWAP $result, $base, $offset"> {
   let MMIXInventoryFamily = "memory";
 }
@@ -353,7 +399,7 @@ class MMIXFPLoadReg<string Mnemonic>
 
 class MMIXFPLoadImm<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
-                      (ins GPR64Op:$base, MMIXUImm8:$offset),
+                      (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                       Mnemonic # " $dst, $base, $offset"> {
   let MMIXInventoryFamily = "floating-point";
 }
@@ -367,7 +413,8 @@ class MMIXFPStoreReg<string Mnemonic>
 
 class MMIXFPStoreImm<string Mnemonic>
     : MMIXInstruction<(outs),
-                      (ins FPR64Op:$value, GPR64Op:$base, MMIXUImm8:$offset),
+                      (ins FPR64Op:$value, GPR64Op:$base,
+                           MMIXMemOffset8:$offset),
                       Mnemonic # " $value, $base, $offset"> {
   let MMIXInventoryFamily = "floating-point";
 }
@@ -395,7 +442,7 @@ class MMIXStoreConstantReg
 class MMIXStoreConstantImm
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$value, GPR64Op:$base,
-                                  MMIXUImm8:$offset),
+                                  MMIXMemOffset8:$offset),
                              "STCO $value, $base, $offset">;
 
 def STCO : MMIXStoreConstantReg;
@@ -410,7 +457,7 @@ class MMIXCacheReg<string Mnemonic>
 class MMIXCacheImm<string Mnemonic>
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$count, GPR64Op:$base,
-                                  MMIXUImm8:$offset),
+                                  MMIXMemOffset8:$offset),
                              Mnemonic # " $count, $base, $offset">;
 
 foreach Mnemonic = ["PRELD", "PREGO", "PREST", "SYNCD", "SYNCID"] in {
@@ -425,7 +472,7 @@ class MMIXUncachedLoad<string Mnemonic>
 
 class MMIXUncachedLoadImm<string Mnemonic>
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
-                             (ins GPR64Op:$base, MMIXUImm8:$offset),
+                             (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                              Mnemonic # " $dst, $base, $offset">;
 
 class MMIXUncachedStore<string Mnemonic>
@@ -437,7 +484,7 @@ class MMIXUncachedStore<string Mnemonic>
 class MMIXUncachedStoreImm<string Mnemonic>
     : MMIXMachineInstruction<(outs),
                              (ins GPR64Op:$value, GPR64Op:$base,
-                                  MMIXUImm8:$offset),
+                                  MMIXMemOffset8:$offset),
                              Mnemonic # " $value, $base, $offset">;
 
 def LDUNC : MMIXUncachedLoad<"LDUNC">;
@@ -452,7 +499,7 @@ class MMIXVirtualTranslationReg
 
 class MMIXVirtualTranslationImm
     : MMIXMachineInstruction<(outs GPR64Op:$dst),
-                             (ins GPR64Op:$base, MMIXUImm8:$offset),
+                             (ins GPR64Op:$base, MMIXMemOffset8:$offset),
                              "LDVTS $dst, $base, $offset">;
 
 def LDVTS : MMIXVirtualTranslationReg;
