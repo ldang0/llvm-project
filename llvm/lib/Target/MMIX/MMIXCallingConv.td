@@ -10,6 +10,21 @@
 // ordinary memory spills. The frame pointer is saved only when a function uses
 // it. Stack and register-stack state is preserved without appearing in the
 // software callee-save list.
+def CC_MMIX : CallingConv<[
+  CCIfType<[i1, i8, i16, i32], CCPromoteToType<i64>>,
+  CCIfType<[f32], CCBitConvertToType<i64>>,
+  CCIfType<[i64, f64],
+      CCAssignToReg<[R231, R232, R233, R234, R235, R236, R237, R238,
+                     R239, R240, R241, R242, R243, R244, R245, R246]>>,
+  CCIfType<[i64, f64], CCAssignToStack<8, 8>>
+]>;
+
+def RetCC_MMIX : CallingConv<[
+  CCIfType<[i1, i8, i16, i32], CCPromoteToType<i64>>,
+  CCIfType<[f32], CCBitConvertToType<i64>>,
+  CCIfType<[i64, f64], CCAssignToReg<[R231]>>
+]>;
+
 def CSR_MMIX : CalleeSavedRegs<
     (add (sequence "R%u", 0, 30), R253)> {
   let OtherPreserved = (add R254, RG, RL, RO);

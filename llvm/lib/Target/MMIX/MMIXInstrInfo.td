@@ -16,6 +16,16 @@ def MMIXcallseq_start
 def MMIXcallseq_end
     : SDNode<"ISD::CALLSEQ_END", SDT_MMIXCallSeqEnd,
              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+def SDT_MMIXLoadStackArg
+    : SDTypeProfile<1, 1, [SDTCisVT<1, i64>]>;
+def MMIXload_stack_arg
+    : SDNode<"MMIXISD::LOAD_STACK_ARG", SDT_MMIXLoadStackArg,
+             [SDNPHasChain, SDNPMayLoad]>;
+def MMIXret
+    : SDNode<"MMIXISD::RET_GLUE", SDTNone, [SDNPHasChain]>;
+def MMIXret_value
+    : SDNode<"MMIXISD::RET_VALUE_GLUE", SDTNone,
+             [SDNPHasChain, SDNPInGlue]>;
 
 // Common operand categories. These records carry the architectural encoding
 // constraints used by later MC emitters and parsers, without installing any
@@ -757,6 +767,24 @@ def POP : MMIXPop {
   let isTerminator = true;
   let isBarrier = true;
 }
+
+// The provisional ABI always returns global results with POP 0,0. Keep these
+// fixed CodeGen forms separate from the general architectural POP instruction.
+class MMIXReturn<list<Register> ResultUses>
+    : MMIXInstruction<(outs), (ins), "POP 0, 0"> {
+  let MMIXOpcode = 0xF8;
+  let MMIXX = 0;
+  let MMIXY = 0;
+  let MMIXZ = 0;
+  let isCodeGenOnly = true;
+  let isReturn = true;
+  let isTerminator = true;
+  let isBarrier = true;
+  let Uses = !listconcat([RJ, RL, RO, RG], ResultUses);
+}
+
+def RET : MMIXReturn<[]>;
+def RET_VALUE : MMIXReturn<[R231]>;
 
 // Floating-point arithmetic operates on the 64-bit floating-point view of
 // the general-purpose register file. These operations have no immediate

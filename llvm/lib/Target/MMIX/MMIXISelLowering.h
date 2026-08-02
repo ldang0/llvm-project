@@ -15,6 +15,17 @@ namespace llvm {
 
 class MMIXSubtarget;
 
+namespace MMIXISD {
+
+enum NodeType : unsigned {
+  FIRST_NUMBER = ISD::BUILTIN_OP_END,
+  LOAD_STACK_ARG,
+  RET_GLUE,
+  RET_VALUE_GLUE,
+};
+
+} // namespace MMIXISD
+
 class MMIXTargetLowering final : public TargetLowering {
 public:
   MMIXTargetLowering(const TargetMachine &TM, const MMIXSubtarget &STI);
@@ -25,6 +36,14 @@ public:
                                const SmallVectorImpl<ISD::InputArg> &Ins,
                                const SDLoc &DL, SelectionDAG &DAG,
                                SmallVectorImpl<SDValue> &InVals) const override;
+  bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
+                      bool IsVarArg,
+                      const SmallVectorImpl<ISD::OutputArg> &Outs,
+                      LLVMContext &Context, const Type *RetTy) const override;
+  SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
+                      const SmallVectorImpl<ISD::OutputArg> &Outs,
+                      const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
+                      SelectionDAG &DAG) const override;
 };
 
 } // namespace llvm

@@ -8,6 +8,7 @@
 
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIX.h"
+#include "MMIXISelLowering.h"
 #include "MMIXTargetMachine.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/InitializePasses.h"
@@ -33,6 +34,31 @@ private:
       Node->setNodeId(-1);
       return;
     }
+
+    if (Node->getOpcode() == MMIXISD::LOAD_STACK_ARG) {
+      SDLoc DL(Node);
+      auto *FIN = cast<FrameIndexSDNode>(Node->getOperand(1));
+      SDValue FrameIndex =
+          CurDAG->getTargetFrameIndex(FIN->getIndex(), MVT::i64);
+      SDValue Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+      SDValue Chain = Node->getOperand(0);
+      SDValue Ops[] = {FrameIndex, Offset, Chain};
+      CurDAG->SelectNodeTo(Node, MMIX::LDOUI, Node->getValueType(0), MVT::Other,
+                           Ops);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::RET_GLUE) {
+      CurDAG->SelectNodeTo(Node, MMIX::RET, MVT::Other, Node->getOperand(0));
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::RET_VALUE_GLUE) {
+      CurDAG->SelectNodeTo(Node, MMIX::RET_VALUE, MVT::Other,
+                           Node->getOperand(0), Node->getOperand(1));
+      return;
+    }
+
     SelectCode(Node);
   }
 };
