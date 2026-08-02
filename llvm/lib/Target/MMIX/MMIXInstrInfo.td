@@ -394,6 +394,7 @@ class MMIXLoadReg<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayLoad = true;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -407,6 +408,7 @@ class MMIXLoadImm<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayLoad = true;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -420,6 +422,7 @@ class MMIXStoreReg<string Mnemonic>
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -434,6 +437,7 @@ class MMIXStoreImm<string Mnemonic>
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -896,6 +900,7 @@ class MMIXFPLoadReg<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayLoad = true;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -909,6 +914,7 @@ class MMIXFPLoadImm<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayLoad = true;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -922,6 +928,7 @@ class MMIXFPStoreReg<string Mnemonic>
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -936,6 +943,7 @@ class MMIXFPStoreImm<string Mnemonic>
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
 }
 

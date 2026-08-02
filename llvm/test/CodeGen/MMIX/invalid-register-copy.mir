@@ -1,0 +1,21 @@
+# RUN: not --crash llc -mtriple=mmix -run-pass=postrapseudos -o /dev/null %s \
+# RUN:   2>&1 | FileCheck %s
+
+# CHECK: MMIX cannot copy between these register classes
+
+--- |
+  define void @invalid_register_copy() {
+    ret void
+  }
+...
+---
+name:            invalid_register_copy
+tracksRegLiveness: true
+liveins:
+  - { reg: '$rj' }
+body:             |
+  bb.0:
+    liveins: $rj
+
+    $r231 = COPY $rj
+...
