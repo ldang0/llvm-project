@@ -67,7 +67,7 @@ public:
     const uint32_t Encoded =
         static_cast<uint32_t>(Delta) & ((uint32_t(1) << Width) - 1);
     uint32_t Word = support::endian::read32be(Data);
-    const unsigned Shift = IsBranch ? 8 : 0;
+    const unsigned Shift = 0;
     const uint32_t Mask = ((uint32_t(1) << Width) - 1) << Shift;
     Word = (Word & ~(Mask)) | (Encoded << Shift);
     support::endian::write32be(Data, Word);
@@ -80,8 +80,8 @@ public:
 
   MCFixupKindInfo getFixupKindInfo(MCFixupKind Kind) const override {
     static const MCFixupKindInfo Infos[MMIX::NumTargetFixupKinds] = {
-        {"fixup_mmix_branch_forward", 8, 16, 0},
-        {"fixup_mmix_branch_backward", 8, 16, 0},
+        {"fixup_mmix_branch_forward", 0, 16, 0},
+        {"fixup_mmix_branch_backward", 0, 16, 0},
         {"fixup_mmix_jump_forward", 0, 24, 0},
         {"fixup_mmix_jump_backward", 0, 24, 0},
     };

@@ -19,8 +19,12 @@ assert !eq(MMIXUImm16.MMIXEncodingWidth, 16),
        "MMIX sixteen-bit immediate metadata is incorrect";
 assert !eq(MMIXUImm24.MMIXEncodingWidth, 24),
        "MMIX twenty-four-bit immediate metadata is incorrect";
-assert !eq(MMIXRoundingMode.MMIXEncodingWidth, 2),
-       "MMIX rounding modes must use two-bit fields";
+assert !eq(MMIXRoundingMode.MMIXEncodingWidth, 3),
+       "MMIX rounding modes must use three-bit fields";
+assert !eq(MMIXResumeMode.MMIXEncodingWidth, 1),
+       "MMIX resume modes must use a one-bit field";
+assert !eq(MMIXSyncMode.MMIXEncodingWidth, 3),
+       "MMIX synchronization modes must use a three-bit field";
 
 assert !eq(MMIXBranchTarget.MMIXEncodingKind, "pc-relative"),
        "MMIX branch targets must be PC-relative";

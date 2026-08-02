@@ -39,6 +39,10 @@ def MMIXUImm16AsmOperand : MMIXImmediateParserOperand<"MMIXUImm16">;
 def MMIXUImm24AsmOperand : MMIXImmediateParserOperand<"MMIXUImm24">;
 def MMIXRoundingModeAsmOperand
     : MMIXImmediateParserOperand<"MMIXRoundingMode">;
+def MMIXResumeModeAsmOperand
+    : MMIXImmediateParserOperand<"MMIXResumeMode">;
+def MMIXSyncModeAsmOperand
+    : MMIXImmediateParserOperand<"MMIXSyncMode">;
 
 def MMIXImm64 : MMIXImmediateOperand<64, true, "signed-64"> {
   let ParserMatchClass = MMIXImm64AsmOperand;
@@ -52,8 +56,14 @@ def MMIXUImm16 : MMIXImmediateOperand<16, false, "unsigned-16"> {
 def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24"> {
   let ParserMatchClass = MMIXUImm24AsmOperand;
 }
-def MMIXRoundingMode : MMIXImmediateOperand<2, false, "rounding-mode"> {
+def MMIXRoundingMode : MMIXImmediateOperand<3, false, "rounding-mode"> {
   let ParserMatchClass = MMIXRoundingModeAsmOperand;
+}
+def MMIXResumeMode : MMIXImmediateOperand<1, false, "resume-mode"> {
+  let ParserMatchClass = MMIXResumeModeAsmOperand;
+}
+def MMIXSyncMode : MMIXImmediateOperand<3, false, "sync-mode"> {
+  let ParserMatchClass = MMIXSyncModeAsmOperand;
 }
 
 class MMIXRegOrImmOperand<int Width, string Range>
@@ -657,8 +667,9 @@ def FSQRT : MMIXFPUnaryRoundedOpcode<0x15, "FSQRT">;
 def FINT  : MMIXFPUnaryRoundedOpcode<0x17, "FINT">;
 
 class MMIXFix<string Mnemonic>
-    : MMIXInstruction<(outs GPR64Op:$dst), (ins FPR64Op:$src),
-                      Mnemonic # " $dst, $src"> {
+    : MMIXInstruction<(outs GPR64Op:$dst),
+                      (ins MMIXRoundingMode:$round, FPR64Op:$src),
+                      Mnemonic # " $dst, $round, $src"> {
   let MMIXInventoryFamily = "floating-point";
 }
 
@@ -897,7 +908,7 @@ class MMIXVirtualTranslationImmOpcode<bits<8> Opcode>
 def LDVTS  : MMIXVirtualTranslationRegOpcode<0x98>;
 def LDVTSI : MMIXVirtualTranslationImmOpcode<0x99>;
 
-class MMIXSync : MMIXMachineInstruction<(outs), (ins MMIXUImm24:$mode),
+class MMIXSync : MMIXMachineInstruction<(outs), (ins MMIXSyncMode:$mode),
                                         "SYNC $mode">;
 
 def SYNC : MMIXSync {
@@ -927,7 +938,7 @@ class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
 def TRAP : MMIXTrapInstructionOpcode<0x00, "TRAP">;
 def TRIP : MMIXTrapInstructionOpcode<0xFF, "TRIP">;
 
-class MMIXResume : MMIXMachineInstruction<(outs), (ins MMIXUImm8:$mode),
+class MMIXResume : MMIXMachineInstruction<(outs), (ins MMIXResumeMode:$mode),
                                            "RESUME $mode">;
 
 def RESUME : MMIXResume {

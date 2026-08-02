@@ -34,6 +34,10 @@ static bool isLongPCRelative(unsigned Opcode) {
   return Opcode >= 0xf0 && Opcode <= 0xf5;
 }
 
+static bool isShortPCRelative(unsigned Opcode) {
+  return isBranch(Opcode) || (Opcode >= 0xf2 && Opcode <= 0xf5);
+}
+
 static bool isBackward(unsigned Opcode) {
   return (Opcode >= 0x41 && Opcode <= 0x5f && (Opcode & 1)) || Opcode == 0xf1 ||
          Opcode == 0xf3 || Opcode == 0xf5;
@@ -53,7 +57,7 @@ class MMIXMCCodeEmitter : public MCCodeEmitter {
   }
 
   MCFixupKind getPCRelativeFixup(unsigned Opcode) const {
-    if (isBranch(Opcode))
+    if (isShortPCRelative(Opcode))
       return isBackward(Opcode) ? MMIX::fixup_mmix_branch_backward
                                 : MMIX::fixup_mmix_branch_forward;
     return isBackward(Opcode) ? MMIX::fixup_mmix_jump_backward
@@ -122,6 +126,21 @@ public:
         Fixups.push_back(
             MCFixup::create(0, MO.getExpr(), getPCRelativeFixup(Opcode), true));
         continue;
+      }
+
+      if (MO.isImm() && (isBranch(Opcode) || isLongPCRelative(Opcode))) {
+        const unsigned PCRelWidth = isShortPCRelative(Opcode) ? 16 : 24;
+        const int64_t Min = isBackward(Opcode)
+                                ? -(int64_t(1) << PCRelWidth)
+                                : 0;
+        const int64_t Max = isBackward(Opcode)
+                                ? -1
+                                : (int64_t(1) << PCRelWidth) - 1;
+        if (MO.getImm() < Min || MO.getImm() > Max) {
+          Ctx.reportError(MI.getLoc(),
+                          "MMIX PC-relative operand is out of range");
+          continue;
+        }
       }
 
       Word |= (getMachineOpValue(MO) & Mask) << Shift;

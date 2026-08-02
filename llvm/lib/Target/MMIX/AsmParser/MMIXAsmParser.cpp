@@ -109,7 +109,9 @@ public:
   bool isMMIXUImm8() const { return isAbsoluteInRange(0, UINT8_MAX); }
   bool isMMIXUImm16() const { return isAbsoluteInRange(0, UINT16_MAX); }
   bool isMMIXUImm24() const { return isAbsoluteInRange(0, 0xffffff); }
-  bool isMMIXRoundingMode() const { return isAbsoluteInRange(0, 3); }
+  bool isMMIXRoundingMode() const { return isAbsoluteInRange(0, 4); }
+  bool isMMIXResumeMode() const { return isAbsoluteInRange(0, 1); }
+  bool isMMIXSyncMode() const { return isAbsoluteInRange(0, 7); }
   bool isMMIXRegOrImm8() const {
     return isReg() || isAbsoluteInRange(0, UINT8_MAX);
   }
@@ -152,6 +154,12 @@ public:
     addImmOperands(Inst, N);
   }
   void addMMIXRoundingModeOperands(MCInst &Inst, unsigned N) const {
+    addImmOperands(Inst, N);
+  }
+  void addMMIXResumeModeOperands(MCInst &Inst, unsigned N) const {
+    addImmOperands(Inst, N);
+  }
+  void addMMIXSyncModeOperands(MCInst &Inst, unsigned N) const {
     addImmOperands(Inst, N);
   }
   void addMMIXRegOrImm8Operands(MCInst &Inst, unsigned N) const {

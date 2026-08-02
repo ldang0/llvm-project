@@ -103,6 +103,30 @@ class MMIXDisassembler final : public MCDisassembler {
     return Value;
   }
 
+  static bool hasValidFixedFields(uint32_t Word, unsigned Opcode) {
+    const unsigned X = (Word >> 16) & 0xff;
+    const unsigned Y = (Word >> 8) & 0xff;
+    const unsigned Z = Word & 0xff;
+
+    if (Opcode == 0x05 || Opcode == 0x07 ||
+        (Opcode >= 0x08 && Opcode <= 0x0f) || Opcode == 0x15 ||
+        Opcode == 0x17)
+      return Y <= 4;
+    if (Opcode == 0xf6 || Opcode == 0xf7)
+      return X < 32 && Y == 0;
+    if (Opcode == 0xf9)
+      return X == 0 && Y == 0 && Z <= 1;
+    if (Opcode == 0xfa)
+      return Y == 0 && Z == 0;
+    if (Opcode == 0xfb)
+      return X == 0 && Y == 0;
+    if (Opcode == 0xfc)
+      return (Word & 0xffffff) <= 7;
+    if (Opcode == 0xfe)
+      return Y == 0 && Z < 32;
+    return true;
+  }
+
 public:
   MMIXDisassembler(const MCSubtargetInfo &STI, MCContext &Ctx,
                    std::unique_ptr<MCInstrInfo> MCII)
@@ -122,6 +146,8 @@ public:
                           (uint32_t(Bytes[1]) << 16) |
                           (uint32_t(Bytes[2]) << 8) | uint32_t(Bytes[3]);
     const unsigned ArchOpcode = Word >> 24;
+    if (!hasValidFixedFields(Word, ArchOpcode))
+      return Fail;
     unsigned Opcode = MMIX::TRAP;
     if (ArchOpcode != 0) {
       Opcode = 0;
