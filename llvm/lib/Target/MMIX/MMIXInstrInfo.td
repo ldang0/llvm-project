@@ -16,7 +16,9 @@ def SPR64Op : RegisterOperand<SPR64>;
 def MMIXImm64 : Operand<i64>;
 def MMIXUImm8 : Operand<i64>;
 def MMIXUImm16 : Operand<i64>;
+def MMIXUImm24 : Operand<i64>;
 def MMIXRoundingMode : Operand<i64>;
+def MMIXRegOrImm8 : Operand<i64>;
 
 def MMIXBranchTarget : Operand<OtherVT> {
   let OperandType = "OPERAND_PCREL";
@@ -301,3 +303,122 @@ def LDSF : MMIXFPLoadReg<"LDSF">;
 def LDSFI : MMIXFPLoadImm<"LDSF">;
 def STSF : MMIXFPStoreReg<"STSF">;
 def STSFI : MMIXFPStoreImm<"STSF">;
+
+// Machine-control instructions are intentionally modeled as side-effecting
+// operations. They are available to MC and target-specific mechanisms, but
+// are not generic instruction-selection candidates in this phase.
+class MMIXMachineInstruction<dag outs, dag ins, string asmstr>
+    : MMIXInstruction<outs, ins, asmstr> {
+  let hasSideEffects = true;
+}
+
+class MMIXStoreConstantReg
+    : MMIXMachineInstruction<(outs),
+                             (ins MMIXUImm8:$value, GPR64Op:$base,
+                                  GPR64Op:$offset),
+                             "STCO $value, $base, $offset">;
+
+class MMIXStoreConstantImm
+    : MMIXMachineInstruction<(outs),
+                             (ins MMIXUImm8:$value, GPR64Op:$base,
+                                  MMIXUImm8:$offset),
+                             "STCO $value, $base, $offset">;
+
+def STCO : MMIXStoreConstantReg;
+def STCOI : MMIXStoreConstantImm;
+
+class MMIXCacheReg<string Mnemonic>
+    : MMIXMachineInstruction<(outs),
+                             (ins MMIXUImm8:$count, GPR64Op:$base,
+                                  GPR64Op:$offset),
+                             Mnemonic # " $count, $base, $offset">;
+
+class MMIXCacheImm<string Mnemonic>
+    : MMIXMachineInstruction<(outs),
+                             (ins MMIXUImm8:$count, GPR64Op:$base,
+                                  MMIXUImm8:$offset),
+                             Mnemonic # " $count, $base, $offset">;
+
+foreach Mnemonic = ["PRELD", "PREGO", "PREST", "SYNCD", "SYNCID"] in {
+  def Mnemonic : MMIXCacheReg<Mnemonic>;
+  def Mnemonic # "I" : MMIXCacheImm<Mnemonic>;
+}
+
+class MMIXUncachedLoad<string Mnemonic>
+    : MMIXMachineInstruction<(outs GPR64Op:$dst),
+                             (ins GPR64Op:$base, GPR64Op:$offset),
+                             Mnemonic # " $dst, $base, $offset">;
+
+class MMIXUncachedLoadImm<string Mnemonic>
+    : MMIXMachineInstruction<(outs GPR64Op:$dst),
+                             (ins GPR64Op:$base, MMIXUImm8:$offset),
+                             Mnemonic # " $dst, $base, $offset">;
+
+class MMIXUncachedStore<string Mnemonic>
+    : MMIXMachineInstruction<(outs),
+                             (ins GPR64Op:$value, GPR64Op:$base,
+                                  GPR64Op:$offset),
+                             Mnemonic # " $value, $base, $offset">;
+
+class MMIXUncachedStoreImm<string Mnemonic>
+    : MMIXMachineInstruction<(outs),
+                             (ins GPR64Op:$value, GPR64Op:$base,
+                                  MMIXUImm8:$offset),
+                             Mnemonic # " $value, $base, $offset">;
+
+def LDUNC : MMIXUncachedLoad<"LDUNC">;
+def LDUNCI : MMIXUncachedLoadImm<"LDUNC">;
+def STUNC : MMIXUncachedStore<"STUNC">;
+def STUNCI : MMIXUncachedStoreImm<"STUNC">;
+
+class MMIXVirtualTranslationReg
+    : MMIXMachineInstruction<(outs GPR64Op:$dst),
+                             (ins GPR64Op:$base, GPR64Op:$offset),
+                             "LDVTS $dst, $base, $offset">;
+
+class MMIXVirtualTranslationImm
+    : MMIXMachineInstruction<(outs GPR64Op:$dst),
+                             (ins GPR64Op:$base, MMIXUImm8:$offset),
+                             "LDVTS $dst, $base, $offset">;
+
+def LDVTS : MMIXVirtualTranslationReg;
+def LDVTSI : MMIXVirtualTranslationImm;
+
+def SYNC : MMIXMachineInstruction<(outs), (ins MMIXUImm24:$mode),
+                                   "SYNC $mode">;
+
+def SWYM : MMIXMachineInstruction<
+    (outs),
+    (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
+    "SWYM $x, $y, $z">;
+
+class MMIXTrapInstruction<string Mnemonic>
+    : MMIXMachineInstruction<
+          (outs),
+          (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
+          Mnemonic # " $x, $y, $z">;
+
+def TRAP : MMIXTrapInstruction<"TRAP">;
+def TRIP : MMIXTrapInstruction<"TRIP">;
+
+def RESUME : MMIXMachineInstruction<(outs), (ins MMIXUImm8:$mode),
+                                     "RESUME $mode">;
+
+def GET : MMIXMachineInstruction<(outs GPR64Op:$dst), (ins SPR64Op:$src),
+                                 "GET $dst, $src">;
+
+class MMIXPutReg
+    : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, GPR64Op:$src),
+                             "PUT $dst, $src">;
+
+class MMIXPutImm
+    : MMIXMachineInstruction<(outs), (ins SPR64Op:$dst, MMIXUImm8:$src),
+                             "PUT $dst, $src">;
+
+def PUT : MMIXPutReg;
+def PUTI : MMIXPutImm;
+
+def SAVE : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
+                                  "SAVE $state">;
+def UNSAVE : MMIXMachineInstruction<(outs), (ins GPR64Op:$state),
+                                    "UNSAVE $state">;
