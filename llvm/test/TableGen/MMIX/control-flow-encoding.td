@@ -59,3 +59,24 @@ assert !eq(MMIXBranchTarget.MMIXFixupKind, "pc-relative"),
        "branch targets must carry PC-relative fixup metadata";
 assert !eq(MMIXBranchTarget.MMIXFixupScale, 4),
        "branch targets must use instruction-word scaling";
+assert !eq(MMIXBranchTarget.DecoderMethod, "decodePCRelativeOperand"),
+       "branch targets must use the MMIX PC-relative decoder";
+assert !eq(MMIXJumpTarget.DecoderMethod, "decodePCRelativeOperand"),
+       "jump targets must use the MMIX PC-relative decoder";
+
+assert !eq(BN.MMIXPCRelativeWidth, 16),
+       "forward branches must carry a 16-bit displacement width";
+assert !eq(BNB.MMIXPCRelativeWidth, 16),
+       "backward branches must carry a 16-bit displacement width";
+assert !eq(BN.MMIXPCRelativeBackward, false),
+       "BN must use a forward displacement";
+assert !eq(BNB.MMIXPCRelativeBackward, true),
+       "BNB must use a backward displacement";
+assert !eq(JMP.MMIXPCRelativeWidth, 24),
+       "jumps must carry a 24-bit displacement width";
+assert !eq(JMPB.MMIXPCRelativeBackward, true),
+       "JMPB must use a backward displacement";
+assert !eq(GETA.MMIXPCRelativeWidth, 16),
+       "GETA must carry a 16-bit displacement width";
+assert !eq(GETAB.MMIXPCRelativeBackward, true),
+       "GETAB must use a backward displacement";

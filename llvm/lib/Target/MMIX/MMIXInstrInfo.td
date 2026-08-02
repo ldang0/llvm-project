@@ -58,6 +58,7 @@ def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24"> {
 }
 def MMIXRoundingMode : MMIXImmediateOperand<3, false, "rounding-mode"> {
   let ParserMatchClass = MMIXRoundingModeAsmOperand;
+  let DecoderMethod = "decodeRoundingMode";
 }
 def MMIXResumeMode : MMIXImmediateOperand<1, false, "resume-mode"> {
   let ParserMatchClass = MMIXResumeModeAsmOperand;
@@ -89,6 +90,7 @@ class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
   string MMIXEncodingRange = Range;
   string MMIXFixupKind = "pc-relative";
   int MMIXFixupScale = 4;
+  let DecoderMethod = "decodePCRelativeOperand";
   let OperandType = "OPERAND_PCREL";
 }
 
@@ -144,11 +146,15 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   bits<8> MMIXX;
   bits<8> MMIXY;
   bits<8> MMIXZ;
+  bit MMIXPCRelativeBackward = false;
+  bits<5> MMIXPCRelativeWidth = 0;
   let Inst{31-24} = MMIXOpcode;
   let Inst{23-16} = MMIXX;
   let Inst{15-8} = MMIXY;
   let Inst{7-0} = MMIXZ;
   let TSFlags{7-0} = MMIXOpcode;
+  let TSFlags{8} = MMIXPCRelativeBackward;
+  let TSFlags{13-9} = MMIXPCRelativeWidth;
   string MMIXInventoryStatus = "modeled";
   string MMIXInventoryFamily = "unclassified";
 }
@@ -539,12 +545,14 @@ class MMIXCondBranch<string Mnemonic>
   let MMIXX = condition;
   let MMIXY = target{15-8};
   let MMIXZ = target{7-0};
+  let MMIXPCRelativeWidth = 16;
   let MMIXInventoryFamily = "control-flow";
 }
 
 class MMIXCondBranchOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXCondBranch<Mnemonic> {
   let MMIXOpcode = Opcode;
+  let MMIXPCRelativeBackward = Opcode{0};
 }
 
 def BN   : MMIXCondBranchOpcode<0x40, "BN">;
@@ -588,11 +596,13 @@ class MMIXJump<string Mnemonic>
   let MMIXX = target{23-16};
   let MMIXY = target{15-8};
   let MMIXZ = target{7-0};
+  let MMIXPCRelativeWidth = 24;
   let MMIXInventoryFamily = "control-flow";
 }
 
 class MMIXJumpOpcode<bits<8> Opcode, string Mnemonic> : MMIXJump<Mnemonic> {
   let MMIXOpcode = Opcode;
+  let MMIXPCRelativeBackward = Opcode{0};
 }
 
 def JMP  : MMIXJumpOpcode<0xF0, "JMP">;
@@ -606,12 +616,14 @@ class MMIXGetAddress<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = target{15-8};
   let MMIXZ = target{7-0};
+  let MMIXPCRelativeWidth = 16;
   let MMIXInventoryFamily = "control-flow";
 }
 
 class MMIXGetAddressOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXGetAddress<Mnemonic> {
   let MMIXOpcode = Opcode;
+  let MMIXPCRelativeBackward = Opcode{0};
 }
 
 def GETA  : MMIXGetAddressOpcode<0xF4, "GETA">;
@@ -625,12 +637,14 @@ class MMIXPushJump<string Mnemonic>
   let MMIXX = link;
   let MMIXY = target{15-8};
   let MMIXZ = target{7-0};
+  let MMIXPCRelativeWidth = 16;
   let MMIXInventoryFamily = "control-flow";
 }
 
 class MMIXPushJumpOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXPushJump<Mnemonic> {
   let MMIXOpcode = Opcode;
+  let MMIXPCRelativeBackward = Opcode{0};
 }
 
 def PUSHJ  : MMIXPushJumpOpcode<0xF2, "PUSHJ">;

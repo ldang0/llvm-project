@@ -21,6 +21,8 @@ assert !eq(MMIXUImm24.MMIXEncodingWidth, 24),
        "MMIX twenty-four-bit immediate metadata is incorrect";
 assert !eq(MMIXRoundingMode.MMIXEncodingWidth, 3),
        "MMIX rounding modes must use three-bit fields";
+assert !eq(MMIXRoundingMode.DecoderMethod, "decodeRoundingMode"),
+       "MMIX rounding modes must use the range-checking decoder";
 assert !eq(MMIXResumeMode.MMIXEncodingWidth, 1),
        "MMIX resume modes must use a one-bit field";
 assert !eq(MMIXSyncMode.MMIXEncodingWidth, 3),

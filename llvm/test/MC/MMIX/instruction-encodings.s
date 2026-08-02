@@ -1,8 +1,12 @@
 # RUN: llvm-mc -triple=mmix -show-encoding %s | FileCheck %s
+# RUN: llvm-mc -triple=mmix -filetype=obj %s -o %t
+# RUN: llvm-objdump --triple=mmix --no-print-imm-hex -d %t | FileCheck %s \
+# RUN:   --check-prefix=DISASM --implicit-check-not='<unknown>'
 
 # Floating-point arithmetic, comparison, conversion, and rounding forms.
 FCMP r1, r2, r3
 # CHECK: FCMP r1, r2, r3{{.*}}[0x01,0x01,0x02,0x03]
+# DISASM: FCMP r1, r2, r3
 FUN r1, r2, r3
 # CHECK: FUN r1, r2, r3{{.*}}[0x02,0x01,0x02,0x03]
 FEQL r1, r2, r3
@@ -513,3 +517,4 @@ TRAP 1, 2, 3
 # CHECK: TRAP 1, 2, 3{{.*}}[0x00,0x01,0x02,0x03]
 TRIP 1, 2, 3
 # CHECK: TRIP 1, 2, 3{{.*}}[0xff,0x01,0x02,0x03]
+# DISASM: TRIP 1, 2, 3
