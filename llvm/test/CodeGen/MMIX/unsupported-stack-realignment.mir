@@ -1,0 +1,19 @@
+# RUN: not --crash llc -mtriple=mmix -run-pass=prolog-epilog \
+# RUN:   -o /dev/null %s 2>&1 | FileCheck %s
+
+# CHECK: MMIX does not support stack realignment
+
+--- |
+  define void @overaligned_object() {
+    ret void
+  }
+...
+---
+name:            overaligned_object
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+body:             |
+  bb.0:
+    POP 0, 0
+...

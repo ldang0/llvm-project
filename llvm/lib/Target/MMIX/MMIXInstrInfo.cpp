@@ -19,7 +19,66 @@ using namespace llvm;
 #include "MMIXGenInstrInfo.inc"
 
 MMIXInstrInfo::MMIXInstrInfo(const MMIXSubtarget &STI)
-    : MMIXGenInstrInfo(STI, RI), RI() {}
+    : MMIXGenInstrInfo(STI, RI, MMIX::ADJCALLSTACKDOWN, MMIX::ADJCALLSTACKUP),
+      RI() {}
+
+void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
+                                  MachineBasicBlock::iterator MBBI,
+                                  const DebugLoc &DL, Register DstReg,
+                                  uint64_t Value,
+                                  MachineInstr::MIFlag Flags) const {
+  static constexpr unsigned SetOpcodes[] = {MMIX::SETL, MMIX::SETML,
+                                            MMIX::SETMH, MMIX::SETH};
+  static constexpr unsigned OrOpcodes[] = {MMIX::ORL, MMIX::ORML, MMIX::ORMH,
+                                           MMIX::ORH};
+
+  int HighestChunk = 3;
+  while (HighestChunk > 0 && ((Value >> (HighestChunk * 16)) & 0xffff) == 0)
+    --HighestChunk;
+
+  BuildMI(MBB, MBBI, DL, get(SetOpcodes[HighestChunk]), DstReg)
+      .addImm((Value >> (HighestChunk * 16)) & 0xffff)
+      .setMIFlag(Flags);
+
+  for (int Chunk = HighestChunk - 1; Chunk >= 0; --Chunk) {
+    uint64_t Part = (Value >> (Chunk * 16)) & 0xffff;
+    if (Part)
+      BuildMI(MBB, MBBI, DL, get(OrOpcodes[Chunk]), DstReg)
+          .addImm(Part)
+          .setMIFlag(Flags);
+  }
+}
+
+void MMIXInstrInfo::adjustReg(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MBBI,
+                              const DebugLoc &DL, Register DstReg,
+                              Register SrcReg, int64_t Amount,
+                              MachineInstr::MIFlag Flags) const {
+  if (Amount == 0) {
+    if (DstReg != SrcReg)
+      BuildMI(MBB, MBBI, DL, get(MMIX::ORI), DstReg)
+          .addReg(SrcReg)
+          .addImm(0)
+          .setMIFlag(Flags);
+    return;
+  }
+
+  bool Subtract = Amount < 0;
+  uint64_t Magnitude = Subtract ? 0 - uint64_t(Amount) : uint64_t(Amount);
+  if (Magnitude <= 255) {
+    BuildMI(MBB, MBBI, DL, get(Subtract ? MMIX::SUBUI : MMIX::ADDUI), DstReg)
+        .addReg(SrcReg)
+        .addImm(Magnitude)
+        .setMIFlag(Flags);
+    return;
+  }
+
+  loadImmediate(MBB, MBBI, DL, MMIX::R255, Magnitude, Flags);
+  BuildMI(MBB, MBBI, DL, get(Subtract ? MMIX::SUBU : MMIX::ADDU), DstReg)
+      .addReg(SrcReg)
+      .addReg(MMIX::R255, RegState::Kill)
+      .setMIFlag(Flags);
+}
 
 void MMIXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MBBI,

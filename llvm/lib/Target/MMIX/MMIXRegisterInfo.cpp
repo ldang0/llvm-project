@@ -9,9 +9,12 @@
 #include "MMIXRegisterInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXFrameLowering.h"
+#include "MMIXInstrInfo.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 
 using namespace llvm;
 
@@ -46,9 +49,99 @@ MMIXRegisterInfo::getPointerRegClass(unsigned Kind) const {
   return &MMIX::GPR64CodeGenRegClass;
 }
 
-bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator, int,
-                                           unsigned, RegScavenger *) const {
-  llvm_unreachable("MMIX frame-index elimination is not implemented");
+static unsigned getRegisterOffsetOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  default:
+    report_fatal_error("MMIX cannot use a register frame offset for this "
+                       "instruction");
+#define MAP_IMMEDIATE_TO_REGISTER(Immediate, Register)                         \
+  case MMIX::Immediate:                                                        \
+    return MMIX::Register
+    MAP_IMMEDIATE_TO_REGISTER(ADDUI, ADDU);
+    MAP_IMMEDIATE_TO_REGISTER(LDBI, LDB);
+    MAP_IMMEDIATE_TO_REGISTER(LDBUI, LDBU);
+    MAP_IMMEDIATE_TO_REGISTER(LDWI, LDW);
+    MAP_IMMEDIATE_TO_REGISTER(LDWUI, LDWU);
+    MAP_IMMEDIATE_TO_REGISTER(LDTI, LDT);
+    MAP_IMMEDIATE_TO_REGISTER(LDTUI, LDTU);
+    MAP_IMMEDIATE_TO_REGISTER(LDOI, LDO);
+    MAP_IMMEDIATE_TO_REGISTER(LDOUI, LDOU);
+    MAP_IMMEDIATE_TO_REGISTER(LDHTI, LDHT);
+    MAP_IMMEDIATE_TO_REGISTER(LDSFI, LDSF);
+    MAP_IMMEDIATE_TO_REGISTER(STBI, STB);
+    MAP_IMMEDIATE_TO_REGISTER(STBUI, STBU);
+    MAP_IMMEDIATE_TO_REGISTER(STWI, STW);
+    MAP_IMMEDIATE_TO_REGISTER(STWUI, STWU);
+    MAP_IMMEDIATE_TO_REGISTER(STTI, STT);
+    MAP_IMMEDIATE_TO_REGISTER(STTUI, STTU);
+    MAP_IMMEDIATE_TO_REGISTER(STOI, STO);
+    MAP_IMMEDIATE_TO_REGISTER(STOUI, STOU);
+    MAP_IMMEDIATE_TO_REGISTER(STHTI, STHT);
+    MAP_IMMEDIATE_TO_REGISTER(STSFI, STSF);
+#undef MAP_IMMEDIATE_TO_REGISTER
+  }
+}
+
+bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
+                                           int SPAdj, unsigned FIOperandNum,
+                                           RegScavenger *) const {
+  if (SPAdj)
+    report_fatal_error("MMIX requires a reserved call frame");
+
+  MachineInstr &MI = *II;
+  MachineFunction &MF = *MI.getParent()->getParent();
+  const auto *TFI = MF.getSubtarget().getFrameLowering();
+  int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+  Register FrameReg;
+  StackOffset Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg);
+
+  if (!MI.getOperand(FIOperandNum + 1).isImm())
+    report_fatal_error("MMIX frame index must have an immediate displacement");
+  Offset += StackOffset::getFixed(MI.getOperand(FIOperandNum + 1).getImm());
+
+  bool SavesFramePointer = false;
+  if (MI.mayStore() && TFI->hasFP(MF)) {
+    for (const CalleeSavedInfo &CSI : MF.getFrameInfo().getCalleeSavedInfo()) {
+      if (CSI.getReg() == MMIX::R253 && CSI.getFrameIdx() == FrameIndex) {
+        SavesFramePointer = true;
+        break;
+      }
+    }
+  }
+
+  // The old frame pointer is spilled before the new frame pointer is
+  // established, so that prologue access must use the adjusted SP.
+  if (SavesFramePointer) {
+    FrameReg = MMIX::R254;
+    Offset =
+        StackOffset::getFixed(MF.getFrameInfo().getObjectOffset(FrameIndex) +
+                              MF.getFrameInfo().getStackSize() +
+                              MF.getFrameInfo().getOffsetAdjustment() +
+                              MI.getOperand(FIOperandNum + 1).getImm());
+  }
+
+  int64_t FixedOffset = Offset.getFixed();
+  MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, /*isDef=*/false);
+
+  if (MI.isDebugValue()) {
+    MI.getOperand(FIOperandNum + 1).ChangeToImmediate(FixedOffset);
+    return false;
+  }
+
+  if (isUInt<8>(FixedOffset)) {
+    MI.getOperand(FIOperandNum + 1).ChangeToImmediate(FixedOffset);
+    return false;
+  }
+
+  const auto &TII =
+      *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  TII.loadImmediate(*MI.getParent(), II, MI.getDebugLoc(), MMIX::R255,
+                    uint64_t(FixedOffset));
+  MI.setDesc(TII.get(getRegisterOffsetOpcode(MI.getOpcode())));
+  MI.getOperand(FIOperandNum + 1)
+      .ChangeToRegister(MMIX::R255, /*isDef=*/false, /*isImp=*/false,
+                        /*isKill=*/true);
+  return false;
 }
 
 Register MMIXRegisterInfo::getFrameRegister(const MachineFunction &MF) const {

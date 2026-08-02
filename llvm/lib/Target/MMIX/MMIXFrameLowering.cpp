@@ -7,7 +7,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXFrameLowering.h"
+#include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIXInstrInfo.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetMachine.h"
+
+#include <iterator>
 
 using namespace llvm;
 
@@ -15,16 +22,102 @@ MMIXFrameLowering::MMIXFrameLowering()
     : TargetFrameLowering(StackGrowsDown, Align(8), /*LocalAreaOffset=*/0,
                           Align(8)) {}
 
-void MMIXFrameLowering::emitPrologue(MachineFunction &,
-                                     MachineBasicBlock &) const {
-  llvm_unreachable("MMIX prologue emission is not implemented");
+bool MMIXFrameLowering::hasReservedCallFrame(const MachineFunction &) const {
+  return true;
 }
 
-void MMIXFrameLowering::emitEpilogue(MachineFunction &,
-                                     MachineBasicBlock &) const {
-  llvm_unreachable("MMIX epilogue emission is not implemented");
+StackOffset
+MMIXFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
+                                          Register &FrameReg) const {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  int64_t Offset = MFI.getObjectOffset(FI) + MFI.getOffsetAdjustment();
+
+  if (hasFP(MF)) {
+    FrameReg = MMIX::R253;
+  } else {
+    FrameReg = MMIX::R254;
+    Offset += MFI.getStackSize();
+  }
+
+  return StackOffset::getFixed(Offset);
 }
 
-bool MMIXFrameLowering::hasFPImpl(const MachineFunction &) const {
-  return false;
+void MMIXFrameLowering::determineCalleeSaves(MachineFunction &MF,
+                                             BitVector &SavedRegs,
+                                             RegScavenger *RS) const {
+  TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
+
+  // PUSHJ/PUSHGO and POP preserve local registers through the hardware
+  // register stack, so they must never receive ordinary memory save slots.
+  for (MCPhysReg Reg = MMIX::R0; Reg <= MMIX::R30; ++Reg)
+    SavedRegs.reset(Reg);
+
+  if (hasFP(MF))
+    SavedRegs.set(MMIX::R253);
+}
+
+static void validateFrame(const MachineFunction &MF,
+                          const MMIXFrameLowering &TFI) {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  if (MFI.hasVarSizedObjects())
+    report_fatal_error("MMIX does not support dynamic stack allocation");
+  if (MFI.getMaxAlign() > TFI.getStackAlign())
+    report_fatal_error("MMIX does not support stack realignment");
+  if (MF.shouldSplitStack())
+    report_fatal_error("MMIX does not support split stacks");
+  if (MF.getFunction().hasFnAttribute("probe-stack"))
+    report_fatal_error("MMIX does not support stack probing");
+}
+
+void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
+                                     MachineBasicBlock &MBB) const {
+  assert(&MBB == &MF.front() && "MMIX does not support shrink wrapping");
+  validateFrame(MF, *this);
+
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  uint64_t StackSize = MFI.getStackSize();
+  if (StackSize > uint64_t(INT64_MAX))
+    report_fatal_error("MMIX stack frame is too large");
+
+  const auto *TII = MF.getSubtarget().getInstrInfo();
+  const auto &MMIXII = *static_cast<const MMIXInstrInfo *>(TII);
+  MachineBasicBlock::iterator MBBI = MBB.begin();
+  DebugLoc DL;
+
+  MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254, -int64_t(StackSize),
+                   MachineInstr::FrameSetup);
+
+  if (hasFP(MF)) {
+    // The generic callee-save spill of the old frame pointer is at the entry
+    // of the block. Establish the new frame pointer after that store.
+    std::advance(MBBI, MFI.getCalleeSavedInfo().size());
+    MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R253, MMIX::R254, int64_t(StackSize),
+                     MachineInstr::FrameSetup);
+  }
+}
+
+void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
+                                     MachineBasicBlock &MBB) const {
+  uint64_t StackSize = MF.getFrameInfo().getStackSize();
+  if (StackSize > uint64_t(INT64_MAX))
+    report_fatal_error("MMIX stack frame is too large");
+
+  MachineBasicBlock::iterator MBBI = MBB.getFirstTerminator();
+  DebugLoc DL = MBBI == MBB.end() ? DebugLoc() : MBBI->getDebugLoc();
+  const auto &MMIXII =
+      *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254, int64_t(StackSize),
+                   MachineInstr::FrameDestroy);
+}
+
+MachineBasicBlock::iterator MMIXFrameLowering::eliminateCallFramePseudoInstr(
+    MachineFunction &, MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator MI) const {
+  return MBB.erase(MI);
+}
+
+bool MMIXFrameLowering::hasFPImpl(const MachineFunction &MF) const {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  return MF.getTarget().Options.DisableFramePointerElim(MF) ||
+         MFI.isFrameAddressTaken();
 }

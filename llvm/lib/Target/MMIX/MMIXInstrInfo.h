@@ -27,6 +27,14 @@ public:
 
   const MMIXRegisterInfo &getRegisterInfo() const { return RI; }
 
+  void loadImmediate(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+                     const DebugLoc &DL, Register DstReg, uint64_t Value,
+                     MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const;
+  void adjustReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+                 const DebugLoc &DL, Register DstReg, Register SrcReg,
+                 int64_t Amount,
+                 MachineInstr::MIFlag Flags = MachineInstr::NoFlags) const;
+
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                    const DebugLoc &DL, Register DstReg, Register SrcReg,
                    bool KillSrc, bool RenamableDest = false,

@@ -6,6 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+def SDT_MMIXCallSeqStart
+    : SDCallSeqStart<[SDTCisVT<0, i64>, SDTCisVT<1, i64>]>;
+def SDT_MMIXCallSeqEnd
+    : SDCallSeqEnd<[SDTCisVT<0, i64>, SDTCisVT<1, i64>]>;
+def MMIXcallseq_start
+    : SDNode<"ISD::CALLSEQ_START", SDT_MMIXCallSeqStart,
+             [SDNPHasChain, SDNPOutGlue]>;
+def MMIXcallseq_end
+    : SDNode<"ISD::CALLSEQ_END", SDT_MMIXCallSeqEnd,
+             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+
 // Common operand categories. These records carry the architectural encoding
 // constraints used by later MC emitters and parsers, without installing any
 // target-specific parser or encoder methods yet.
@@ -742,6 +753,9 @@ class MMIXPop : MMIXInstruction<(outs),
 
 def POP : MMIXPop {
   let MMIXOpcode = 0xF8;
+  let isReturn = true;
+  let isTerminator = true;
+  let isBarrier = true;
 }
 
 // Floating-point arithmetic operates on the 64-bit floating-point view of
@@ -1311,13 +1325,32 @@ def UNSAVE : MMIXUnsave {
   let MMIXOpcode = 0xFB;
 }
 
-// Keep pseudo instructions separate from architectural instructions.  This
-// base is intentionally not used by the current inventory until lowering and
-// expansion semantics are defined.
+// Keep CodeGen-only pseudos separate from the architectural instruction
+// inventory and its encoding fields.
 class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
-    : MMIXInstruction<outs, ins, asmstr> {
+    : Instruction {
+  let Namespace = "MMIX";
+  let OutOperandList = outs;
+  let InOperandList = ins;
+  let AsmString = asmstr;
+  let Size = 0;
   let isPseudo = true;
   let isCodeGenOnly = true;
+}
+
+let Defs = [R254], Uses = [R254], hasSideEffects = true in {
+def ADJCALLSTACKDOWN
+    : MMIXPseudoInstruction<(outs),
+                            (ins i64imm:$amount, i64imm:$alignment),
+                            "# ADJCALLSTACKDOWN $amount, $alignment"> {
+  let Pattern = [(MMIXcallseq_start timm:$amount, timm:$alignment)];
+}
+def ADJCALLSTACKUP
+    : MMIXPseudoInstruction<(outs),
+                            (ins i64imm:$amount, i64imm:$alignment),
+                            "# ADJCALLSTACKUP $amount, $alignment"> {
+  let Pattern = [(MMIXcallseq_end timm:$amount, timm:$alignment)];
+}
 }
 
 // These records describe expansion relationships without installing parser or

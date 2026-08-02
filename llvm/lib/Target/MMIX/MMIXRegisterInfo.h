@@ -26,6 +26,9 @@ public:
   BitVector getReservedRegs(const MachineFunction &MF) const override;
   const TargetRegisterClass *
   getPointerRegClass(unsigned Kind = 0) const override;
+  bool canRealignStack(const MachineFunction &MF) const override {
+    return false;
+  }
   bool eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
                            unsigned FIOperandNum,
                            RegScavenger *RS = nullptr) const override;

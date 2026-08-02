@@ -1,0 +1,145 @@
+# RUN: llc -mtriple=mmix -run-pass=prolog-epilog -verify-machineinstrs \
+# RUN:   -o - %s | FileCheck %s
+
+# CHECK-LABEL: name: small_frame
+# CHECK: stackSize: 8
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r254 = frame-setup SUBUI $r254, 8
+# CHECK: STOUI $r250, $r254, 0
+# CHECK: $r250 = LDOUI $r254, 0
+# CHECK: $r254 = frame-destroy ADDUI $r254, 8
+# CHECK-NEXT: POP 0, 0
+
+# CHECK-LABEL: name: frame_pointer
+# CHECK: stackSize: 16
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r254 = frame-setup SUBUI $r254, 16
+# CHECK-NEXT: STOUI killed $r253, $r254, 8
+# CHECK-NEXT: $r253 = frame-setup ADDUI $r254, 16
+# CHECK: $r255 = SETH 65535
+# CHECK-NEXT: $r255 = ORMH 65535
+# CHECK-NEXT: $r255 = ORML 65535
+# CHECK-NEXT: $r255 = ORL 65520
+# CHECK-NEXT: STOU $r250, $r253, killed $r255
+# CHECK: $r255 = SETH 65535
+# CHECK-NEXT: $r255 = ORMH 65535
+# CHECK-NEXT: $r255 = ORML 65535
+# CHECK-NEXT: $r255 = ORL 65528
+# CHECK-NEXT: $r253 = LDOU $r253, killed $r255
+# CHECK-NEXT: $r254 = frame-destroy ADDUI $r254, 16
+# CHECK-NEXT: POP 0, 0
+
+# CHECK-LABEL: name: large_frame
+# CHECK: stackSize: 512
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r255 = frame-setup SETL 512
+# CHECK-NEXT: $r254 = frame-setup SUBU $r254, killed $r255
+# CHECK-NEXT: $r255 = SETL 512
+# CHECK-NEXT: $r250 = LDOU $r254, killed $r255
+# CHECK-NEXT: $r255 = frame-destroy SETL 512
+# CHECK-NEXT: $r254 = frame-destroy ADDU $r254, killed $r255
+# CHECK-NEXT: POP 0, 0
+
+# CHECK-LABEL: name: reserved_call_frame
+# CHECK: stackSize: 32
+# CHECK: maxCallFrameSize: 32
+# CHECK: body:
+# CHECK: $r254 = frame-setup SUBUI $r254, 32
+# CHECK-NOT: ADJCALLSTACK
+# CHECK: $r254 = frame-destroy ADDUI $r254, 32
+# CHECK-NEXT: POP 0, 0
+
+# CHECK-LABEL: name: local_register
+# CHECK: stackSize: 0
+# CHECK: stack: []
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r0 = SETL 1
+# CHECK-NEXT: POP 0, 0
+
+--- |
+  define void @small_frame() {
+    ret void
+  }
+
+  define void @frame_pointer() {
+    ret void
+  }
+
+  define void @large_frame() {
+    ret void
+  }
+
+  define void @reserved_call_frame() {
+    ret void
+  }
+
+  define void @local_register() {
+    ret void
+  }
+...
+---
+name:            small_frame
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body:             |
+  bb.0:
+    $r250 = SETL 1
+    STOUI $r250, %stack.0, 0
+    $r250 = LDOUI %stack.0, 0
+    POP 0, 0
+...
+---
+name:            frame_pointer
+tracksRegLiveness: true
+frameInfo:
+  isFrameAddressTaken: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body:             |
+  bb.0:
+    $r250 = SETL 1
+    STOUI $r250, %stack.0, 0
+    POP 0, 0
+...
+---
+name:            large_frame
+tracksRegLiveness: true
+fixedStack:
+  - { id: 0, offset: 0, size: 8, alignment: 8, isImmutable: true,
+      isAliased: false }
+stack:
+  - { id: 0, size: 512, alignment: 8 }
+body:             |
+  bb.0:
+    $r250 = LDOUI %fixed-stack.0, 0
+    POP 0, 0
+...
+---
+name:            reserved_call_frame
+tracksRegLiveness: true
+liveins:
+  - { reg: '$r254' }
+frameInfo:
+  hasCalls: true
+  adjustsStack: true
+body:             |
+  bb.0:
+    liveins: $r254
+
+    ADJCALLSTACKDOWN 32, 0, implicit-def $r254, implicit $r254
+    ADJCALLSTACKUP 32, 0, implicit-def $r254, implicit $r254
+    POP 0, 0
+...
+---
+name:            local_register
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    $r0 = SETL 1
+    POP 0, 0
+...
