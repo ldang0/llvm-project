@@ -332,6 +332,18 @@ def mmix_neg_imm : SDNodeXForm<imm, [{
   return CurDAG->getTargetConstant(-N->getSExtValue(), SDLoc(N), MVT::i64);
 }]>;
 
+def mmix_uimm6 : PatLeaf<(imm), [{
+  return isUInt<6>(N->getZExtValue());
+}]>;
+
+def mmix_inv_uimm8 : PatLeaf<(imm), [{
+  return isUInt<8>(~N->getZExtValue());
+}]>;
+
+def mmix_inv_imm : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(~N->getZExtValue(), SDLoc(N), MVT::i64);
+}]>;
+
 // LLVM integer arithmetic wraps modulo 2^64 unless overflow makes the result
 // poison. Neither case permits the traps raised by MMIX ADD, SUB, and NEG, so
 // instruction selection exclusively uses their unsigned, nontrapping forms.
@@ -397,6 +409,69 @@ def NAND : MMIXIntRegRegOpcode<0xCC, "NAND">;
 def NANDI : MMIXIntRegImmOpcode<0xCD, "NAND">;
 def NXOR : MMIXIntRegRegOpcode<0xCE, "NXOR">;
 def NXORI : MMIXIntRegImmOpcode<0xCF, "NXOR">;
+
+// SLU is the nontrapping left shift required by LLVM's poison-on-overflow
+// semantics. MMIX register shifts are exact for every non-poison LLVM shift
+// count; immediate forms are restricted to that valid 0..63 range.
+def : Pat<(shl i64:$value, mmix_uimm6:$amount),
+          (SLUI $value, mmix_uimm6:$amount)>;
+def : Pat<(shl i64:$value, i64:$amount), (SLU $value, $amount)>;
+def : Pat<(sra i64:$value, mmix_uimm6:$amount),
+          (SRI $value, mmix_uimm6:$amount)>;
+def : Pat<(sra i64:$value, i64:$amount), (SR $value, $amount)>;
+def : Pat<(srl i64:$value, mmix_uimm6:$amount),
+          (SRUI $value, mmix_uimm6:$amount)>;
+def : Pat<(srl i64:$value, i64:$amount), (SRU $value, $amount)>;
+
+// Select complemented forms only when the complete Boolean identity is
+// present. The immediate forms encode the complement in their Z byte.
+def : Pat<(xor (or i64:$lhs, i64:$rhs), (i64 -1)),
+          (NOR $lhs, $rhs)>;
+def : Pat<(xor (or i64:$lhs, mmix_uimm8:$rhs), (i64 -1)),
+          (NORI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(xor (and i64:$lhs, i64:$rhs), (i64 -1)),
+          (NAND $lhs, $rhs)>;
+def : Pat<(xor (and i64:$lhs, mmix_uimm8:$rhs), (i64 -1)),
+          (NANDI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(xor (xor i64:$lhs, i64:$rhs), (i64 -1)),
+          (NXOR $lhs, $rhs)>;
+def : Pat<(xor (xor i64:$lhs, mmix_uimm8:$rhs), (i64 -1)),
+          (NXORI $lhs, mmix_uimm8:$rhs)>;
+
+def : Pat<(and i64:$lhs, (xor i64:$rhs, (i64 -1))),
+          (ANDN $lhs, $rhs)>;
+def : Pat<(and (xor i64:$rhs, (i64 -1)), i64:$lhs),
+          (ANDN $lhs, $rhs)>;
+def : Pat<(and (xor i64:$lhs, (i64 -1)), mmix_inv_uimm8:$rhs),
+          (NORI $lhs, (mmix_inv_imm mmix_inv_uimm8:$rhs))>;
+def : Pat<(and i64:$lhs, mmix_uimm8:$rhs),
+          (ANDI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(and i64:$lhs, mmix_inv_uimm8:$rhs),
+          (ANDNI $lhs, (mmix_inv_imm mmix_inv_uimm8:$rhs))>;
+def : Pat<(and i64:$lhs, i64:$rhs), (AND $lhs, $rhs)>;
+
+def : Pat<(or i64:$lhs, (xor i64:$rhs, (i64 -1))),
+          (ORN $lhs, $rhs)>;
+def : Pat<(or (xor i64:$rhs, (i64 -1)), i64:$lhs),
+          (ORN $lhs, $rhs)>;
+def : Pat<(or (xor i64:$lhs, (i64 -1)), mmix_inv_uimm8:$rhs),
+          (NANDI $lhs, (mmix_inv_imm mmix_inv_uimm8:$rhs))>;
+def : Pat<(or i64:$lhs, mmix_uimm8:$rhs),
+          (ORI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(or i64:$lhs, mmix_inv_uimm8:$rhs),
+          (ORNI $lhs, (mmix_inv_imm mmix_inv_uimm8:$rhs))>;
+def : Pat<(or i64:$lhs, i64:$rhs), (OR $lhs, $rhs)>;
+
+def : Pat<(xor i64:$lhs, (xor i64:$rhs, (i64 -1))),
+          (NXOR $lhs, $rhs)>;
+def : Pat<(xor (xor i64:$rhs, (i64 -1)), i64:$lhs),
+          (NXOR $lhs, $rhs)>;
+def : Pat<(xor i64:$lhs, mmix_uimm8:$rhs),
+          (XORI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(xor i64:$lhs, mmix_inv_uimm8:$rhs),
+          (NXORI $lhs, (mmix_inv_imm mmix_inv_uimm8:$rhs))>;
+def : Pat<(xor i64:$lhs, i64:$rhs), (XOR $lhs, $rhs)>;
+
 def BDIF : MMIXIntRegRegOpcode<0xD0, "BDIF">;
 def BDIFI : MMIXIntRegImmOpcode<0xD1, "BDIF">;
 def WDIF : MMIXIntRegRegOpcode<0xD2, "WDIF">;
