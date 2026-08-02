@@ -424,20 +424,20 @@ def STOUI : MMIXStoreImmOpcode<0xAF, "STOU">;
 def STHT : MMIXStoreRegOpcode<0xB2, "STHT">;
 def STHTI : MMIXStoreImmOpcode<0xB3, "STHT">;
 
-// CSWAP has the ordinary memory address forms but also updates its X operand
-// with the comparison result. The data dependency is left for later lowering.
+// CSWAP uses the ordinary three-field memory form. Its comparison and result
+// dependency is left for later lowering.
 class MMIXCompareSwapReg
-    : MMIXInstruction<(outs GPR64Op:$result),
+    : MMIXInstruction<(outs),
                       (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
-                      "CSWAP $result, $base, $offset"> {
+                      "CSWAP $value, $base, $offset"> {
   let MMIXInventoryFamily = "memory";
 }
 
 class MMIXCompareSwapImm
-    : MMIXInstruction<(outs GPR64Op:$result),
+    : MMIXInstruction<(outs),
                       (ins GPR64Op:$value, GPR64Op:$base,
                            MMIXMemOffset8:$offset),
-                      "CSWAP $result, $base, $offset"> {
+                           "CSWAP $value, $base, $offset"> {
   let MMIXInventoryFamily = "memory";
 }
 

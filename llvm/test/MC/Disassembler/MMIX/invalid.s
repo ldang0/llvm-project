@@ -5,5 +5,5 @@
 # CHECK: warning: invalid instruction encoding
 
 # Special-register fields have only five architectural bits.
-0xfe 0x01 0x20 0x00
+0xfe 0x01 0x00 0x20
 # CHECK: warning: invalid instruction encoding

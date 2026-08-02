@@ -63,21 +63,36 @@ class MMIXMCCodeEmitter : public MCCodeEmitter {
   static unsigned getOperandShift(unsigned Opcode, unsigned Operand) {
     if (isBranch(Opcode))
       return Operand == 1 ? 0 : 16;
-    if (isLongPCRelative(Opcode))
-      return Operand == 0 && Opcode == 0xf0 ? 0 : (Operand == 0 ? 16 : 0);
+    if (Opcode == 0xf0 || Opcode == 0xf1)
+      return 0;
+    if (Opcode >= 0xf2 && Opcode <= 0xf5)
+      return Operand == 0 ? 16 : 0;
     if (Opcode == 0xf8)
       return Operand == 0 ? 16 : 0;
+    if (Opcode >= 0xe0 && Opcode <= 0xef && Operand == 1)
+      return 0;
+    if (Opcode == 0xfc || Opcode == 0xf9 || Opcode == 0xfb)
+      return 0;
+    if (Opcode == 0xfe && Operand == 1)
+      return 0;
+    if ((Opcode == 0xf6 || Opcode == 0xf7) && Operand == 1)
+      return 0;
     return 16 - 8 * Operand;
   }
 
   static unsigned getOperandWidth(unsigned Opcode, unsigned Operand) {
     if (isBranch(Opcode) && Operand == 1)
       return 16;
-    if (isLongPCRelative(Opcode) &&
-        ((Opcode == 0xf0 || Opcode == 0xf1) || Operand == 1))
+    if (Opcode == 0xf0 || Opcode == 0xf1)
       return 24;
+    if (Opcode >= 0xf2 && Opcode <= 0xf5 && Operand == 1)
+      return 16;
     if (Opcode == 0xf8 && Operand == 1)
       return 16;
+    if (Opcode >= 0xe0 && Opcode <= 0xef && Operand == 1)
+      return 16;
+    if (Opcode == 0xfc)
+      return 24;
     return 8;
   }
 
