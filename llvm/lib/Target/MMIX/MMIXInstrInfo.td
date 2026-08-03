@@ -16,6 +16,10 @@ def MMIXcallseq_start
 def MMIXcallseq_end
     : SDNode<"ISD::CALLSEQ_END", SDT_MMIXCallSeqEnd,
              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+def SDT_MMIXCall : SDTypeProfile<0, -1, [SDTCisVT<0, i64>]>;
+def MMIXcall
+    : SDNode<"MMIXISD::CALL", SDT_MMIXCall,
+             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def SDT_MMIXLoadStackArg
     : SDTypeProfile<1, 1, [SDTCisVT<1, i64>]>;
 def MMIXload_stack_arg
@@ -811,21 +815,21 @@ multiclass MMIXF64LoadPatterns<Instruction RegOp, Instruction ImmOp> {
 }
 
 multiclass MMIXF64StorePatterns<Instruction RegOp, Instruction ImmOp> {
-  def : Pat<(store FPR64:$value, GPR64:$base),
+  def : Pat<(store (f64 FPR64:$value), GPR64:$base),
             (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
                    GPR64:$base, 0)>;
-  def : Pat<(store FPR64:$value, (i64 frameindex:$base)),
+  def : Pat<(store (f64 FPR64:$value), (i64 frameindex:$base)),
             (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
                    (i64 (to_tframeindex $base)), 0)>;
-  def : Pat<(store FPR64:$value,
+  def : Pat<(store (f64 FPR64:$value),
                    (add GPR64:$base, mmix_uimm8:$offset)),
             (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
                    GPR64:$base, mmix_uimm8:$offset)>;
-  def : Pat<(store FPR64:$value,
+  def : Pat<(store (f64 FPR64:$value),
                    (add (i64 frameindex:$base), mmix_uimm8:$offset)),
             (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
                    (i64 (to_tframeindex $base)), mmix_uimm8:$offset)>;
-  def : Pat<(store FPR64:$value,
+  def : Pat<(store (f64 FPR64:$value),
                    (add GPR64:$base, GPR64:$offset)),
             (RegOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
                    GPR64:$base, GPR64:$offset)>;
@@ -1755,6 +1759,14 @@ class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
   let isPseudo = true;
   let isCodeGenOnly = true;
 }
+
+// Call-site lowering records the complete call state before the following
+// task chooses PUSHJ or PUSHGO and implements register-stack semantics.
+def MMIXCallTarget : Operand<i64>;
+let isCall = true, hasSideEffects = true, Uses = [R254] in
+def CALL_STATE
+    : MMIXPseudoInstruction<(outs), (ins MMIXCallTarget:$callee),
+                            "# CALL_STATE $callee">;
 
 // Block layout determines whether MMIX must use a forward or backward opcode.
 // Keep CodeGen branches direction-neutral and resolve them only during final

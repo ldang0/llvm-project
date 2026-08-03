@@ -385,8 +385,170 @@ static bool hasUnsupportedArgumentFlags(const ISD::ArgFlagsTy &Flags) {
          Flags.isPreallocated() || Flags.isSwiftSelf() ||
          Flags.isSwiftAsync() || Flags.isSwiftError() ||
          Flags.isCFGuardTarget() || Flags.isHva() || Flags.isHvaStart() ||
-         Flags.isSecArgPass() || Flags.isInConsecutiveRegs() ||
-         Flags.isCopyElisionCandidate() || Flags.isSplit();
+         Flags.isSecArgPass() || Flags.isReturned() ||
+         Flags.isInConsecutiveRegs() || Flags.isCopyElisionCandidate() ||
+         Flags.isSplit();
+}
+
+static bool isSupportedCallValueType(EVT VT) {
+  return VT == MVT::i1 || VT == MVT::i8 || VT == MVT::i16 || VT == MVT::i32 ||
+         VT == MVT::i64 || VT == MVT::f32 || VT == MVT::f64;
+}
+
+static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
+                                    const SDLoc &DL, SelectionDAG &DAG) {
+  switch (VA.getLocInfo()) {
+  case CCValAssign::Full:
+    return Value;
+  case CCValAssign::SExt:
+    return DAG.getNode(ISD::SIGN_EXTEND, DL, VA.getLocVT(), Value);
+  case CCValAssign::ZExt:
+    return DAG.getNode(ISD::ZERO_EXTEND, DL, VA.getLocVT(), Value);
+  case CCValAssign::AExt:
+    return DAG.getNode(ISD::ANY_EXTEND, DL, VA.getLocVT(), Value);
+  case CCValAssign::BCvt:
+    return DAG.getNode(ISD::BITCAST, DL, VA.getLocVT(), Value);
+  default:
+    report_fatal_error("MMIX does not support this call operand conversion");
+  }
+}
+
+SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
+                                      SmallVectorImpl<SDValue> &InVals) const {
+  if (CLI.CallConv != CallingConv::C)
+    report_fatal_error("MMIX supports only the C calling convention");
+  if (CLI.IsVarArg)
+    report_fatal_error("MMIX does not support variadic calls");
+  if (CLI.OrigRetTy && CLI.OrigRetTy->isAggregateType())
+    report_fatal_error("MMIX does not support aggregate call results");
+  if (CLI.Outs.size() != CLI.OutVals.size())
+    report_fatal_error("MMIX call operand lowering received mismatched values");
+
+  for (const ISD::OutputArg &Arg : CLI.Outs) {
+    if (!isSupportedCallValueType(Arg.VT) ||
+        hasUnsupportedArgumentFlags(Arg.Flags))
+      report_fatal_error("MMIX does not support aggregate or special call "
+                         "arguments");
+    if (Arg.Flags.isPointer() && Arg.Flags.getPointerAddrSpace() != 0)
+      report_fatal_error(
+          "MMIX does not support nonzero-address-space call arguments");
+  }
+  if (CLI.Ins.size() > 1)
+    report_fatal_error("MMIX supports at most one scalar call result");
+  for (const ISD::InputArg &Result : CLI.Ins) {
+    if (!isSupportedCallValueType(Result.VT) ||
+        hasUnsupportedArgumentFlags(Result.Flags))
+      report_fatal_error("MMIX does not support aggregate or special call "
+                         "results");
+    if (Result.Flags.isPointer() && Result.Flags.getPointerAddrSpace() != 0)
+      report_fatal_error(
+          "MMIX does not support nonzero-address-space call results");
+  }
+
+  CLI.IsTailCall = false;
+  SelectionDAG &DAG = CLI.DAG;
+  MachineFunction &MF = DAG.getMachineFunction();
+  SDValue Chain = CLI.Chain;
+
+  SmallVector<CCValAssign, 16> ArgLocs;
+  CCState ArgCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
+  ArgCCInfo.AnalyzeCallOperands(CLI.Outs, CC_MMIX);
+  unsigned NumBytes = ArgCCInfo.getStackSize();
+  Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
+
+  SmallVector<std::pair<MCRegister, SDValue>, 16> RegsToPass;
+  SmallVector<SDValue, 8> StackStores;
+  SDValue StackPointer;
+  for (unsigned I = 0; I != ArgLocs.size(); ++I) {
+    const CCValAssign &VA = ArgLocs[I];
+    SDValue Value = convertOutgoingValue(CLI.OutVals[I], VA, CLI.DL, DAG);
+    if (VA.isRegLoc()) {
+      RegsToPass.emplace_back(VA.getLocReg(), Value);
+      continue;
+    }
+
+    if (!StackPointer)
+      StackPointer = DAG.getCopyFromReg(Chain, CLI.DL, MMIX::R254, MVT::i64);
+    if (Value.getValueType() == MVT::f64)
+      Value = DAG.getNode(ISD::BITCAST, CLI.DL, MVT::i64, Value);
+    SDValue Address = StackPointer;
+    if (VA.getLocMemOffset())
+      Address =
+          DAG.getNode(ISD::ADD, CLI.DL, MVT::i64, StackPointer,
+                      DAG.getConstant(VA.getLocMemOffset(), CLI.DL, MVT::i64));
+    StackStores.push_back(DAG.getStore(
+        Chain, CLI.DL, Value, Address,
+        MachinePointerInfo::getStack(MF, VA.getLocMemOffset()), Align(8)));
+  }
+  if (!StackStores.empty())
+    Chain = DAG.getNode(ISD::TokenFactor, CLI.DL, MVT::Other, StackStores);
+
+  SDValue Glue;
+  for (const auto &[Reg, Value] : RegsToPass) {
+    Chain = DAG.getCopyToReg(Chain, CLI.DL, Reg, Value, Glue);
+    Glue = Chain.getValue(1);
+  }
+
+  SDValue Callee = CLI.Callee;
+  if (auto *GA = dyn_cast<GlobalAddressSDNode>(Callee))
+    Callee = DAG.getTargetGlobalAddress(GA->getGlobal(), CLI.DL, MVT::i64,
+                                        GA->getOffset());
+  else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Callee))
+    Callee = DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
+
+  SmallVector<SDValue, 20> CallOps = {Chain, Callee};
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
+  const uint32_t *Mask = TRI->getCallPreservedMask(MF, CLI.CallConv);
+  if (!Mask)
+    report_fatal_error("MMIX has no call-preserved mask for this convention");
+  CallOps.push_back(DAG.getRegisterMask(Mask));
+  for (const auto &[Reg, Value] : RegsToPass)
+    CallOps.push_back(DAG.getRegister(Reg, Value.getValueType()));
+  if (Glue)
+    CallOps.push_back(Glue);
+
+  Chain = DAG.getNode(MMIXISD::CALL, CLI.DL,
+                      DAG.getVTList(MVT::Other, MVT::Glue), CallOps);
+  Glue = Chain.getValue(1);
+  Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
+  Glue = Chain.getValue(1);
+
+  SmallVector<CCValAssign, 1> ResultLocs;
+  CCState ResultCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ResultLocs,
+                       *DAG.getContext());
+  ResultCCInfo.AnalyzeCallResult(CLI.Ins, RetCC_MMIX);
+  for (const CCValAssign &VA : ResultLocs) {
+    SDValue Copy =
+        DAG.getCopyFromReg(Chain, CLI.DL, VA.getLocReg(), VA.getLocVT(), Glue);
+    SDValue Value = Copy;
+    Chain = Copy.getValue(1);
+    Glue = Copy.getValue(2);
+    switch (VA.getLocInfo()) {
+    case CCValAssign::Full:
+      break;
+    case CCValAssign::SExt:
+      Value = DAG.getNode(ISD::AssertSext, CLI.DL, VA.getLocVT(), Value,
+                          DAG.getValueType(VA.getValVT()));
+      Value = DAG.getNode(ISD::TRUNCATE, CLI.DL, VA.getValVT(), Value);
+      break;
+    case CCValAssign::ZExt:
+      Value = DAG.getNode(ISD::AssertZext, CLI.DL, VA.getLocVT(), Value,
+                          DAG.getValueType(VA.getValVT()));
+      Value = DAG.getNode(ISD::TRUNCATE, CLI.DL, VA.getValVT(), Value);
+      break;
+    case CCValAssign::AExt:
+      Value = DAG.getNode(ISD::TRUNCATE, CLI.DL, VA.getValVT(), Value);
+      break;
+    case CCValAssign::BCvt:
+      Value = DAG.getNode(ISD::BITCAST, CLI.DL, VA.getValVT(), Value);
+      break;
+    default:
+      report_fatal_error("MMIX does not support this call result conversion");
+    }
+    InVals.push_back(Value);
+  }
+
+  return Chain;
 }
 
 SDValue MMIXTargetLowering::LowerFormalArguments(
@@ -465,8 +627,7 @@ bool MMIXTargetLowering::CanLowerReturn(
       (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() <= 64) ||
       (RetTy->isPointerTy() && RetTy->getPointerAddressSpace() == 0) ||
       RetTy->isFloatTy() || RetTy->isDoubleTy();
-  if (CallConv != CallingConv::C || IsVarArg || Outs.size() > 1 ||
-      !SupportedType)
+  if (CallConv != CallingConv::C || Outs.size() > 1 || !SupportedType)
     return false;
 
   SmallVector<CCValAssign, 1> RetLocs;

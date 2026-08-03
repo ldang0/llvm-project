@@ -104,6 +104,22 @@ private:
       return;
     }
 
+    if (Node->getOpcode() == MMIXISD::CALL) {
+      SmallVector<SDValue, 20> Ops;
+      bool HasGlue =
+          Node->getNumOperands() > 1 &&
+          Node->getOperand(Node->getNumOperands() - 1).getValueType() ==
+              MVT::Glue;
+      unsigned LastDataOperand = Node->getNumOperands() - HasGlue;
+      for (unsigned I = 1; I != LastDataOperand; ++I)
+        Ops.push_back(Node->getOperand(I));
+      Ops.push_back(Node->getOperand(0));
+      if (HasGlue)
+        Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
+      CurDAG->SelectNodeTo(Node, MMIX::CALL_STATE, MVT::Other, MVT::Glue, Ops);
+      return;
+    }
+
     if (Node->getOpcode() == MMIXISD::RET_GLUE) {
       CurDAG->SelectNodeTo(Node, MMIX::RET, MVT::Other, Node->getOperand(0));
       return;

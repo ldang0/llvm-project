@@ -29,6 +29,7 @@ enum NodeType : unsigned {
   FUN,
   SFLOT,
   SFLOTU,
+  CALL,
   RET_GLUE,
   RET_VALUE_GLUE,
 };
@@ -45,6 +46,8 @@ public:
       unsigned *Fast = nullptr) const override;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+  SDValue LowerCall(CallLoweringInfo &CLI,
+                    SmallVectorImpl<SDValue> &InVals) const override;
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,
                                const SmallVectorImpl<ISD::InputArg> &Ins,
