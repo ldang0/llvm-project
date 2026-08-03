@@ -28,6 +28,12 @@ def MMIXret_value
              [SDNPHasChain, SDNPInGlue]>;
 def SDT_MMIXLoadAddr : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 def MMIXload_addr : SDNode<"MMIXISD::LOAD_ADDR", SDT_MMIXLoadAddr>;
+def SDT_MMIXFPCompare
+    : SDTypeProfile<1, 2, [SDTCisVT<0, i64>, SDTCisVT<1, f64>,
+                           SDTCisSameAs<1, 2>]>;
+def MMIXfcmp : SDNode<"MMIXISD::FCMP", SDT_MMIXFPCompare>;
+def MMIXfeql : SDNode<"MMIXISD::FEQL", SDT_MMIXFPCompare>;
+def MMIXfun : SDNode<"MMIXISD::FUN", SDT_MMIXFPCompare>;
 
 // Common operand categories. These records carry the architectural encoding
 // constraints used by later MC emitters and parsers, without installing any
@@ -1048,6 +1054,7 @@ class MMIXFPBinary<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFPBinaryOpcode<bits<8> Opcode, string Mnemonic>
@@ -1060,6 +1067,11 @@ def FSUB : MMIXFPBinaryOpcode<0x06, "FSUB">;
 def FMUL : MMIXFPBinaryOpcode<0x10, "FMUL">;
 def FDIV : MMIXFPBinaryOpcode<0x14, "FDIV">;
 def FREM : MMIXFPBinaryOpcode<0x16, "FREM">;
+
+def : Pat<(fadd f64:$lhs, f64:$rhs), (FADD $lhs, $rhs)>;
+def : Pat<(fsub f64:$lhs, f64:$rhs), (FSUB $lhs, $rhs)>;
+def : Pat<(fmul f64:$lhs, f64:$rhs), (FMUL $lhs, $rhs)>;
+def : Pat<(fdiv f64:$lhs, f64:$rhs), (FDIV $lhs, $rhs)>;
 
 class MMIXFPCompare<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
@@ -1079,12 +1091,18 @@ class MMIXFPCompareOpcode<bits<8> Opcode, string Mnemonic>
   let MMIXOpcode = Opcode;
 }
 
+let mayRaiseFPException = true in {
 def FCMP  : MMIXFPCompareOpcode<0x01, "FCMP">;
 def FCMPE : MMIXFPCompareOpcode<0x11, "FCMPE">;
+def FEQLE : MMIXFPCompareOpcode<0x13, "FEQLE">;
+}
 def FUN   : MMIXFPCompareOpcode<0x02, "FUN">;
 def FUNE  : MMIXFPCompareOpcode<0x12, "FUNE">;
 def FEQL  : MMIXFPCompareOpcode<0x03, "FEQL">;
-def FEQLE : MMIXFPCompareOpcode<0x13, "FEQLE">;
+
+def : Pat<(MMIXfcmp f64:$lhs, f64:$rhs), (FCMP $lhs, $rhs)>;
+def : Pat<(MMIXfeql f64:$lhs, f64:$rhs), (FEQL $lhs, $rhs)>;
+def : Pat<(MMIXfun f64:$lhs, f64:$rhs), (FUN $lhs, $rhs)>;
 
 class MMIXFPUnaryRounded<string Mnemonic>
     : MMIXInstruction<(outs FPR64Op:$dst),
@@ -1098,6 +1116,7 @@ class MMIXFPUnaryRounded<string Mnemonic>
   let MMIXY{2-0} = round;
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFPUnaryRoundedOpcode<bits<8> Opcode, string Mnemonic>
@@ -1107,6 +1126,10 @@ class MMIXFPUnaryRoundedOpcode<bits<8> Opcode, string Mnemonic>
 
 def FSQRT : MMIXFPUnaryRoundedOpcode<0x15, "FSQRT">;
 def FINT  : MMIXFPUnaryRoundedOpcode<0x17, "FINT">;
+
+// A zero Y field selects the rounding mode in rA, as used by the binary
+// floating-point operations.
+def : Pat<(fsqrt f64:$src), (FSQRT 0, $src)>;
 
 class MMIXFix<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),

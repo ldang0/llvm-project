@@ -78,11 +78,22 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   for (unsigned Opcode : {ISD::SADDO, ISD::UADDO, ISD::SSUBO, ISD::USUBO})
     setOperationAction(Opcode, MVT::i64, Expand);
 
-  static constexpr unsigned FloatingOperations[] = {
-      ISD::ConstantFP, ISD::FADD,  ISD::FSUB,   ISD::FMUL,      ISD::FDIV,
-      ISD::FREM,       ISD::FNEG,  ISD::FABS,   ISD::FCOPYSIGN, ISD::FSQRT,
-      ISD::FMA,        ISD::SETCC, ISD::SELECT, ISD::SELECT_CC};
-  for (unsigned Opcode : FloatingOperations)
+  for (unsigned Opcode : {ISD::FADD, ISD::FSUB, ISD::FMUL, ISD::FDIV,
+                          ISD::FSQRT})
+    setOperationAction(Opcode, MVT::f64, Legal);
+  setOperationAction(ISD::SETCC, MVT::f64, Custom);
+
+  static constexpr unsigned UnsupportedFloatingOperations[] = {
+      ISD::ConstantFP, ISD::FREM, ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN,
+      ISD::FMA, ISD::SELECT, ISD::SELECT_CC};
+  for (unsigned Opcode : UnsupportedFloatingOperations)
+    RejectOperation(Opcode, MVT::f64);
+
+  static constexpr unsigned StrictFloatingOperations[] = {
+      ISD::STRICT_FADD,  ISD::STRICT_FSUB,    ISD::STRICT_FMUL,
+      ISD::STRICT_FDIV,  ISD::STRICT_FREM,    ISD::STRICT_FSQRT,
+      ISD::STRICT_FMA,   ISD::STRICT_FSETCC,  ISD::STRICT_FSETCCS};
+  for (unsigned Opcode : StrictFloatingOperations)
     RejectOperation(Opcode, MVT::f64);
 
   static constexpr unsigned SymbolicAddressOperations[] = {
@@ -108,7 +119,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   RejectOperation(ISD::LOAD, MVT::f64);
   RejectOperation(ISD::STORE, MVT::f64);
   setOperationAction(ISD::BR_CC, MVT::i64, Expand);
-  RejectOperation(ISD::BR_CC, MVT::f64);
+  setOperationAction(ISD::BR_CC, MVT::f64, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
@@ -124,6 +135,17 @@ bool MMIXTargetLowering::allowsMisalignedMemoryAccesses(
 
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
+  if (Op.getOpcode() == ISD::FREM)
+    report_fatal_error(
+        "MMIX cannot directly lower LLVM frem: MMIX FREM implements IEEE "
+        "remainder instead of truncating-quotient fmod semantics");
+  if (Op.getOpcode() == ISD::FMA)
+    report_fatal_error(
+        "MMIX cannot lower fused f64 multiply-add without a runtime helper");
+  if (Op->isStrictFPOpcode())
+    report_fatal_error(
+        "MMIX constrained floating-point lowering is not implemented");
+
   switch (Op.getOpcode()) {
   case ISD::GlobalAddress:
   case ISD::ExternalSymbol:
@@ -134,6 +156,7 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   case ISD::SMUL_LOHI:
   case ISD::UDIVREM:
   case ISD::SDIVREM:
+  case ISD::SETCC:
     break;
   default:
     report_fatal_error(
@@ -143,6 +166,84 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   }
 
   SDLoc DL(Op);
+  if (Op.getOpcode() == ISD::SETCC) {
+    SDValue LHS = Op.getOperand(0);
+    SDValue RHS = Op.getOperand(1);
+    ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
+    EVT ResultVT = Op.getValueType();
+    SDValue Zero = DAG.getConstant(0, DL, ResultVT);
+    SDValue One = DAG.getConstant(1, DL, ResultVT);
+    auto FPCompare = [&](unsigned Opcode) {
+      return DAG.getNode(Opcode, DL, ResultVT, LHS, RHS);
+    };
+    auto CompareZero = [&](SDValue Value, ISD::CondCode IntCC) {
+      return DAG.getSetCC(DL, ResultVT, Value, Zero, IntCC);
+    };
+
+    // FEQL and FUN are quiet even for signaling NaNs. FCMP provides ordering,
+    // but raises invalid for NaN operands; constrained comparisons therefore
+    // remain unsupported instead of silently changing exception behavior.
+    switch (CC) {
+    case ISD::SETFALSE:
+    case ISD::SETFALSE2:
+      return Zero;
+    case ISD::SETOEQ:
+    case ISD::SETEQ:
+      return FPCompare(MMIXISD::FEQL);
+    case ISD::SETOGT:
+    case ISD::SETGT:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETGT);
+    case ISD::SETOGE: {
+      SDValue Ordered = CompareZero(FPCompare(MMIXISD::FUN), ISD::SETEQ);
+      SDValue GE = CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETGE);
+      return DAG.getNode(ISD::AND, DL, ResultVT, Ordered, GE);
+    }
+    case ISD::SETGE:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETGE);
+    case ISD::SETOLT:
+    case ISD::SETLT:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETLT);
+    case ISD::SETOLE: {
+      SDValue Ordered = CompareZero(FPCompare(MMIXISD::FUN), ISD::SETEQ);
+      SDValue LE = CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETLE);
+      return DAG.getNode(ISD::AND, DL, ResultVT, Ordered, LE);
+    }
+    case ISD::SETLE:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETLE);
+    case ISD::SETONE:
+    case ISD::SETNE:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETNE);
+    case ISD::SETO:
+      return CompareZero(FPCompare(MMIXISD::FUN), ISD::SETEQ);
+    case ISD::SETUO:
+      return FPCompare(MMIXISD::FUN);
+    case ISD::SETUEQ:
+      return DAG.getNode(ISD::OR, DL, ResultVT, FPCompare(MMIXISD::FEQL),
+                         FPCompare(MMIXISD::FUN));
+    case ISD::SETUGT: {
+      SDValue GT = CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETGT);
+      return DAG.getNode(ISD::OR, DL, ResultVT, GT,
+                         FPCompare(MMIXISD::FUN));
+    }
+    case ISD::SETUGE:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETGE);
+    case ISD::SETULT: {
+      SDValue LT = CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETLT);
+      return DAG.getNode(ISD::OR, DL, ResultVT, LT,
+                         FPCompare(MMIXISD::FUN));
+    }
+    case ISD::SETULE:
+      return CompareZero(FPCompare(MMIXISD::FCMP), ISD::SETLE);
+    case ISD::SETUNE:
+      return CompareZero(FPCompare(MMIXISD::FEQL), ISD::SETEQ);
+    case ISD::SETTRUE:
+    case ISD::SETTRUE2:
+      return One;
+    default:
+      llvm_unreachable("unexpected floating-point condition code");
+    }
+  }
+
   if (Op.getOpcode() == ISD::GlobalAddress ||
       Op.getOpcode() == ISD::ExternalSymbol ||
       Op.getOpcode() == ISD::BlockAddress ||

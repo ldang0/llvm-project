@@ -24,6 +24,9 @@ enum NodeType : unsigned {
   SDIVREM,
   UDIVREM,
   LOAD_ADDR,
+  FCMP,
+  FEQL,
+  FUN,
   RET_GLUE,
   RET_VALUE_GLUE,
 };
