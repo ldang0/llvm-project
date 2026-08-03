@@ -171,8 +171,8 @@ false:
   ret i64 6
 }
 
-; Jump tables are disabled until address and relocation lowering is available,
-; so switches lower to a compare-and-branch chain.
+; MMIX keeps switches as compare-and-branch chains until indirect jump-table
+; control transfer and ELF table-entry semantics are defined.
 ; CHECK-LABEL: switch_chain:
 ; CHECK-NOT:   GO
 ; CHECK-COUNT-2: BZ

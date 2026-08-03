@@ -23,6 +23,7 @@ enum NodeType : unsigned {
   UMUL_LOHI,
   SDIVREM,
   UDIVREM,
+  LOAD_ADDR,
   RET_GLUE,
   RET_VALUE_GLUE,
 };

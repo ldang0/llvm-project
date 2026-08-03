@@ -93,6 +93,14 @@ public:
            Value <= Max;
   }
 
+  bool isAbsoluteInRangeOrSymbolic(int64_t Min, int64_t Max) const {
+    if (!isImm())
+      return false;
+    int64_t Value;
+    return !getImm()->evaluateAsAbsolute(Value) ||
+           (Value >= Min && Value <= Max);
+  }
+
   void print(raw_ostream &OS, const MCAsmInfo &) const override {
     if (isToken())
       OS << TokenValue;
@@ -107,7 +115,9 @@ public:
   bool isSPR64Op() const { return isReg(); }
   bool isMMIXImm64() const { return isAbsoluteInRange(INT64_MIN, INT64_MAX); }
   bool isMMIXUImm8() const { return isAbsoluteInRange(0, UINT8_MAX); }
-  bool isMMIXUImm16() const { return isAbsoluteInRange(0, UINT16_MAX); }
+  bool isMMIXUImm16() const {
+    return isAbsoluteInRangeOrSymbolic(0, UINT16_MAX);
+  }
   bool isMMIXUImm24() const { return isAbsoluteInRange(0, 0xffffff); }
   bool isMMIXRoundingMode() const { return isAbsoluteInRange(0, 4); }
   bool isMMIXResumeMode() const { return isAbsoluteInRange(0, 1); }

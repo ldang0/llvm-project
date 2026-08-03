@@ -26,6 +26,8 @@ def MMIXret
 def MMIXret_value
     : SDNode<"MMIXISD::RET_VALUE_GLUE", SDTNone,
              [SDNPHasChain, SDNPInGlue]>;
+def SDT_MMIXLoadAddr : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
+def MMIXload_addr : SDNode<"MMIXISD::LOAD_ADDR", SDT_MMIXLoadAddr>;
 
 // Common operand categories. These records carry the architectural encoding
 // constraints used by later MC emitters and parsers, without installing any
@@ -1673,6 +1675,23 @@ def LOAD_IMM64
                             (ins i64imm:$value), ""> {
   let Pattern = [(set i64:$dst, imm:$value)];
 }
+
+def LOAD_ADDR
+    : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),
+                            (ins i64imm:$symbol), ""> {
+  let Size = 16;
+}
+
+def : Pat<(MMIXload_addr tglobaladdr:$symbol),
+          (LOAD_ADDR tglobaladdr:$symbol)>;
+def : Pat<(MMIXload_addr texternalsym:$symbol),
+          (LOAD_ADDR texternalsym:$symbol)>;
+def : Pat<(MMIXload_addr tblockaddress:$symbol),
+          (LOAD_ADDR tblockaddress:$symbol)>;
+def : Pat<(MMIXload_addr tconstpool:$symbol),
+          (LOAD_ADDR tconstpool:$symbol)>;
+def : Pat<(MMIXload_addr tjumptable:$symbol),
+          (LOAD_ADDR tjumptable:$symbol)>;
 
 def SET_RD_ZERO : MMIXPseudoInstruction<(outs), (ins), ""> {
   let Defs = [RD];

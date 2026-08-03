@@ -21,6 +21,14 @@ enum : uint64_t {
   PCRelativeWidthMask = uint64_t(0x1f) << PCRelativeWidthShift,
 };
 
+enum MachineOperandFlags {
+  MO_None,
+  MO_ABS_LO,
+  MO_ABS_ML,
+  MO_ABS_MH,
+  MO_ABS_HI,
+};
+
 inline unsigned getPCRelativeWidth(uint64_t TSFlags) {
   return (TSFlags & PCRelativeWidthMask) >> PCRelativeWidthShift;
 }

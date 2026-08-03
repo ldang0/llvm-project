@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXMCInstLower.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -36,13 +37,35 @@ static bool branchesBackward(const MachineInstr &MI) {
 
 const MCExpr *MMIXMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
                                                   MCSymbol *Symbol) const {
-  if (MO.getTargetFlags())
-    report_fatal_error("MMIX symbol operand has unsupported target flags");
-
   const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Ctx);
   if (!MO.isJTI() && MO.getOffset())
     Expr = MCBinaryExpr::createAdd(
         Expr, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
+
+  unsigned Shift;
+  switch (MO.getTargetFlags()) {
+  case MMIXII::MO_None:
+    return Expr;
+  case MMIXII::MO_ABS_LO:
+    Shift = 0;
+    break;
+  case MMIXII::MO_ABS_ML:
+    Shift = 16;
+    break;
+  case MMIXII::MO_ABS_MH:
+    Shift = 32;
+    break;
+  case MMIXII::MO_ABS_HI:
+    Shift = 48;
+    break;
+  default:
+    report_fatal_error("MMIX symbol operand has unsupported target flags");
+  }
+  if (Shift)
+    Expr =
+        MCBinaryExpr::createLShr(Expr, MCConstantExpr::create(Shift, Ctx), Ctx);
+  Expr =
+      MCBinaryExpr::createAnd(Expr, MCConstantExpr::create(0xffff, Ctx), Ctx);
   return Expr;
 }
 

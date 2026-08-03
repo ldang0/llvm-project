@@ -1,0 +1,40 @@
+# RUN: llc -mtriple=mmix -run-pass=postrapseudos -verify-machineinstrs %s -o - | FileCheck %s
+
+--- |
+  define void @address_materialization() {
+  entry:
+    ret void
+  }
+...
+---
+name: address_materialization
+tracksRegLiveness: true
+constants:
+  - id: 0
+    value: 'i64 1234605616436508552'
+    alignment: 8
+jumpTable:
+  kind: block-address
+  entries:
+    - id: 0
+      blocks: [ '%bb.0' ]
+body: |
+  bb.0.entry:
+    ; CHECK-LABEL: name: address_materialization
+    ; CHECK:      $r0 = SETH target-flags(mmix-abs-hi) %const.0
+    ; CHECK-NEXT: $r0 = INCMH target-flags(mmix-abs-mh) %const.0
+    ; CHECK-NEXT: $r0 = INCML target-flags(mmix-abs-ml) %const.0
+    ; CHECK-NEXT: $r0 = INCL target-flags(mmix-abs-lo) %const.0
+    ; CHECK-NEXT: $r1 = SETH target-flags(mmix-abs-hi) %jump-table.0
+    ; CHECK-NEXT: $r1 = INCMH target-flags(mmix-abs-mh) %jump-table.0
+    ; CHECK-NEXT: $r1 = INCML target-flags(mmix-abs-ml) %jump-table.0
+    ; CHECK-NEXT: $r1 = INCL target-flags(mmix-abs-lo) %jump-table.0
+    ; CHECK-NEXT: $r2 = SETH target-flags(mmix-abs-hi) &external_name
+    ; CHECK-NEXT: $r2 = INCMH target-flags(mmix-abs-mh) &external_name
+    ; CHECK-NEXT: $r2 = INCML target-flags(mmix-abs-ml) &external_name
+    ; CHECK-NEXT: $r2 = INCL target-flags(mmix-abs-lo) &external_name
+    $r0 = LOAD_ADDR %const.0
+    $r1 = LOAD_ADDR %jump-table.0
+    $r2 = LOAD_ADDR &external_name
+    POP 0, 0
+...

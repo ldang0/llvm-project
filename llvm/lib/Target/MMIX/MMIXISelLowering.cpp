@@ -16,6 +16,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetMachine.h"
 #include <limits>
 
 using namespace llvm;
@@ -84,10 +85,14 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   for (unsigned Opcode : FloatingOperations)
     RejectOperation(Opcode, MVT::f64);
 
-  static constexpr unsigned AddressOperations[] = {
+  static constexpr unsigned SymbolicAddressOperations[] = {
       ISD::GlobalAddress, ISD::ExternalSymbol, ISD::BlockAddress,
-      ISD::ConstantPool,  ISD::JumpTable,      ISD::FRAMEADDR,
-      ISD::RETURNADDR,    ISD::DYNAMIC_STACKALLOC};
+      ISD::ConstantPool, ISD::JumpTable};
+  for (unsigned Opcode : SymbolicAddressOperations)
+    setOperationAction(Opcode, MVT::i64, Custom);
+
+  static constexpr unsigned AddressOperations[] = {
+      ISD::FRAMEADDR, ISD::RETURNADDR, ISD::DYNAMIC_STACKALLOC};
   for (unsigned Opcode : AddressOperations)
     RejectOperation(Opcode, MVT::i64);
 
@@ -120,6 +125,11 @@ bool MMIXTargetLowering::allowsMisalignedMemoryAccesses(
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
+  case ISD::GlobalAddress:
+  case ISD::ExternalSymbol:
+  case ISD::BlockAddress:
+  case ISD::ConstantPool:
+  case ISD::JumpTable:
   case ISD::UMUL_LOHI:
   case ISD::SMUL_LOHI:
   case ISD::UDIVREM:
@@ -133,6 +143,37 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   }
 
   SDLoc DL(Op);
+  if (Op.getOpcode() == ISD::GlobalAddress ||
+      Op.getOpcode() == ISD::ExternalSymbol ||
+      Op.getOpcode() == ISD::BlockAddress ||
+      Op.getOpcode() == ISD::ConstantPool || Op.getOpcode() == ISD::JumpTable) {
+    if (getTargetMachine().getRelocationModel() != Reloc::Static)
+      report_fatal_error(
+          "MMIX symbolic addresses require the static relocation model");
+
+    SDValue Target;
+    if (auto *GA = dyn_cast<GlobalAddressSDNode>(Op))
+      Target = DAG.getTargetGlobalAddress(GA->getGlobal(), DL, MVT::i64,
+                                          GA->getOffset());
+    else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Op))
+      Target = DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
+    else if (auto *BA = dyn_cast<BlockAddressSDNode>(Op))
+      Target = DAG.getTargetBlockAddress(BA->getBlockAddress(), MVT::i64,
+                                         BA->getOffset());
+    else if (auto *CP = dyn_cast<ConstantPoolSDNode>(Op)) {
+      if (CP->isMachineConstantPoolEntry())
+        Target = DAG.getTargetConstantPool(CP->getMachineCPVal(), MVT::i64,
+                                           CP->getAlign(), CP->getOffset());
+      else
+        Target = DAG.getTargetConstantPool(CP->getConstVal(), MVT::i64,
+                                           CP->getAlign(), CP->getOffset());
+    } else {
+      auto *JT = cast<JumpTableSDNode>(Op);
+      Target = DAG.getTargetJumpTable(JT->getIndex(), MVT::i64);
+    }
+    return DAG.getNode(MMIXISD::LOAD_ADDR, DL, MVT::i64, Target);
+  }
+
   SDValue LHS = Op.getOperand(0);
   SDValue RHS = Op.getOperand(1);
   SDVTList PairVTs = DAG.getVTList(MVT::i64, MVT::i64);

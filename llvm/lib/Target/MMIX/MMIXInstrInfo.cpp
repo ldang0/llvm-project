@@ -7,8 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXInstrInfo.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXSubtarget.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -112,6 +114,22 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
+  if (MI.getOpcode() == MMIX::LOAD_ADDR) {
+    static constexpr unsigned Opcodes[] = {MMIX::SETH, MMIX::INCMH, MMIX::INCML,
+                                           MMIX::INCL};
+    static constexpr unsigned Flags[] = {MMIXII::MO_ABS_HI, MMIXII::MO_ABS_MH,
+                                         MMIXII::MO_ABS_ML, MMIXII::MO_ABS_LO};
+    for (auto [Opcode, Flag] : zip_equal(Opcodes, Flags)) {
+      MachineInstrBuilder MIB =
+          BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+                  get(Opcode), MI.getOperand(0).getReg());
+      MIB.add(MI.getOperand(1));
+      MIB->getOperand(1).setTargetFlags(Flag);
+    }
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() != MMIX::LOAD_IMM64)
     return false;
 
@@ -119,6 +137,22 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
                 MI.getOperand(0).getReg(), uint64_t(MI.getOperand(1).getImm()));
   MI.eraseFromParent();
   return true;
+}
+
+ArrayRef<std::pair<unsigned, const char *>>
+MMIXInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+      {MMIXII::MO_ABS_LO, "mmix-abs-lo"},
+      {MMIXII::MO_ABS_ML, "mmix-abs-ml"},
+      {MMIXII::MO_ABS_MH, "mmix-abs-mh"},
+      {MMIXII::MO_ABS_HI, "mmix-abs-hi"},
+  };
+  return ArrayRef(TargetFlags);
+}
+
+std::pair<unsigned, unsigned>
+MMIXInstrInfo::decomposeMachineOperandsTargetFlags(unsigned TF) const {
+  return std::make_pair(TF, 0u);
 }
 
 static bool isMMIXBranch(unsigned Opcode) {
