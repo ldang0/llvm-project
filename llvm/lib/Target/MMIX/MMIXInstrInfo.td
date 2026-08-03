@@ -34,6 +34,10 @@ def SDT_MMIXFPCompare
 def MMIXfcmp : SDNode<"MMIXISD::FCMP", SDT_MMIXFPCompare>;
 def MMIXfeql : SDNode<"MMIXISD::FEQL", SDT_MMIXFPCompare>;
 def MMIXfun : SDNode<"MMIXISD::FUN", SDT_MMIXFPCompare>;
+def SDT_MMIXShortFloatFromInt
+    : SDTypeProfile<1, 1, [SDTCisVT<0, f64>, SDTCisVT<1, i64>]>;
+def MMIXsflot : SDNode<"MMIXISD::SFLOT", SDT_MMIXShortFloatFromInt>;
+def MMIXsflotu : SDNode<"MMIXISD::SFLOTU", SDT_MMIXShortFloatFromInt>;
 
 // Common operand categories. These records carry the architectural encoding
 // constraints used by later MC emitters and parsers, without installing any
@@ -391,6 +395,11 @@ def mmix_inv_imm : SDNodeXForm<imm, [{
   return CurDAG->getTargetConstant(~N->getZExtValue(), SDLoc(N), MVT::i64);
 }]>;
 
+def mmix_fpimm_bits : SDNodeXForm<fpimm, [{
+  return CurDAG->getTargetConstant(
+      N->getValueAPF().bitcastToAPInt().getZExtValue(), SDLoc(N), MVT::i64);
+}]>;
+
 // LLVM integer arithmetic wraps modulo 2^64 unless overflow makes the result
 // poison. Neither case permits the traps raised by MMIX ADD, SUB, and NEG, so
 // instruction selection exclusively uses their unsigned, nontrapping forms.
@@ -573,6 +582,14 @@ def : Pat<(xor i64:$lhs, mmix_uimm8:$rhs),
 def : Pat<(xor i64:$lhs, mmix_inv_uimm8:$rhs),
           (NXORI $lhs, (mmix_inv_imm mmix_inv_uimm8:$rhs))>;
 def : Pat<(xor i64:$lhs, i64:$rhs), (XOR $lhs, $rhs)>;
+
+// Integer and floating-point values use different virtual register classes
+// but share the same physical MMIX registers, so bitcasts are class-only
+// copies and emit no instruction after coalescing.
+def : Pat<(f64 (bitconvert i64:$src)),
+          (COPY_TO_REGCLASS GPR64:$src, FPR64)>;
+def : Pat<(i64 (bitconvert f64:$src)),
+          (COPY_TO_REGCLASS FPR64:$src, GPR64)>;
 
 def BDIF : MMIXIntRegRegOpcode<0xD0, "BDIF">;
 def BDIFI : MMIXIntRegImmOpcode<0xD1, "BDIF">;
@@ -773,6 +790,49 @@ defm : MMIXStorePatterns<truncstorei8, STBU, STBUI>;
 defm : MMIXStorePatterns<truncstorei16, STWU, STWUI>;
 defm : MMIXStorePatterns<truncstorei32, STTU, STTUI>;
 defm : MMIXStorePatterns<store, STOU, STOUI>;
+
+multiclass MMIXF64LoadPatterns<Instruction RegOp, Instruction ImmOp> {
+  def : Pat<(f64 (load GPR64:$base)),
+            (COPY_TO_REGCLASS (ImmOp GPR64:$base, 0), FPR64)>;
+  def : Pat<(f64 (load (i64 frameindex:$base))),
+            (COPY_TO_REGCLASS
+                (ImmOp (i64 (to_tframeindex $base)), 0), FPR64)>;
+  def : Pat<(f64 (load (add GPR64:$base, mmix_uimm8:$offset))),
+            (COPY_TO_REGCLASS
+                (ImmOp GPR64:$base, mmix_uimm8:$offset), FPR64)>;
+  def : Pat<(f64 (load (add (i64 frameindex:$base),
+                            mmix_uimm8:$offset))),
+            (COPY_TO_REGCLASS
+                (ImmOp (i64 (to_tframeindex $base)), mmix_uimm8:$offset),
+                FPR64)>;
+  def : Pat<(f64 (load (add GPR64:$base, GPR64:$offset))),
+            (COPY_TO_REGCLASS
+                (RegOp GPR64:$base, GPR64:$offset), FPR64)>;
+}
+
+multiclass MMIXF64StorePatterns<Instruction RegOp, Instruction ImmOp> {
+  def : Pat<(store FPR64:$value, GPR64:$base),
+            (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
+                   GPR64:$base, 0)>;
+  def : Pat<(store FPR64:$value, (i64 frameindex:$base)),
+            (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
+                   (i64 (to_tframeindex $base)), 0)>;
+  def : Pat<(store FPR64:$value,
+                   (add GPR64:$base, mmix_uimm8:$offset)),
+            (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
+                   GPR64:$base, mmix_uimm8:$offset)>;
+  def : Pat<(store FPR64:$value,
+                   (add (i64 frameindex:$base), mmix_uimm8:$offset)),
+            (ImmOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
+                   (i64 (to_tframeindex $base)), mmix_uimm8:$offset)>;
+  def : Pat<(store FPR64:$value,
+                   (add GPR64:$base, GPR64:$offset)),
+            (RegOp (COPY_TO_REGCLASS FPR64:$value, GPR64),
+                   GPR64:$base, GPR64:$offset)>;
+}
+
+defm : MMIXF64LoadPatterns<LDOU, LDOUI>;
+defm : MMIXF64StorePatterns<STOU, STOUI>;
 
 // CSWAP uses the ordinary three-field memory form. Its comparison and result
 // dependency is left for later lowering.
@@ -1130,6 +1190,11 @@ def FINT  : MMIXFPUnaryRoundedOpcode<0x17, "FINT">;
 // A zero Y field selects the rounding mode in rA, as used by the binary
 // floating-point operations.
 def : Pat<(fsqrt f64:$src), (FSQRT 0, $src)>;
+def : Pat<(ftrunc f64:$src), (FINT 1, $src)>;
+def : Pat<(fceil f64:$src), (FINT 2, $src)>;
+def : Pat<(ffloor f64:$src), (FINT 3, $src)>;
+def : Pat<(froundeven f64:$src), (FINT 4, $src)>;
+def : Pat<(frint f64:$src), (FINT 0, $src)>;
 
 class MMIXFix<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
@@ -1143,6 +1208,7 @@ class MMIXFix<string Mnemonic>
   let MMIXY{2-0} = round;
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFixOpcode<bits<8> Opcode, string Mnemonic> : MMIXFix<Mnemonic> {
@@ -1165,6 +1231,7 @@ class MMIXFloatFromIntReg<string Mnemonic>
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   string MMIXSourceForm = "register";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFloatFromIntImm<string Mnemonic>
@@ -1180,6 +1247,7 @@ class MMIXFloatFromIntImm<string Mnemonic>
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   string MMIXSourceForm = "immediate";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFloatFromIntRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -1200,6 +1268,21 @@ def SFLOT  : MMIXFloatFromIntRegOpcode<0x0C, "SFLOT">;
 def SFLOTI : MMIXFloatFromIntImmOpcode<0x0D, "SFLOT">;
 def SFLOTU : MMIXFloatFromIntRegOpcode<0x0E, "SFLOTU">;
 def SFLOTUI : MMIXFloatFromIntImmOpcode<0x0F, "SFLOTU">;
+
+def : Pat<(MMIXsflot i64:$src), (SFLOT 4, $src)>;
+def : Pat<(MMIXsflotu i64:$src), (SFLOTU 4, $src)>;
+
+// Unconstrained LLVM integer-to-floating conversions always round to nearest,
+// while floating-to-integer conversions truncate toward zero. FIXU avoids the
+// float-to-fix trap of FIX for LLVM's poison-producing out-of-range inputs.
+def : Pat<(f64 (sint_to_fp mmix_uimm8:$src)),
+          (FLOTI 4, mmix_uimm8:$src)>;
+def : Pat<(f64 (sint_to_fp i64:$src)), (FLOT 4, $src)>;
+def : Pat<(f64 (uint_to_fp mmix_uimm8:$src)),
+          (FLOTUI 4, mmix_uimm8:$src)>;
+def : Pat<(f64 (uint_to_fp i64:$src)), (FLOTU 4, $src)>;
+def : Pat<(i64 (fp_to_sint f64:$src)), (FIXU 1, $src)>;
+def : Pat<(i64 (fp_to_uint f64:$src)), (FIXU 1, $src)>;
 
 // Short floating-point values are converted to and from the 64-bit floating
 // representation when crossing memory.
@@ -1243,6 +1326,7 @@ class MMIXFPStoreReg<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFPStoreImm<string Mnemonic>
@@ -1258,6 +1342,7 @@ class MMIXFPStoreImm<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
+  let mayRaiseFPException = true;
 }
 
 class MMIXFPLoadRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -1284,6 +1369,40 @@ def LDSF : MMIXFPLoadRegOpcode<0x90, "LDSF">;
 def LDSFI : MMIXFPLoadImmOpcode<0x91, "LDSF">;
 def STSF : MMIXFPStoreRegOpcode<0xB0, "STSF">;
 def STSFI : MMIXFPStoreImmOpcode<0xB1, "STSF">;
+
+multiclass MMIXShortFloatLoadPatterns<Instruction RegOp, Instruction ImmOp> {
+  def : Pat<(f64 (extloadf32 GPR64:$base)), (ImmOp GPR64:$base, 0)>;
+  def : Pat<(f64 (extloadf32 (i64 frameindex:$base))),
+            (ImmOp (i64 (to_tframeindex $base)), 0)>;
+  def : Pat<(f64 (extloadf32 (add GPR64:$base, mmix_uimm8:$offset))),
+            (ImmOp GPR64:$base, mmix_uimm8:$offset)>;
+  def : Pat<(f64 (extloadf32 (add (i64 frameindex:$base),
+                                  mmix_uimm8:$offset))),
+            (ImmOp (i64 (to_tframeindex $base)), mmix_uimm8:$offset)>;
+  def : Pat<(f64 (extloadf32 (add GPR64:$base, GPR64:$offset))),
+            (RegOp GPR64:$base, GPR64:$offset)>;
+}
+
+multiclass MMIXShortFloatStorePatterns<Instruction RegOp, Instruction ImmOp> {
+  def : Pat<(truncstoref32 FPR64:$value, GPR64:$base),
+            (ImmOp FPR64:$value, GPR64:$base, 0)>;
+  def : Pat<(truncstoref32 FPR64:$value, (i64 frameindex:$base)),
+            (ImmOp FPR64:$value, (i64 (to_tframeindex $base)), 0)>;
+  def : Pat<(truncstoref32 FPR64:$value,
+                          (add GPR64:$base, mmix_uimm8:$offset)),
+            (ImmOp FPR64:$value, GPR64:$base, mmix_uimm8:$offset)>;
+  def : Pat<(truncstoref32 FPR64:$value,
+                          (add (i64 frameindex:$base),
+                               mmix_uimm8:$offset)),
+            (ImmOp FPR64:$value, (i64 (to_tframeindex $base)),
+                   mmix_uimm8:$offset)>;
+  def : Pat<(truncstoref32 FPR64:$value,
+                          (add GPR64:$base, GPR64:$offset)),
+            (RegOp FPR64:$value, GPR64:$base, GPR64:$offset)>;
+}
+
+defm : MMIXShortFloatLoadPatterns<LDSF, LDSFI>;
+defm : MMIXShortFloatStorePatterns<STSF, STSFI>;
 
 // Machine-control instructions are intentionally modeled as side-effecting
 // operations. They are available to MC and target-specific mechanisms, but
@@ -1698,6 +1817,10 @@ def LOAD_IMM64
                             (ins i64imm:$value), ""> {
   let Pattern = [(set i64:$dst, imm:$value)];
 }
+
+def : Pat<(f64 fpimm:$value),
+          (COPY_TO_REGCLASS
+              (LOAD_IMM64 (mmix_fpimm_bits f64:$value)), FPR64)>;
 
 def LOAD_ADDR
     : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),

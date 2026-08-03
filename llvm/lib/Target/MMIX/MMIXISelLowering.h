@@ -27,6 +27,8 @@ enum NodeType : unsigned {
   FCMP,
   FEQL,
   FUN,
+  SFLOT,
+  SFLOTU,
   RET_GLUE,
   RET_VALUE_GLUE,
 };
@@ -42,6 +44,7 @@ public:
       MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
       unsigned *Fast = nullptr) const override;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,
                                const SmallVectorImpl<ISD::InputArg> &Ins,

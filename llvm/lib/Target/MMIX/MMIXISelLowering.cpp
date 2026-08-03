@@ -38,6 +38,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setPrefFunctionAlignment(Align(4));
   setMaxAtomicSizeInBitsSupported(0);
   setMinimumJumpTableEntries(std::numeric_limits<unsigned>::max());
+  setTargetDAGCombine(ISD::STORE);
 
   auto RejectOperation = [this](unsigned Opcode, MVT VT) {
     setOperationAction(Opcode, VT, Custom);
@@ -78,23 +79,38 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   for (unsigned Opcode : {ISD::SADDO, ISD::UADDO, ISD::SSUBO, ISD::USUBO})
     setOperationAction(Opcode, MVT::i64, Expand);
 
-  for (unsigned Opcode : {ISD::FADD, ISD::FSUB, ISD::FMUL, ISD::FDIV,
-                          ISD::FSQRT})
+  for (unsigned Opcode :
+       {ISD::FADD, ISD::FSUB, ISD::FMUL, ISD::FDIV, ISD::FSQRT})
     setOperationAction(Opcode, MVT::f64, Legal);
+  setOperationAction(ISD::ConstantFP, MVT::f64, Legal);
   setOperationAction(ISD::SETCC, MVT::f64, Custom);
 
+  for (unsigned Opcode : {ISD::SINT_TO_FP, ISD::UINT_TO_FP})
+    setOperationAction(Opcode, MVT::i64, Legal);
+  for (unsigned Opcode : {ISD::FP_TO_SINT, ISD::FP_TO_UINT})
+    setOperationAction(Opcode, MVT::i64, Legal);
+  for (unsigned Opcode :
+       {ISD::FTRUNC, ISD::FCEIL, ISD::FFLOOR, ISD::FROUNDEVEN, ISD::FRINT})
+    setOperationAction(Opcode, MVT::f64, Legal);
+
   static constexpr unsigned UnsupportedFloatingOperations[] = {
-      ISD::ConstantFP, ISD::FREM, ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN,
-      ISD::FMA, ISD::SELECT, ISD::SELECT_CC};
+      ISD::FREM,   ISD::FNEG,      ISD::FABS,   ISD::FCOPYSIGN, ISD::FMA,
+      ISD::SELECT, ISD::SELECT_CC, ISD::FROUND, ISD::FNEARBYINT};
   for (unsigned Opcode : UnsupportedFloatingOperations)
     RejectOperation(Opcode, MVT::f64);
 
   static constexpr unsigned StrictFloatingOperations[] = {
-      ISD::STRICT_FADD,  ISD::STRICT_FSUB,    ISD::STRICT_FMUL,
-      ISD::STRICT_FDIV,  ISD::STRICT_FREM,    ISD::STRICT_FSQRT,
-      ISD::STRICT_FMA,   ISD::STRICT_FSETCC,  ISD::STRICT_FSETCCS};
+      ISD::STRICT_FADD,       ISD::STRICT_FSUB,       ISD::STRICT_FMUL,
+      ISD::STRICT_FDIV,       ISD::STRICT_FREM,       ISD::STRICT_FSQRT,
+      ISD::STRICT_FMA,        ISD::STRICT_FSETCC,     ISD::STRICT_FSETCCS,
+      ISD::STRICT_FP_ROUND,   ISD::STRICT_FP_EXTEND,  ISD::STRICT_FTRUNC,
+      ISD::STRICT_FCEIL,      ISD::STRICT_FFLOOR,     ISD::STRICT_FROUND,
+      ISD::STRICT_FROUNDEVEN, ISD::STRICT_FNEARBYINT, ISD::STRICT_FRINT};
   for (unsigned Opcode : StrictFloatingOperations)
     RejectOperation(Opcode, MVT::f64);
+  for (unsigned Opcode : {ISD::STRICT_SINT_TO_FP, ISD::STRICT_UINT_TO_FP,
+                          ISD::STRICT_FP_TO_SINT, ISD::STRICT_FP_TO_UINT})
+    RejectOperation(Opcode, MVT::i64);
 
   static constexpr unsigned SymbolicAddressOperations[] = {
       ISD::GlobalAddress, ISD::ExternalSymbol, ISD::BlockAddress,
@@ -116,8 +132,10 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
     setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MemVT, Legal);
     setTruncStoreAction(MVT::i64, MemVT, Legal);
   }
-  RejectOperation(ISD::LOAD, MVT::f64);
-  RejectOperation(ISD::STORE, MVT::f64);
+  setOperationAction(ISD::LOAD, MVT::f64, Legal);
+  setOperationAction(ISD::STORE, MVT::f64, Legal);
+  setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Legal);
+  setTruncStoreAction(MVT::f64, MVT::f32, Legal);
   setOperationAction(ISD::BR_CC, MVT::i64, Expand);
   setOperationAction(ISD::BR_CC, MVT::f64, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
@@ -133,6 +151,38 @@ bool MMIXTargetLowering::allowsMisalignedMemoryAccesses(
   return false;
 }
 
+SDValue MMIXTargetLowering::PerformDAGCombine(SDNode *N,
+                                              DAGCombinerInfo &DCI) const {
+  auto *Store = dyn_cast<StoreSDNode>(N);
+  if (!Store || Store->isTruncatingStore() || Store->isIndexed() ||
+      Store->getMemoryVT() != MVT::f32)
+    return SDValue();
+
+  SDValue Value = Store->getValue();
+  unsigned ConvertOpcode = Value.getOpcode();
+  if (ConvertOpcode != ISD::SINT_TO_FP && ConvertOpcode != ISD::UINT_TO_FP)
+    return SDValue();
+
+  SDValue Integer = Value.getOperand(0);
+  EVT IntegerVT = Integer.getValueType();
+  if (!IntegerVT.isInteger() || IntegerVT.isVector() ||
+      IntegerVT.getSizeInBits() > 64)
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  if (IntegerVT != MVT::i64) {
+    unsigned ExtendOpcode =
+        ConvertOpcode == ISD::SINT_TO_FP ? ISD::SIGN_EXTEND : ISD::ZERO_EXTEND;
+    Integer = DAG.getNode(ExtendOpcode, SDLoc(Integer), MVT::i64, Integer);
+  }
+  unsigned Opcode =
+      ConvertOpcode == ISD::SINT_TO_FP ? MMIXISD::SFLOT : MMIXISD::SFLOTU;
+  SDValue Rounded = DAG.getNode(Opcode, SDLoc(Value), MVT::f64, Integer);
+  return DAG.getTruncStore(Store->getChain(), SDLoc(Store), Rounded,
+                           Store->getBasePtr(), MVT::f32,
+                           Store->getMemOperand());
+}
+
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
   if (Op.getOpcode() == ISD::FREM)
@@ -142,6 +192,13 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   if (Op.getOpcode() == ISD::FMA)
     report_fatal_error(
         "MMIX cannot lower fused f64 multiply-add without a runtime helper");
+  if (Op.getOpcode() == ISD::FROUND)
+    report_fatal_error(
+        "MMIX cannot lower round-to-nearest-ties-away without a runtime "
+        "helper");
+  if (Op.getOpcode() == ISD::FNEARBYINT)
+    report_fatal_error(
+        "MMIX FINT cannot lower nearbyint because it may raise inexact");
   if (Op->isStrictFPOpcode())
     report_fatal_error(
         "MMIX constrained floating-point lowering is not implemented");
