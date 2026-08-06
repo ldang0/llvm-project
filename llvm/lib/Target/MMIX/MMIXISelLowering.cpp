@@ -144,6 +144,8 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_CC, MVT::f64, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
+  RejectOperation(ISD::BRIND, MVT::Other);
+  RejectOperation(ISD::TRAP, MVT::Other);
   setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i64, Legal);
   setOperationAction(ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, MVT::i64, Expand);
   setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Legal);
@@ -198,6 +200,12 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
     report_fatal_error("MMIX does not support nonzero address spaces");
   if (Op.getOpcode() == ISD::GlobalTLSAddress)
     report_fatal_error("MMIX does not support thread-local storage");
+  if (Op.getOpcode() == ISD::BRIND)
+    report_fatal_error(
+        "MMIX does not support indirect branches in the provisional ABI");
+  if (Op.getOpcode() == ISD::TRAP)
+    report_fatal_error(
+        "MMIX does not define an LLVM trap convention for this environment");
   if (Op.getOpcode() == ISD::FREM)
     report_fatal_error(
         "MMIX cannot directly lower LLVM frem: MMIX FREM implements IEEE "
