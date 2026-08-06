@@ -36,7 +36,8 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setBooleanVectorContents(ZeroOrOneBooleanContent);
   setMinFunctionAlignment(Align(4));
   setPrefFunctionAlignment(Align(4));
-  setMaxAtomicSizeInBitsSupported(0);
+  setMaxAtomicSizeInBitsSupported(64);
+  setMinCmpXchgSizeInBits(64);
   setMinimumJumpTableEntries(std::numeric_limits<unsigned>::max());
   setTargetDAGCombine(ISD::STORE);
 
@@ -140,6 +141,9 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BR_CC, MVT::f64, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
+  setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i64, Legal);
+  setOperationAction(ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, MVT::i64, Expand);
+  setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Legal);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
   RejectOperation(ISD::STACKRESTORE, MVT::Other);
 }

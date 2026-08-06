@@ -9,6 +9,7 @@
 #include "MMIXTargetMachine.h"
 #include "MMIX.h"
 #include "TargetInfo/MMIXTargetInfo.h"
+#include "llvm/CodeGen/AtomicExpand.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -65,6 +66,11 @@ public:
   bool addInstSelector() override {
     addPass(createMMIXISelDag(getMMIXTargetMachine()));
     return false;
+  }
+
+  void addIRPasses() override {
+    addPass(createAtomicExpandLegacyPass());
+    TargetPassConfig::addIRPasses();
   }
 
   void addPreEmitPass() override {

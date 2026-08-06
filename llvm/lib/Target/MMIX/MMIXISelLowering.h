@@ -46,6 +46,21 @@ public:
       unsigned *Fast = nullptr) const override;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+  bool shouldInsertFencesForAtomic(const Instruction *) const override {
+    return true;
+  }
+  AtomicExpansionKind
+  shouldExpandAtomicLoadInIR(LoadInst *) const override {
+    return AtomicExpansionKind::CmpXChg;
+  }
+  AtomicExpansionKind
+  shouldExpandAtomicStoreInIR(StoreInst *) const override {
+    return AtomicExpansionKind::Expand;
+  }
+  AtomicExpansionKind
+  shouldExpandAtomicRMWInIR(const AtomicRMWInst *) const override {
+    return AtomicExpansionKind::CmpXChg;
+  }
   SDValue LowerCall(CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,

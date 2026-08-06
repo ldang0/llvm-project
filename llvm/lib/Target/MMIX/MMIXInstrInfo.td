@@ -838,32 +838,43 @@ multiclass MMIXF64StorePatterns<Instruction RegOp, Instruction ImmOp> {
 defm : MMIXF64LoadPatterns<LDOU, LDOUI>;
 defm : MMIXF64StorePatterns<STOU, STOUI>;
 
-// CSWAP uses the ordinary three-field memory form. Its comparison and result
-// dependency is left for later lowering.
+// CSWAP compares memory with rP, replaces memory with X on success, writes a
+// Boolean result to X, and updates rP with memory on failure. Model X as a
+// two-address operand and expose the special-register state explicitly.
 class MMIXCompareSwapReg
-    : MMIXInstruction<(outs),
+    : MMIXInstruction<(outs GPR64Op:$result),
                       (ins GPR64Op:$value, GPR64Op:$base, GPR64Op:$offset),
-                      "CSWAP $value, $base, $offset"> {
-  bits<8> value;
+                      "CSWAP $result, $base, $offset"> {
+  bits<8> result;
   bits<8> base;
   bits<8> offset;
-  let MMIXX = value;
+  let MMIXX = result;
   let MMIXY = base;
   let MMIXZ = offset;
+  let Constraints = "$result = $value";
+  let Uses = [RP];
+  let Defs = [RP];
+  let mayLoad = true;
+  let mayStore = true;
   let MMIXInventoryFamily = "memory";
 }
 
 class MMIXCompareSwapImm
-    : MMIXInstruction<(outs),
+    : MMIXInstruction<(outs GPR64Op:$result),
                       (ins GPR64Op:$value, GPR64Op:$base,
                            MMIXMemOffset8:$offset),
-                           "CSWAP $value, $base, $offset"> {
-  bits<8> value;
+                           "CSWAP $result, $base, $offset"> {
+  bits<8> result;
   bits<8> base;
   bits<8> offset;
-  let MMIXX = value;
+  let MMIXX = result;
   let MMIXY = base;
   let MMIXZ = offset;
+  let Constraints = "$result = $value";
+  let Uses = [RP];
+  let Defs = [RP];
+  let mayLoad = true;
+  let mayStore = true;
   let MMIXInventoryFamily = "memory";
 }
 
@@ -1759,6 +1770,25 @@ class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
   let isPseudo = true;
   let isCodeGenOnly = true;
 }
+
+// AtomicExpand reduces all supported atomic operations to aligned octabyte
+// compare-and-swap. This pseudo keeps PUT/CSWAP/GET indivisible to the
+// scheduler and is expanded after physical register allocation.
+def ATOMIC_CMP_SWAP
+    : MMIXPseudoInstruction<(outs GPR64Op:$old),
+                            (ins GPR64Op:$ptr, GPR64Op:$expected,
+                                 GPR64Op:$new), ""> {
+  let mayLoad = true;
+  let mayStore = true;
+  let hasSideEffects = true;
+}
+
+def : Pat<(atomic_cmp_swap_i64 GPR64:$ptr, GPR64:$expected, GPR64:$new),
+          (ATOMIC_CMP_SWAP GPR64:$ptr, GPR64:$expected, GPR64:$new)>;
+
+// Mode 3 orders every load or store before the fence with respect to every
+// load or store after it, which implements LLVM's system-scope fences.
+def : Pat<(atomic_fence timm, timm), (SYNC 3)>;
 
 // Call-site lowering records the complete call state until physical registers
 // are assigned. Post-RA expansion then selects the procedure form and supplies

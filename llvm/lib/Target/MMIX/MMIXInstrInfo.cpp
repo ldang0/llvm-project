@@ -105,6 +105,38 @@ void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
 }
 
 bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  if (MI.getOpcode() == MMIX::ATOMIC_CMP_SWAP) {
+    MachineBasicBlock &MBB = *MI.getParent();
+    MachineBasicBlock::iterator MBBI = MI.getIterator();
+    const DebugLoc &DL = MI.getDebugLoc();
+    Register Old = MI.getOperand(0).getReg();
+    Register Ptr = MI.getOperand(1).getReg();
+    Register Expected = MI.getOperand(2).getReg();
+    Register New = MI.getOperand(3).getReg();
+
+    auto WasKilled = [&](Register Reg) {
+      for (unsigned I = 1; I != 4; ++I)
+        if (MI.getOperand(I).getReg() == Reg && MI.getOperand(I).isKill())
+          return true;
+      return false;
+    };
+    bool KillExpected =
+        WasKilled(Expected) && Expected != New && Expected != Ptr;
+    bool KillNew = WasKilled(New) && New != Ptr;
+    bool KillPtr = WasKilled(Ptr);
+    BuildMI(MBB, MBBI, DL, get(MMIX::PUT), MMIX::RP)
+        .addReg(Expected, getKillRegState(KillExpected));
+    copyPhysReg(MBB, MBBI, DL, MMIX::R255, New, KillNew);
+    BuildMI(MBB, MBBI, DL, get(MMIX::CSWAPI), MMIX::R255)
+        .addReg(MMIX::R255, RegState::Kill)
+        .addReg(Ptr, getKillRegState(KillPtr))
+        .addImm(0)
+        .cloneMemRefs(MI);
+    BuildMI(MBB, MBBI, DL, get(MMIX::GET), Old).addReg(MMIX::RP);
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() == MMIX::CALL_STATE) {
     MachineBasicBlock &MBB = *MI.getParent();
     MachineInstrBuilder MIB;

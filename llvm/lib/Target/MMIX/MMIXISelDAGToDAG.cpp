@@ -12,6 +12,7 @@
 #include "MMIXTargetMachine.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/InitializePasses.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 
 using namespace llvm;
@@ -90,6 +91,11 @@ private:
       selectSpecialArithmetic(Node);
       return;
     }
+
+    if (Node->getOpcode() == ISD::ATOMIC_CMP_SWAP &&
+        cast<AtomicSDNode>(Node)->getAlign() < Align(8))
+      report_fatal_error(
+          "MMIX requires naturally aligned octabyte compare-and-swap");
 
     if (Node->getOpcode() == MMIXISD::LOAD_STACK_ARG) {
       SDLoc DL(Node);
