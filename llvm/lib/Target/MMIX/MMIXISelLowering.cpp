@@ -50,10 +50,12 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   // legal-width operations unavailable until their dedicated lowering task
   // defines the exact MMIX semantics.
   static constexpr unsigned IntegerOperations[] = {
-      ISD::ROTL, ISD::ROTR,  ISD::BSWAP,  ISD::CTPOP,    ISD::CTLZ,
-      ISD::CTTZ};
+      ISD::ROTL, ISD::ROTR, ISD::BSWAP, ISD::CTLZ, ISD::CTTZ};
   for (unsigned Opcode : IntegerOperations)
     RejectOperation(Opcode, MVT::i64);
+
+  setOperationAction(ISD::CTPOP, MVT::i64, Legal);
+  setOperationAction(ISD::USUBSAT, MVT::i64, Legal);
 
   setOperationAction(ISD::SETCC, MVT::i64, Legal);
   setOperationAction(ISD::SELECT, MVT::i64, Legal);

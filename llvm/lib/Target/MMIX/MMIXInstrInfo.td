@@ -424,6 +424,23 @@ def : Pat<(mul i64:$lhs, mmix_uimm8:$rhs),
           (MULUI $lhs, mmix_uimm8:$rhs)>;
 def : Pat<(mul i64:$lhs, i64:$rhs), (MULU $lhs, $rhs)>;
 
+// These instructions compute (scale * Y + Z) modulo 2^64, exactly matching a
+// constant left shift followed by wrapping addition. The combined instruction
+// is strictly cheaper than emitting SLU and ADDU separately. Shift counts
+// outside 1..4 deliberately retain the generic sequence.
+multiclass MMIXScaledAddPatterns<Instruction RegOp, Instruction ImmOp,
+                                 int Shift> {
+  def : Pat<(add (shl i64:$scaled, Shift), mmix_uimm8:$addend),
+            (ImmOp $scaled, mmix_uimm8:$addend)>;
+  def : Pat<(add (shl i64:$scaled, Shift), i64:$addend),
+            (RegOp $scaled, $addend)>;
+}
+
+defm : MMIXScaledAddPatterns<TWOADDU, TWOADDUI, 1>;
+defm : MMIXScaledAddPatterns<FOURADDU, FOURADDUI, 2>;
+defm : MMIXScaledAddPatterns<EIGHTADDU, EIGHTADDUI, 3>;
+defm : MMIXScaledAddPatterns<SIXTEENADDU, SIXTEENADDUI, 4>;
+
 def CSN : MMIXCondSetRegOpcode<0x60, "CSN">;
 def CSNI : MMIXCondSetImmOpcode<0x61, "CSN">;
 def CSZ : MMIXCondSetRegOpcode<0x62, "CSZ">;
@@ -611,6 +628,15 @@ def MOR : MMIXIntRegRegOpcode<0xDC, "MOR">;
 def MORI : MMIXIntRegImmOpcode<0xDD, "MOR">;
 def MXOR : MMIXIntRegRegOpcode<0xDE, "MXOR">;
 def MXORI : MMIXIntRegImmOpcode<0xDF, "MXOR">;
+
+// ODIF is unsigned saturating subtraction over one 64-bit octabyte. Its
+// narrower relatives operate independently on packed lanes and therefore do
+// not implement scalar or generic-vector subtraction. SADD counts the bits in
+// Y that are absent from Z, so only a zero second operand is generic ctpop.
+def : Pat<(usubsat i64:$lhs, mmix_uimm8:$rhs),
+          (ODIFI $lhs, mmix_uimm8:$rhs)>;
+def : Pat<(usubsat i64:$lhs, i64:$rhs), (ODIF $lhs, $rhs)>;
+def : Pat<(ctpop i64:$value), (SADDI $value, 0)>;
 
 def SETH : MMIXIntConstOpcode<0xE0, "SETH">;
 def SETMH : MMIXIntConstOpcode<0xE1, "SETMH">;
