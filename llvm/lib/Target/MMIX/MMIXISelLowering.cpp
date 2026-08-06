@@ -16,10 +16,12 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/IntrinsicsMMIX.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 #include <limits>
+#include <string>
 
 using namespace llvm;
 
@@ -75,6 +77,101 @@ static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
   default:
     return false;
   }
+}
+
+static MCRegister getMMIXSpecialRegister(unsigned Selector,
+                                         const TargetRegisterInfo &TRI) {
+  for (MCPhysReg Reg : MMIX::SPR64RegClass)
+    if (TRI.getEncodingValue(Reg) == Selector)
+      return Reg;
+  llvm_unreachable("missing MMIX special-register definition");
+}
+
+static bool isMMIXSystemSpecialRegister(MCRegister Reg) {
+  switch (Reg.id()) {
+  case MMIX::RC:
+  case MMIX::RI:
+  case MMIX::RT:
+  case MMIX::RTT:
+  case MMIX::RK:
+  case MMIX::RQ:
+  case MMIX::RU:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static SDValue emitMMIXIntrinsicError(SDValue Op, StringRef IntrinsicName,
+                                      const Twine &Message, SelectionDAG &DAG) {
+  DAG.getContext()->emitError(Twine(IntrinsicName) + ": " + Message);
+  if (Op.getOpcode() == ISD::INTRINSIC_W_CHAIN)
+    return DAG.getMergeValues(
+        {DAG.getUNDEF(Op.getValueType()), Op.getOperand(0)}, SDLoc(Op));
+  return Op.getOperand(0);
+}
+
+static SDValue lowerMMIXSpecialRegisterIntrinsic(SDValue Op,
+                                                 SelectionDAG &DAG) {
+  bool IsGet = Op.getOpcode() == ISD::INTRINSIC_W_CHAIN;
+  StringRef IntrinsicName = IsGet ? "llvm.mmix.get" : "llvm.mmix.put";
+  auto *SelectorNode = dyn_cast<ConstantSDNode>(Op.getOperand(2));
+  if (!SelectorNode)
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  "selector must be an immediate", DAG);
+
+  uint64_t Selector = SelectorNode->getZExtValue();
+  if (!isUInt<5>(Selector))
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  "selector must be in the range [0, 31]", DAG);
+
+  const MMIXSubtarget &STI =
+      DAG.getMachineFunction().getSubtarget<MMIXSubtarget>();
+  const TargetRegisterInfo &TRI = *STI.getRegisterInfo();
+  MCRegister Reg = getMMIXSpecialRegister(Selector, TRI);
+  SDLoc DL(Op);
+  SDValue SpecialReg = DAG.getRegister(Reg, MVT::i64);
+  if (IsGet)
+    return DAG.getNode(MMIXISD::GET_SPECIAL_REGISTER, DL,
+                       {MVT::i64, MVT::Other}, {Op.getOperand(0), SpecialReg});
+
+  std::string RegName = TRI.getName(Reg);
+  RegName.front() = 'r';
+  switch (Reg.id()) {
+  case MMIX::RN:
+  case MMIX::RO:
+  case MMIX::RS:
+    return emitMMIXIntrinsicError(
+        Op, IntrinsicName,
+        Twine("register '") + RegName + "' is architecturally read-only", DAG);
+  case MMIX::RJ:
+  case MMIX::RG:
+  case MMIX::RL:
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  Twine("register '") + RegName +
+                                      "' is reserved by the provisional ABI",
+                                  DAG);
+  case MMIX::RA:
+    return emitMMIXIntrinsicError(
+        Op, IntrinsicName,
+        "register 'rA' requires explicit floating-environment modeling", DAG);
+  default:
+    break;
+  }
+
+  if (isMMIXSystemSpecialRegister(Reg) && !STI.hasMMIXSystem())
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  Twine("register '") + RegName +
+                                      "' requires the system target feature",
+                                  DAG);
+  if (Reg == MMIX::RV && !STI.hasMMIXVirtualMemory())
+    return emitMMIXIntrinsicError(
+        Op, IntrinsicName,
+        "register 'rV' requires the virtual-memory target feature", DAG);
+
+  return DAG.getNode(MMIXISD::PUT_SPECIAL_REGISTER, DL, MVT::Other,
+                     {Op.getOperand(0), SpecialReg, Op.getOperand(3),
+                      DAG.getConstant(Selector, DL, MVT::i64)});
 }
 
 MMIXTargetLowering::AsmOperandInfoVector
@@ -347,6 +444,9 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i64, Legal);
   setOperationAction(ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, MVT::i64, Expand);
   setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Legal);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i64, Custom);
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
+  setOperationAction(ISD::INTRINSIC_VOID, MVT::Other, Custom);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
   RejectOperation(ISD::STACKRESTORE, MVT::Other);
 }
@@ -423,6 +523,8 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
         "MMIX constrained floating-point lowering is not implemented");
 
   switch (Op.getOpcode()) {
+  case ISD::INTRINSIC_W_CHAIN:
+  case ISD::INTRINSIC_VOID:
   case ISD::GlobalAddress:
   case ISD::ExternalSymbol:
   case ISD::BlockAddress:
@@ -439,6 +541,17 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
         Twine("MMIX SelectionDAG operation is not implemented by this "
               "lowering stage: ") +
         Op->getOperationName(&DAG));
+  }
+
+  if (Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
+      Op.getOpcode() == ISD::INTRINSIC_VOID) {
+    unsigned IntrinsicID = Op.getConstantOperandVal(1);
+    if ((Op.getOpcode() == ISD::INTRINSIC_W_CHAIN &&
+         IntrinsicID != Intrinsic::mmix_get) ||
+        (Op.getOpcode() == ISD::INTRINSIC_VOID &&
+         IntrinsicID != Intrinsic::mmix_put))
+      report_fatal_error("unsupported chained MMIX intrinsic");
+    return lowerMMIXSpecialRegisterIntrinsic(Op, DAG);
   }
 
   SDLoc DL(Op);

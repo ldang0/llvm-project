@@ -105,6 +105,24 @@ void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
 }
 
 bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  if (MI.getDesc().TSFlags & MMIXII::PutSpecialRegister) {
+    Register SpecialReg;
+    for (const MachineOperand &MO : MI.operands())
+      if (MO.isReg() && MO.isImplicit() && MO.isDef()) {
+        SpecialReg = MO.getReg();
+        break;
+      }
+    assert(SpecialReg && "special-register PUT pseudo has no implicit def");
+    unsigned Opcode = MI.getDesc().TSFlags & MMIXII::PutSpecialRegisterImmediate
+                          ? MMIX::PUTI
+                          : MMIX::PUT;
+    BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(), get(Opcode),
+            SpecialReg)
+        .add(MI.getOperand(0));
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() == MMIX::ATOMIC_CMP_SWAP) {
     MachineBasicBlock &MBB = *MI.getParent();
     MachineBasicBlock::iterator MBBI = MI.getIterator();

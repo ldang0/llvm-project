@@ -21,8 +21,16 @@ using namespace llvm;
 
 void MMIXSubtarget::anchor() {}
 
+MMIXSubtarget &MMIXSubtarget::initializeSubtargetDependencies(StringRef CPU,
+                                                              StringRef FS) {
+  StringRef CPUName = CPU.empty() ? "generic" : CPU;
+  ParseSubtargetFeatures(CPUName, CPUName, FS);
+  return *this;
+}
+
 MMIXSubtarget::MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
                              const TargetMachine &TM)
     : MMIXGenSubtargetInfo(TT, CPU.empty() ? "generic" : CPU,
                            /*TuneCPU=*/CPU.empty() ? "generic" : CPU, FS),
-      InstrInfo(*this), FrameLowering(), TLInfo(TM, *this) {}
+      InstrInfo(initializeSubtargetDependencies(CPU, FS)), FrameLowering(),
+      TLInfo(TM, *this) {}

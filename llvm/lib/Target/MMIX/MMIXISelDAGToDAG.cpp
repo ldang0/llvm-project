@@ -79,6 +79,53 @@ private:
     CurDAG->RemoveDeadNode(Node);
   }
 
+  void selectSpecialRegisterAccess(SDNode *Node) {
+    SDLoc DL(Node);
+    if (Node->getOpcode() == MMIXISD::GET_SPECIAL_REGISTER) {
+      SDValue Ops[] = {Node->getOperand(1), Node->getOperand(0)};
+      CurDAG->SelectNodeTo(Node, MMIX::GET, MVT::i64, MVT::Other, Ops);
+      return;
+    }
+
+    static constexpr unsigned RegisterOpcodes[] = {
+        MMIX::PUT_RB_REG,  MMIX::PUT_RD_REG,  MMIX::PUT_RE_REG,
+        MMIX::PUT_RH_REG,  MMIX::PUT_RJ_REG,  MMIX::PUT_RM_REG,
+        MMIX::PUT_RR_REG,  MMIX::PUT_RBB_REG, MMIX::PUT_RC_REG,
+        MMIX::PUT_RN_REG,  MMIX::PUT_RO_REG,  MMIX::PUT_RS_REG,
+        MMIX::PUT_RI_REG,  MMIX::PUT_RT_REG,  MMIX::PUT_RTT_REG,
+        MMIX::PUT_RK_REG,  MMIX::PUT_RQ_REG,  MMIX::PUT_RU_REG,
+        MMIX::PUT_RV_REG,  MMIX::PUT_RG_REG,  MMIX::PUT_RL_REG,
+        MMIX::PUT_RA_REG,  MMIX::PUT_RF_REG,  MMIX::PUT_RP_REG,
+        MMIX::PUT_RW_REG,  MMIX::PUT_RX_REG,  MMIX::PUT_RY_REG,
+        MMIX::PUT_RZ_REG,  MMIX::PUT_RWW_REG, MMIX::PUT_RXX_REG,
+        MMIX::PUT_RYY_REG, MMIX::PUT_RZZ_REG};
+    static constexpr unsigned ImmediateOpcodes[] = {
+        MMIX::PUT_RB_IMM,  MMIX::PUT_RD_IMM,  MMIX::PUT_RE_IMM,
+        MMIX::PUT_RH_IMM,  MMIX::PUT_RJ_IMM,  MMIX::PUT_RM_IMM,
+        MMIX::PUT_RR_IMM,  MMIX::PUT_RBB_IMM, MMIX::PUT_RC_IMM,
+        MMIX::PUT_RN_IMM,  MMIX::PUT_RO_IMM,  MMIX::PUT_RS_IMM,
+        MMIX::PUT_RI_IMM,  MMIX::PUT_RT_IMM,  MMIX::PUT_RTT_IMM,
+        MMIX::PUT_RK_IMM,  MMIX::PUT_RQ_IMM,  MMIX::PUT_RU_IMM,
+        MMIX::PUT_RV_IMM,  MMIX::PUT_RG_IMM,  MMIX::PUT_RL_IMM,
+        MMIX::PUT_RA_IMM,  MMIX::PUT_RF_IMM,  MMIX::PUT_RP_IMM,
+        MMIX::PUT_RW_IMM,  MMIX::PUT_RX_IMM,  MMIX::PUT_RY_IMM,
+        MMIX::PUT_RZ_IMM,  MMIX::PUT_RWW_IMM, MMIX::PUT_RXX_IMM,
+        MMIX::PUT_RYY_IMM, MMIX::PUT_RZZ_IMM};
+    static_assert(sizeof(RegisterOpcodes) / sizeof(RegisterOpcodes[0]) == 32);
+    static_assert(sizeof(ImmediateOpcodes) / sizeof(ImmediateOpcodes[0]) == 32);
+    unsigned Selector =
+        cast<ConstantSDNode>(Node->getOperand(3))->getZExtValue();
+    SDValue Value = Node->getOperand(2);
+    unsigned Opcode = RegisterOpcodes[Selector];
+    if (auto *Constant = dyn_cast<ConstantSDNode>(Value);
+        Constant && isUInt<8>(Constant->getZExtValue())) {
+      Opcode = ImmediateOpcodes[Selector];
+      Value = CurDAG->getTargetConstant(Constant->getZExtValue(), DL, MVT::i64);
+    }
+    SDValue Ops[] = {Value, Node->getOperand(0)};
+    CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, Ops);
+  }
+
   void Select(SDNode *Node) override {
     if (Node->isMachineOpcode()) {
       Node->setNodeId(-1);
@@ -92,6 +139,12 @@ private:
         Node->getOpcode() == MMIXISD::SDIVREM ||
         Node->getOpcode() == MMIXISD::UDIVREM) {
       selectSpecialArithmetic(Node);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::GET_SPECIAL_REGISTER ||
+        Node->getOpcode() == MMIXISD::PUT_SPECIAL_REGISTER) {
+      selectSpecialRegisterAccess(Node);
       return;
     }
 

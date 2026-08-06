@@ -22,19 +22,26 @@ namespace llvm {
 class MMIXSubtarget : public MMIXGenSubtargetInfo {
   virtual void anchor();
 
-  MMIXInstrInfo InstrInfo;
-  MMIXFrameLowering FrameLowering;
-  MMIXTargetLowering TLInfo;
-
 #define GET_SUBTARGETINFO_MACRO(ATTRIBUTE, DEFAULT, GETTER)                    \
   bool ATTRIBUTE = DEFAULT;
 #include "MMIXGenSubtargetInfo.inc"
+
+  MMIXSubtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
+
+  MMIXInstrInfo InstrInfo;
+  MMIXFrameLowering FrameLowering;
+  MMIXTargetLowering TLInfo;
 
 public:
   MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
                 const TargetMachine &TM);
 
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
+
+  bool hasMMIXBase() const { return HasMMIXBase; }
+  bool hasMMIXCache() const { return HasMMIXCache; }
+  bool hasMMIXSystem() const { return HasMMIXSystem; }
+  bool hasMMIXVirtualMemory() const { return HasMMIXVirtualMemory; }
 
   const MMIXInstrInfo *getInstrInfo() const override { return &InstrInfo; }
   const MMIXFrameLowering *getFrameLowering() const override {

@@ -1814,6 +1814,54 @@ class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
   let isCodeGenOnly = true;
 }
 
+class MMIXPutSpecialRegisterPseudo<Register Reg, dag ins, bit IsImmediate>
+    : MMIXPseudoInstruction<(outs), ins, ""> {
+  let Defs = [Reg];
+  let hasSideEffects = true;
+  let TSFlags{14} = true;
+  let TSFlags{15} = IsImmediate;
+}
+
+multiclass MMIXPutSpecialRegisterPseudos<Register Reg> {
+  def _REG
+      : MMIXPutSpecialRegisterPseudo<Reg, (ins GPR64Op:$src), false>;
+  def _IMM
+      : MMIXPutSpecialRegisterPseudo<Reg, (ins MMIXUImm8:$src), true>;
+}
+
+defm PUT_RB  : MMIXPutSpecialRegisterPseudos<RB>;
+defm PUT_RD  : MMIXPutSpecialRegisterPseudos<RD>;
+defm PUT_RE  : MMIXPutSpecialRegisterPseudos<RE>;
+defm PUT_RH  : MMIXPutSpecialRegisterPseudos<RH>;
+defm PUT_RJ  : MMIXPutSpecialRegisterPseudos<RJ>;
+defm PUT_RM  : MMIXPutSpecialRegisterPseudos<RM>;
+defm PUT_RR  : MMIXPutSpecialRegisterPseudos<RR>;
+defm PUT_RBB : MMIXPutSpecialRegisterPseudos<RBB>;
+defm PUT_RC  : MMIXPutSpecialRegisterPseudos<RC>;
+defm PUT_RN  : MMIXPutSpecialRegisterPseudos<RN>;
+defm PUT_RO  : MMIXPutSpecialRegisterPseudos<RO>;
+defm PUT_RS  : MMIXPutSpecialRegisterPseudos<RS>;
+defm PUT_RI  : MMIXPutSpecialRegisterPseudos<RI>;
+defm PUT_RT  : MMIXPutSpecialRegisterPseudos<RT>;
+defm PUT_RTT : MMIXPutSpecialRegisterPseudos<RTT>;
+defm PUT_RK  : MMIXPutSpecialRegisterPseudos<RK>;
+defm PUT_RQ  : MMIXPutSpecialRegisterPseudos<RQ>;
+defm PUT_RU  : MMIXPutSpecialRegisterPseudos<RU>;
+defm PUT_RV  : MMIXPutSpecialRegisterPseudos<RV>;
+defm PUT_RG  : MMIXPutSpecialRegisterPseudos<RG>;
+defm PUT_RL  : MMIXPutSpecialRegisterPseudos<RL>;
+defm PUT_RA  : MMIXPutSpecialRegisterPseudos<RA>;
+defm PUT_RF  : MMIXPutSpecialRegisterPseudos<RF>;
+defm PUT_RP  : MMIXPutSpecialRegisterPseudos<RP>;
+defm PUT_RW  : MMIXPutSpecialRegisterPseudos<RW>;
+defm PUT_RX  : MMIXPutSpecialRegisterPseudos<RX>;
+defm PUT_RY  : MMIXPutSpecialRegisterPseudos<RY>;
+defm PUT_RZ  : MMIXPutSpecialRegisterPseudos<RZ>;
+defm PUT_RWW : MMIXPutSpecialRegisterPseudos<RWW>;
+defm PUT_RXX : MMIXPutSpecialRegisterPseudos<RXX>;
+defm PUT_RYY : MMIXPutSpecialRegisterPseudos<RYY>;
+defm PUT_RZZ : MMIXPutSpecialRegisterPseudos<RZZ>;
+
 // AtomicExpand reduces all supported atomic operations to aligned octabyte
 // compare-and-swap. This pseudo keeps PUT/CSWAP/GET indivisible to the
 // scheduler and is expanded after physical register allocation.

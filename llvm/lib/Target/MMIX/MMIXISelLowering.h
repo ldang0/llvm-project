@@ -29,6 +29,8 @@ enum NodeType : unsigned {
   FUN,
   SFLOT,
   SFLOTU,
+  GET_SPECIAL_REGISTER,
+  PUT_SPECIAL_REGISTER,
   CALL,
   RET_GLUE,
   RET_VALUE_GLUE,

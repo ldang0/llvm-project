@@ -19,6 +19,8 @@ enum : uint64_t {
   PCRelativeBackward = uint64_t(1) << 8,
   PCRelativeWidthShift = 9,
   PCRelativeWidthMask = uint64_t(0x1f) << PCRelativeWidthShift,
+  PutSpecialRegister = uint64_t(1) << 14,
+  PutSpecialRegisterImmediate = uint64_t(1) << 15,
 };
 
 enum MachineOperandFlags {
