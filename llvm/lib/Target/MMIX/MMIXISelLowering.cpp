@@ -117,12 +117,13 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
 
   static constexpr unsigned SymbolicAddressOperations[] = {
       ISD::GlobalAddress, ISD::ExternalSymbol, ISD::BlockAddress,
-      ISD::ConstantPool, ISD::JumpTable};
+      ISD::ConstantPool, ISD::JumpTable, ISD::GlobalTLSAddress};
   for (unsigned Opcode : SymbolicAddressOperations)
     setOperationAction(Opcode, MVT::i64, Custom);
 
   static constexpr unsigned AddressOperations[] = {
-      ISD::FRAMEADDR, ISD::RETURNADDR, ISD::DYNAMIC_STACKALLOC};
+      ISD::FRAMEADDR, ISD::RETURNADDR, ISD::DYNAMIC_STACKALLOC,
+      ISD::ADDRSPACECAST};
   for (unsigned Opcode : AddressOperations)
     RejectOperation(Opcode, MVT::i64);
 
@@ -191,6 +192,12 @@ SDValue MMIXTargetLowering::PerformDAGCombine(SDNode *N,
 
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
+  if (Op.getOpcode() == ISD::DYNAMIC_STACKALLOC)
+    report_fatal_error("MMIX does not support dynamic stack allocation");
+  if (Op.getOpcode() == ISD::ADDRSPACECAST)
+    report_fatal_error("MMIX does not support nonzero address spaces");
+  if (Op.getOpcode() == ISD::GlobalTLSAddress)
+    report_fatal_error("MMIX does not support thread-local storage");
   if (Op.getOpcode() == ISD::FREM)
     report_fatal_error(
         "MMIX cannot directly lower LLVM frem: MMIX FREM implements IEEE "
@@ -312,8 +319,7 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
       Op.getOpcode() == ISD::BlockAddress ||
       Op.getOpcode() == ISD::ConstantPool || Op.getOpcode() == ISD::JumpTable) {
     if (getTargetMachine().getRelocationModel() != Reloc::Static)
-      report_fatal_error(
-          "MMIX symbolic addresses require the static relocation model");
+      report_fatal_error("MMIX supports only the static relocation model");
 
     SDValue Target;
     if (auto *GA = dyn_cast<GlobalAddressSDNode>(Op))
@@ -578,6 +584,8 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
+  if (DAG.getMachineFunction().getFunction().hasPersonalityFn())
+    report_fatal_error("MMIX does not support exception handling");
   if (CallConv != CallingConv::C)
     report_fatal_error("MMIX supports only the C calling convention");
   if (IsVarArg)

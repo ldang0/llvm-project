@@ -57,4 +57,4 @@ target:
   ret ptr blockaddress(@block_address, %target)
 }
 
-; PIC: MMIX symbolic addresses require the static relocation model
+; PIC: MMIX supports only the static relocation model

@@ -85,6 +85,9 @@ private:
       return;
     }
 
+    if (auto *Mem = dyn_cast<MemSDNode>(Node); Mem && Mem->getAddressSpace())
+      report_fatal_error("MMIX does not support nonzero address spaces");
+
     if (Node->getOpcode() == MMIXISD::UMUL_LOHI ||
         Node->getOpcode() == MMIXISD::SDIVREM ||
         Node->getOpcode() == MMIXISD::UDIVREM) {

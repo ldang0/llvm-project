@@ -13,11 +13,23 @@
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {
-  return RM.value_or(Reloc::Static);
+  Reloc::Model Model = RM.value_or(Reloc::Static);
+  if (Model != Reloc::Static)
+    report_fatal_error("MMIX supports only the static relocation model");
+  return Model;
+}
+
+static CodeModel::Model
+getMMIXEffectiveCodeModel(std::optional<CodeModel::Model> CM) {
+  CodeModel::Model Model = CM.value_or(CodeModel::Small);
+  if (Model != CodeModel::Small)
+    report_fatal_error("MMIX supports only the small code model");
+  return Model;
 }
 
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTarget() {
@@ -34,7 +46,7 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
     : CodeGenTargetMachineImpl(
           T, TT.computeDataLayout(), TT, CPU, FS, Options,
           getEffectiveRelocModel(RM),
-          llvm::getEffectiveCodeModel(CM, CodeModel::Small), OL),
+          getMMIXEffectiveCodeModel(CM), OL),
       TLOF(std::make_unique<TargetLoweringObjectFileELF>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
