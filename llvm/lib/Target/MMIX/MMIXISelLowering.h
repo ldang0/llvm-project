@@ -40,6 +40,20 @@ class MMIXTargetLowering final : public TargetLowering {
 public:
   MMIXTargetLowering(const TargetMachine &TM, const MMIXSubtarget &STI);
 
+  AsmOperandInfoVector ParseConstraints(const DataLayout &DL,
+                                        const TargetRegisterInfo *TRI,
+                                        const CallBase &Call) const override;
+  ConstraintType getConstraintType(StringRef Constraint) const override;
+  ConstraintWeight
+  getSingleConstraintMatchWeight(AsmOperandInfo &Info,
+                                 const char *Constraint) const override;
+  std::pair<unsigned, const TargetRegisterClass *>
+  getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                               StringRef Constraint, MVT VT) const override;
+  void LowerAsmOperandForConstraint(SDValue Op, StringRef Constraint,
+                                    std::vector<SDValue> &Ops,
+                                    SelectionDAG &DAG) const override;
+
   bool allowsMisalignedMemoryAccesses(
       EVT VT, unsigned AddrSpace, Align Alignment,
       MachineMemOperand::Flags Flags = MachineMemOperand::MONone,

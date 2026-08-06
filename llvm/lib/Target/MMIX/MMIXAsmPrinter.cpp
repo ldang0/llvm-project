@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/MMIXInstPrinter.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXMCInstLower.h"
 #include "TargetInfo/MMIXTargetInfo.h"
@@ -31,6 +32,43 @@ public:
       : AsmPrinter(TM, std::move(Streamer)) {}
 
   StringRef getPassName() const override { return "MMIX Assembly Printer"; }
+
+  bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                       const char *ExtraCode, raw_ostream &OS) override {
+    if (!AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, OS))
+      return false;
+    if (ExtraCode && ExtraCode[0])
+      return true;
+
+    const MachineOperand &MO = MI->getOperand(OpNo);
+    if (MO.isReg()) {
+      if (!MO.getReg())
+        return true;
+      OS << MMIXInstPrinter::getRegisterName(MO.getReg());
+      return false;
+    }
+    if (MO.isImm()) {
+      OS << MO.getImm();
+      return false;
+    }
+    if (MO.isGlobal()) {
+      PrintSymbolOperand(MO, OS);
+      return false;
+    }
+    if (MO.isMBB()) {
+      MO.getMBB()->getSymbol()->print(OS, MAI);
+      return false;
+    }
+    if (MO.isBlockAddress()) {
+      GetBlockAddressSymbol(MO.getBlockAddress())->print(OS, MAI);
+      return false;
+    }
+    if (MO.isSymbol()) {
+      GetExternalSymbolSymbol(MO.getSymbolName())->print(OS, MAI);
+      return false;
+    }
+    return true;
+  }
 
   void emitInstruction(const MachineInstr *MI) override {
     if (MI->isPseudo() && MI->getOpcode() != MMIX::PseudoB &&

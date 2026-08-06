@@ -15,7 +15,9 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 #include <limits>
 
@@ -23,6 +25,202 @@ using namespace llvm;
 
 #define GET_CALLING_CONV_IMPL
 #include "MMIXGenCallingConv.inc"
+
+#define GET_REGISTER_MATCHER
+#include "MMIXGenAsmMatcher.inc"
+
+static bool isMMIXIntegerInlineAsmConstraint(char Constraint) {
+  switch (Constraint) {
+  case 'I':
+  case 'J':
+  case 'K':
+  case 'M':
+  case 'O':
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isMMIXInlineAsmImmediate(char Constraint, int64_t Value) {
+  switch (Constraint) {
+  case 'I':
+    return Value >= 0 && isUInt<8>(uint64_t(Value));
+  case 'J':
+    return Value >= 0 && isUInt<16>(uint64_t(Value));
+  case 'K':
+    return Value >= -255 && Value <= 0;
+  case 'M':
+    return Value == 0;
+  case 'O':
+    return Value == 3 || Value == 5 || Value == 9 || Value == 17;
+  default:
+    return false;
+  }
+}
+
+static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
+  switch (Reg.id()) {
+  case MMIX::R30:  // Holds the incoming rJ in non-leaf functions.
+  case MMIX::R253: // Frame pointer.
+  case MMIX::R254: // Stack pointer.
+  case MMIX::RA:   // Floating environment.
+  case MMIX::RG:   // Global-register threshold.
+  case MMIX::RJ:   // Return address.
+  case MMIX::RL:   // Local-register count.
+  case MMIX::RN:   // Register-stack serial number.
+  case MMIX::RO:   // Register-stack offset.
+  case MMIX::RS:   // Register-stack pointer.
+    return true;
+  default:
+    return false;
+  }
+}
+
+MMIXTargetLowering::AsmOperandInfoVector
+MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
+                                     const TargetRegisterInfo *TRI,
+                                     const CallBase &Call) const {
+  AsmOperandInfoVector Operands =
+      TargetLowering::ParseConstraints(DL, TRI, Call);
+  for (const AsmOperandInfo &Operand : Operands) {
+    if (Operand.Type != InlineAsm::isClobber)
+      continue;
+    for (StringRef Code : Operand.Codes) {
+      if (!Code.starts_with('{') || !Code.ends_with('}'))
+        continue;
+      StringRef Name = Code.drop_front().drop_back();
+      MCRegister Reg = MatchRegisterName(Name);
+      if (!Reg || !isUnsafeInlineAsmRegister(Reg))
+        continue;
+      Call.getContext().emitError(
+          &Call, Twine("MMIX inline assembly may not clobber register '") +
+                     Name + "' in an ordinary function");
+      return {};
+    }
+  }
+  return Operands;
+}
+
+MMIXTargetLowering::ConstraintType
+MMIXTargetLowering::getConstraintType(StringRef Constraint) const {
+  if (Constraint.size() == 1) {
+    if (isMMIXIntegerInlineAsmConstraint(Constraint[0]))
+      return C_Immediate;
+    switch (Constraint[0]) {
+    case 'G':
+      return C_Other;
+    case 'm':
+    case 'o':
+    case 'V':
+    case 'p':
+      return C_Unknown;
+    default:
+      break;
+    }
+  }
+  return TargetLowering::getConstraintType(Constraint);
+}
+
+MMIXTargetLowering::ConstraintWeight
+MMIXTargetLowering::getSingleConstraintMatchWeight(
+    AsmOperandInfo &Info, const char *Constraint) const {
+  if (!Info.CallOperandVal)
+    return CW_Default;
+
+  if (Constraint[1] != '\0')
+    return TargetLowering::getSingleConstraintMatchWeight(Info, Constraint);
+
+  if (Constraint[0] == 'r') {
+    Type *Ty = Info.CallOperandVal->getType();
+    return Ty->isIntegerTy() || Ty->isPointerTy() || Ty->isDoubleTy()
+               ? CW_Register
+               : CW_Invalid;
+  }
+
+  if (Constraint[0] == 'G') {
+    const auto *C = dyn_cast<ConstantFP>(Info.CallOperandVal);
+    return C && C->isZero() ? CW_Constant : CW_Invalid;
+  }
+
+  const auto *C = dyn_cast<ConstantInt>(Info.CallOperandVal);
+  if (!C)
+    return TargetLowering::getSingleConstraintMatchWeight(Info, Constraint);
+
+  if (!C->getValue().isSignedIntN(64))
+    return CW_Invalid;
+  if (!isMMIXIntegerInlineAsmConstraint(Constraint[0]))
+    return TargetLowering::getSingleConstraintMatchWeight(Info, Constraint);
+  return isMMIXInlineAsmImmediate(Constraint[0], C->getSExtValue())
+             ? CW_Constant
+             : CW_Invalid;
+}
+
+std::pair<unsigned, const TargetRegisterClass *>
+MMIXTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                                 StringRef Constraint,
+                                                 MVT VT) const {
+  if (Constraint == "r") {
+    if (VT == MVT::f64)
+      return {0, &MMIX::FPR64CodeGenRegClass};
+    if (!VT.isVector())
+      return {0, &MMIX::GPR64CodeGenRegClass};
+    return {0, nullptr};
+  }
+
+  if (!Constraint.starts_with('{') || !Constraint.ends_with('}'))
+    return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+
+  MCRegister Reg = MatchRegisterName(Constraint.drop_front().drop_back());
+  if (!Reg || isUnsafeInlineAsmRegister(Reg))
+    return {0, nullptr};
+
+  if (MMIX::GPR64CodeGenRegClass.contains(Reg)) {
+    const TargetRegisterClass *RC = VT == MVT::f64
+                                        ? &MMIX::FPR64CodeGenRegClass
+                                        : &MMIX::GPR64CodeGenRegClass;
+    return {Reg.id(), RC};
+  }
+
+  // Reserved architectural and special registers are valid clobber names, but
+  // cannot carry values without changing the provisional register-allocation
+  // or special-register state contract.
+  if (VT != MVT::Other)
+    return {0, nullptr};
+  if (MMIX::GPR64RegClass.contains(Reg))
+    return {Reg.id(), &MMIX::GPR64RegClass};
+  if (MMIX::SPR64RegClass.contains(Reg))
+    return {Reg.id(), &MMIX::SPR64RegClass};
+  return {0, nullptr};
+}
+
+void MMIXTargetLowering::LowerAsmOperandForConstraint(SDValue Op,
+                                                      StringRef Constraint,
+                                                      std::vector<SDValue> &Ops,
+                                                      SelectionDAG &DAG) const {
+  if (Constraint.size() != 1)
+    return TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops,
+                                                        DAG);
+
+  if (Constraint[0] == 'G') {
+    if (const auto *C = dyn_cast<ConstantFPSDNode>(Op); C && C->isZero())
+      Ops.push_back(DAG.getTargetConstant(0, SDLoc(Op), MVT::i64));
+    return;
+  }
+
+  const auto *C = dyn_cast<ConstantSDNode>(Op);
+  if (!C)
+    return TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops,
+                                                        DAG);
+
+  if (!isMMIXIntegerInlineAsmConstraint(Constraint[0]))
+    return TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops,
+                                                        DAG);
+
+  int64_t Value = C->getSExtValue();
+  if (isMMIXInlineAsmImmediate(Constraint[0], Value))
+    Ops.push_back(DAG.getSignedTargetConstant(Value, SDLoc(Op), MVT::i64));
+}
 
 MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
                                        const MMIXSubtarget &STI)
