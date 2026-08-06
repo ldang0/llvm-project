@@ -1454,6 +1454,21 @@ class MMIXMachineInstruction<dag outs, dag ins, string asmstr>
   let MMIXInventoryFamily = "system";
 }
 
+class MMIXSystemInstruction<dag outs, dag ins, string asmstr>
+    : MMIXMachineInstruction<outs, ins, asmstr> {
+  let Predicates = [HasMMIXSystem];
+}
+
+class MMIXCacheInstruction<dag outs, dag ins, string asmstr>
+    : MMIXMachineInstruction<outs, ins, asmstr> {
+  let Predicates = [HasMMIXCache];
+}
+
+class MMIXVirtualMemoryInstruction<dag outs, dag ins, string asmstr>
+    : MMIXMachineInstruction<outs, ins, asmstr> {
+  let Predicates = [HasMMIXVirtualMemory];
+}
+
 class MMIXStoreConstantReg
     : MMIXMachineInstruction<(outs),
                              (ins MMIXUImm8:$value, GPR64Op:$base,
@@ -1494,10 +1509,10 @@ def STCO : MMIXStoreConstantRegOpcode<0xB4>;
 def STCOI : MMIXStoreConstantImmOpcode<0xB5>;
 
 class MMIXCacheReg<string Mnemonic>
-    : MMIXMachineInstruction<(outs),
-                             (ins MMIXUImm8:$count, GPR64Op:$base,
-                                  GPR64Op:$offset),
-                             Mnemonic # " $count, $base, $offset"> {
+    : MMIXCacheInstruction<(outs),
+                           (ins MMIXUImm8:$count, GPR64Op:$base,
+                                GPR64Op:$offset),
+                           Mnemonic # " $count, $base, $offset"> {
   bits<8> count;
   bits<8> base;
   bits<8> offset;
@@ -1507,10 +1522,10 @@ class MMIXCacheReg<string Mnemonic>
 }
 
 class MMIXCacheImm<string Mnemonic>
-    : MMIXMachineInstruction<(outs),
-                             (ins MMIXUImm8:$count, GPR64Op:$base,
-                                  MMIXMemOffset8:$offset),
-                             Mnemonic # " $count, $base, $offset"> {
+    : MMIXCacheInstruction<(outs),
+                           (ins MMIXUImm8:$count, GPR64Op:$base,
+                                MMIXMemOffset8:$offset),
+                           Mnemonic # " $count, $base, $offset"> {
   bits<8> count;
   bits<8> base;
   bits<8> offset;
@@ -1541,9 +1556,9 @@ def SYNCID  : MMIXCacheRegOpcode<0xBC, "SYNCID">;
 def SYNCIDI : MMIXCacheImmOpcode<0xBD, "SYNCID">;
 
 class MMIXUncachedLoad<string Mnemonic>
-    : MMIXMachineInstruction<(outs GPR64Op:$dst),
-                             (ins GPR64Op:$base, GPR64Op:$offset),
-                             Mnemonic # " $dst, $base, $offset"> {
+    : MMIXCacheInstruction<(outs GPR64Op:$dst),
+                           (ins GPR64Op:$base, GPR64Op:$offset),
+                           Mnemonic # " $dst, $base, $offset"> {
   bits<8> dst;
   bits<8> base;
   bits<8> offset;
@@ -1553,9 +1568,9 @@ class MMIXUncachedLoad<string Mnemonic>
 }
 
 class MMIXUncachedLoadImm<string Mnemonic>
-    : MMIXMachineInstruction<(outs GPR64Op:$dst),
-                             (ins GPR64Op:$base, MMIXMemOffset8:$offset),
-                             Mnemonic # " $dst, $base, $offset"> {
+    : MMIXCacheInstruction<(outs GPR64Op:$dst),
+                           (ins GPR64Op:$base, MMIXMemOffset8:$offset),
+                           Mnemonic # " $dst, $base, $offset"> {
   bits<8> dst;
   bits<8> base;
   bits<8> offset;
@@ -1565,10 +1580,10 @@ class MMIXUncachedLoadImm<string Mnemonic>
 }
 
 class MMIXUncachedStore<string Mnemonic>
-    : MMIXMachineInstruction<(outs),
-                             (ins GPR64Op:$value, GPR64Op:$base,
-                                  GPR64Op:$offset),
-                             Mnemonic # " $value, $base, $offset"> {
+    : MMIXCacheInstruction<(outs),
+                           (ins GPR64Op:$value, GPR64Op:$base,
+                                GPR64Op:$offset),
+                           Mnemonic # " $value, $base, $offset"> {
   bits<8> value;
   bits<8> base;
   bits<8> offset;
@@ -1578,10 +1593,10 @@ class MMIXUncachedStore<string Mnemonic>
 }
 
 class MMIXUncachedStoreImm<string Mnemonic>
-    : MMIXMachineInstruction<(outs),
-                             (ins GPR64Op:$value, GPR64Op:$base,
-                                  MMIXMemOffset8:$offset),
-                             Mnemonic # " $value, $base, $offset"> {
+    : MMIXCacheInstruction<(outs),
+                           (ins GPR64Op:$value, GPR64Op:$base,
+                                MMIXMemOffset8:$offset),
+                           Mnemonic # " $value, $base, $offset"> {
   bits<8> value;
   bits<8> base;
   bits<8> offset;
@@ -1616,9 +1631,9 @@ def STUNC : MMIXUncachedStoreOpcode<0xB6, "STUNC">;
 def STUNCI : MMIXUncachedStoreImmOpcode<0xB7, "STUNC">;
 
 class MMIXVirtualTranslationReg
-    : MMIXMachineInstruction<(outs GPR64Op:$dst),
-                             (ins GPR64Op:$base, GPR64Op:$offset),
-                             "LDVTS $dst, $base, $offset"> {
+    : MMIXVirtualMemoryInstruction<(outs GPR64Op:$dst),
+                                   (ins GPR64Op:$base, GPR64Op:$offset),
+                                   "LDVTS $dst, $base, $offset"> {
   bits<8> dst;
   bits<8> base;
   bits<8> offset;
@@ -1628,9 +1643,10 @@ class MMIXVirtualTranslationReg
 }
 
 class MMIXVirtualTranslationImm
-    : MMIXMachineInstruction<(outs GPR64Op:$dst),
-                             (ins GPR64Op:$base, MMIXMemOffset8:$offset),
-                             "LDVTS $dst, $base, $offset"> {
+    : MMIXVirtualMemoryInstruction<(outs GPR64Op:$dst),
+                                   (ins GPR64Op:$base,
+                                        MMIXMemOffset8:$offset),
+                                   "LDVTS $dst, $base, $offset"> {
   bits<8> dst;
   bits<8> base;
   bits<8> offset;
@@ -1652,8 +1668,8 @@ class MMIXVirtualTranslationImmOpcode<bits<8> Opcode>
 def LDVTS  : MMIXVirtualTranslationRegOpcode<0x98>;
 def LDVTSI : MMIXVirtualTranslationImmOpcode<0x99>;
 
-class MMIXSync : MMIXMachineInstruction<(outs), (ins MMIXSyncMode:$mode),
-                                        "SYNC $mode"> {
+class MMIXSync : MMIXSystemInstruction<(outs), (ins MMIXSyncMode:$mode),
+                                       "SYNC $mode"> {
   bits<3> mode;
   let MMIXX = 0;
   let MMIXY = 0;
@@ -1682,7 +1698,7 @@ def SWYM : MMIXSwym {
 }
 
 class MMIXTrapInstruction<string Mnemonic>
-    : MMIXMachineInstruction<
+    : MMIXSystemInstruction<
           (outs),
           (ins MMIXRegOrImm8:$x, MMIXRegOrImm8:$y, MMIXRegOrImm8:$z),
           Mnemonic # " $x, $y, $z"> {
@@ -1702,8 +1718,9 @@ class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
 def TRAP : MMIXTrapInstructionOpcode<0x00, "TRAP">;
 def TRIP : MMIXTrapInstructionOpcode<0xFF, "TRIP">;
 
-class MMIXResume : MMIXMachineInstruction<(outs), (ins MMIXResumeMode:$mode),
-                                           "RESUME $mode"> {
+class MMIXResume
+    : MMIXSystemInstruction<(outs), (ins MMIXResumeMode:$mode),
+                            "RESUME $mode"> {
   bits<1> mode;
   let MMIXX = 0;
   let MMIXY = 0;
@@ -1762,15 +1779,15 @@ class MMIXPutImmOpcode<bits<8> Opcode> : MMIXPutImm {
 def PUT  : MMIXPutRegOpcode<0xF6>;
 def PUTI : MMIXPutImmOpcode<0xF7>;
 
-class MMIXSave : MMIXMachineInstruction<(outs GPR64Op:$state), (ins),
-                                         "SAVE $state"> {
+class MMIXSave : MMIXSystemInstruction<(outs GPR64Op:$state), (ins),
+                                        "SAVE $state"> {
   bits<8> state;
   let MMIXX = state;
   let MMIXY = 0;
   let MMIXZ = 0;
 }
-class MMIXUnsave : MMIXMachineInstruction<(outs), (ins GPR64Op:$state),
-                                           "UNSAVE $state"> {
+class MMIXUnsave : MMIXSystemInstruction<(outs), (ins GPR64Op:$state),
+                                          "UNSAVE $state"> {
   bits<8> state;
   let MMIXX = 0;
   let MMIXY = 0;

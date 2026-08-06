@@ -15,7 +15,22 @@ defvar MMIXSystemInstructions = !listconcat(
   !instances<MMIXSwym>(), !instances<MMIXResume>(), !instances<MMIXGet>(),
   !instances<MMIXPutRegOpcode>(), !instances<MMIXPutImmOpcode>(),
   !instances<MMIXStoreConstantRegOpcode>(),
-  !instances<MMIXStoreConstantImmOpcode>());
+  !instances<MMIXStoreConstantImmOpcode>(), !instances<MMIXSave>(),
+  !instances<MMIXUnsave>());
+
+defvar MMIXCacheFeatureInstructions = !listconcat(
+  !instances<MMIXCacheRegOpcode>(), !instances<MMIXCacheImmOpcode>(),
+  !instances<MMIXUncachedLoadOpcode>(),
+  !instances<MMIXUncachedLoadImmOpcode>(),
+  !instances<MMIXUncachedStoreOpcode>(),
+  !instances<MMIXUncachedStoreImmOpcode>());
+defvar MMIXVirtualMemoryFeatureInstructions = !listconcat(
+  !instances<MMIXVirtualTranslationRegOpcode>(),
+  !instances<MMIXVirtualTranslationImmOpcode>());
+defvar MMIXSystemFeatureInstructions = !listconcat(
+  !instances<MMIXTrapInstructionOpcode>(), !instances<MMIXSync>(),
+  !instances<MMIXResume>(), !instances<MMIXSave>(),
+  !instances<MMIXUnsave>());
 
 assert !eq(!size(!instances<MMIXCacheRegOpcode>()), 5),
        "unexpected MMIX cache register forms";
@@ -27,6 +42,29 @@ assert !eq(!size(!instances<MMIXVirtualTranslationImmOpcode>()), 1),
        "unexpected MMIX virtual translation immediate forms";
 assert !eq(!size(!instances<MMIXTrapInstructionOpcode>()), 2),
        "unexpected MMIX trap forms";
+
+foreach Record = MMIXCacheFeatureInstructions in {
+  assert !eq(!size(Record.Predicates), 1),
+         "MMIX cache instruction must have exactly one feature predicate";
+  assert !eq(Record.Predicates[0], HasMMIXCache),
+         "MMIX cache instruction has the wrong feature predicate";
+}
+foreach Record = MMIXVirtualMemoryFeatureInstructions in {
+  assert !eq(!size(Record.Predicates), 1),
+         "MMIX virtual-memory instruction must have exactly one feature predicate";
+  assert !eq(Record.Predicates[0], HasMMIXVirtualMemory),
+         "MMIX virtual-memory instruction has the wrong feature predicate";
+}
+foreach Record = MMIXSystemFeatureInstructions in {
+  assert !eq(!size(Record.Predicates), 1),
+         "MMIX system instruction must have exactly one feature predicate";
+  assert !eq(Record.Predicates[0], HasMMIXSystem),
+         "MMIX system instruction has the wrong feature predicate";
+}
+
+foreach Record = [GET, PUT, PUTI, STCO, STCOI, SWYM] in
+  assert !eq(!size(Record.Predicates), 0),
+         "MMIX base instruction unexpectedly requires an optional feature";
 
 foreach Record = !listconcat(
     !instances<MMIXCacheRegOpcode>(), !instances<MMIXCacheImmOpcode>(),

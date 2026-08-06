@@ -48,4 +48,8 @@ MCAsmBackend *createMMIXAsmBackend(const Target &T, const MCSubtargetInfo &STI,
 #define GET_INSTRINFO_MC_HELPER_DECLS
 #include "MMIXGenInstrInfo.inc"
 
+namespace llvm::MMIX_MC {
+bool isOpcodeAvailable(unsigned Opcode, const FeatureBitset &Features);
+} // namespace llvm::MMIX_MC
+
 #endif // LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXMCTARGETDESC_H

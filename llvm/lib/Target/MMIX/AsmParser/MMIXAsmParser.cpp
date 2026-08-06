@@ -29,6 +29,7 @@
 using namespace llvm;
 
 static MCRegister MatchRegisterName(StringRef Name);
+static const char *getSubtargetFeatureName(uint64_t Val);
 
 namespace {
 
@@ -274,14 +275,23 @@ bool MMIXAsmParser::matchAndEmitInstruction(
     SMLoc IDLoc, unsigned &Opcode, OperandVector &Operands, MCStreamer &Out,
     uint64_t &ErrorInfo, bool MatchingInlineAsm) {
   MCInst Inst;
-  switch (MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm)) {
+  FeatureBitset MissingFeatures;
+  switch (MatchInstructionImpl(Operands, Inst, ErrorInfo, MissingFeatures,
+                              MatchingInlineAsm)) {
   case Match_Success:
     Inst.setLoc(IDLoc);
     Opcode = Inst.getOpcode();
     Out.emitInstruction(Inst, getSTI());
     return false;
-  case Match_MissingFeature:
-    return Error(IDLoc, "instruction requires a target feature");
+  case Match_MissingFeature: {
+    assert(MissingFeatures.any() && "missing feature was not reported");
+    std::string Message = "instruction requires:";
+    for (unsigned Feature : MissingFeatures) {
+      Message += " ";
+      Message += getSubtargetFeatureName(Feature);
+    }
+    return Error(IDLoc, Message);
+  }
   case Match_InvalidOperand:
     return Error(IDLoc, "invalid operand for instruction");
   default:
@@ -290,6 +300,7 @@ bool MMIXAsmParser::matchAndEmitInstruction(
 }
 
 #define GET_REGISTER_MATCHER
+#define GET_SUBTARGET_FEATURE_NAME
 #define GET_MATCHER_IMPLEMENTATION
 #include "MMIXGenAsmMatcher.inc"
 

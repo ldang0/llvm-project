@@ -12,11 +12,13 @@
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
@@ -40,6 +42,11 @@ public:
 
     MCInst OutMI;
     MMIXMCInstLower(OutContext, *this).lower(*MI, OutMI);
+    if (!MMIX_MC::isOpcodeAvailable(OutMI.getOpcode(),
+                                    getSubtargetInfo().getFeatureBits()))
+      report_fatal_error(Twine("cannot emit ") +
+                         TM.getMCInstrInfo()->getName(OutMI.getOpcode()) +
+                         ": required target feature is disabled");
     MMIX_MC::verifyInstructionPredicates(OutMI.getOpcode(),
                                          getSubtargetInfo().getFeatureBits());
     EmitToStreamer(*OutStreamer, OutMI);

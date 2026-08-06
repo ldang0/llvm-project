@@ -1,0 +1,69 @@
+# RUN: llc -mtriple=mmix -start-after=block-placement -verify-machineinstrs \
+# RUN:   -filetype=asm -o - %s | FileCheck %s --check-prefix=ALL
+# RUN: not --crash llc -mtriple=mmix -mattr=-system \
+# RUN:   -start-after=block-placement -filetype=asm -o /dev/null %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=NO-SYSTEM
+# RUN: not --crash llc -mtriple=mmix -mattr=-cache \
+# RUN:   -start-after=block-placement -filetype=asm -o /dev/null %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=NO-CACHE
+# RUN: not --crash llc -mtriple=mmix -mattr=-virtual-memory \
+# RUN:   -start-after=block-placement -filetype=asm -o /dev/null %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=NO-VM
+
+# ALL-LABEL: system_instruction:
+# ALL: SYNC 0
+# ALL-LABEL: cache_instruction:
+# ALL: PRELD 0, r231, 0
+# ALL-LABEL: virtual_memory_instruction:
+# ALL: LDVTS r231, r232, 0
+
+# NO-SYSTEM: LLVM ERROR: cannot emit SYNC: required target feature is disabled
+# NO-CACHE: LLVM ERROR: cannot emit PRELDI: required target feature is disabled
+# NO-VM: LLVM ERROR: cannot emit LDVTSI: required target feature is disabled
+
+--- |
+  define void @system_instruction() {
+    ret void
+  }
+
+  define void @cache_instruction() {
+    ret void
+  }
+
+  define void @virtual_memory_instruction() {
+    ret void
+  }
+...
+---
+name:            system_instruction
+tracksRegLiveness: true
+selected:        true
+body:             |
+  bb.0:
+    SYNC 0
+    POP 0, 0
+...
+---
+name:            cache_instruction
+tracksRegLiveness: true
+selected:        true
+liveins:
+  - { reg: '$r231' }
+body:             |
+  bb.0:
+    liveins: $r231
+    PRELDI 0, $r231, 0
+    POP 0, 0
+...
+---
+name:            virtual_memory_instruction
+tracksRegLiveness: true
+selected:        true
+liveins:
+  - { reg: '$r232' }
+body:             |
+  bb.0:
+    liveins: $r232
+    $r231 = LDVTSI $r232, 0
+    POP 0, 0
+...

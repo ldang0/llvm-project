@@ -18,9 +18,8 @@ include "llvm/Target/Target.td"
 // MMIX supported processors
 //===----------------------------------------------------------------------===//
 
-// These features describe implementation capabilities.  They are metadata
-// only for now; instruction availability predicates will be added when the
-// target has subtarget-aware lowering and encoding support.
+// These features describe implementation capabilities. Privilege remains
+// dynamic architectural state and is not implied by enabling a feature.
 def FeatureMMIXBase : SubtargetFeature<"base", "HasMMIXBase", "true",
                                         "MMIX base ISA">;
 def FeatureMMIXSystem : SubtargetFeature<"system", "HasMMIXSystem", "true",
@@ -30,6 +29,16 @@ def FeatureMMIXCache : SubtargetFeature<"cache", "HasMMIXCache", "true",
 def FeatureMMIXVirtualMemory : SubtargetFeature<"virtual-memory",
                                                  "HasMMIXVirtualMemory", "true",
                                                  "MMIX virtual-memory instructions">;
+
+def HasMMIXBase : Predicate<"Subtarget->hasMMIXBase()">,
+                  AssemblerPredicate<(all_of FeatureMMIXBase), "base">;
+def HasMMIXSystem : Predicate<"Subtarget->hasMMIXSystem()">,
+                    AssemblerPredicate<(all_of FeatureMMIXSystem), "system">;
+def HasMMIXCache : Predicate<"Subtarget->hasMMIXCache()">,
+                   AssemblerPredicate<(all_of FeatureMMIXCache), "cache">;
+def HasMMIXVirtualMemory
+    : Predicate<"Subtarget->hasMMIXVirtualMemory()">,
+      AssemblerPredicate<(all_of FeatureMMIXVirtualMemory), "virtual-memory">;
 
 def : Processor<"generic", NoItineraries,
                 [FeatureMMIXBase, FeatureMMIXSystem, FeatureMMIXCache,
