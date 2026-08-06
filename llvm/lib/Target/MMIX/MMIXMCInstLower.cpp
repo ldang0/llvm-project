@@ -12,6 +12,8 @@
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -33,6 +35,23 @@ static bool branchesBackward(const MachineInstr &MI) {
       return false;
   }
   llvm_unreachable("branch target is outside its MachineFunction");
+}
+
+static bool callsBackward(const MachineInstr &MI) {
+  const Function &Source = MI.getMF()->getFunction();
+  const auto *Target = dyn_cast<Function>(MI.getOperand(1).getGlobal());
+  if (!Target || Target->isDeclaration())
+    report_fatal_error("MMIX direct call target must be a function definition");
+  if (&Source == Target)
+    return true;
+
+  for (const Function &Function : *Source.getParent()) {
+    if (&Function == Target)
+      return true;
+    if (&Function == &Source)
+      return false;
+  }
+  llvm_unreachable("direct call target is outside its module");
 }
 
 const MCExpr *MMIXMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
@@ -125,6 +144,10 @@ void MMIXMCInstLower::lower(const MachineInstr &MI, MCInst &OutMI) const {
     Opcode = BranchOpcodes[Predicate][branchesBackward(MI)];
   } else if (Opcode == MMIX::PseudoJMP) {
     Opcode = branchesBackward(MI) ? MMIX::JMPB : MMIX::JMP;
+  } else if (Opcode == MMIX::PseudoPUSHJ) {
+    Opcode = callsBackward(MI) ? MMIX::PUSHJB : MMIX::PUSHJ;
+  } else if (Opcode == MMIX::PseudoPUSHGO) {
+    Opcode = MMIX::PUSHGOI;
   }
   OutMI.setOpcode(Opcode);
   for (unsigned I = 0; I != MI.getNumOperands(); ++I) {

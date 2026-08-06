@@ -14,7 +14,7 @@ declare double @many_callee(i64, i64, i64, i64, i64, i64, i64, i64,
 
 ; ISEL-LABEL: name: call_void
 ; ISEL:       ADJCALLSTACKDOWN 0, 0
-; ISEL:       CALL_STATE @void_callee, csr_mmix, implicit $r254
+; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254
 ; ISEL-NEXT:  ADJCALLSTACKUP 0, 0
 define void @call_void() {
   call void @void_callee()
@@ -25,7 +25,7 @@ define void @call_void() {
 ; from the same documented result register after it.
 ; ISEL-LABEL: name: call_i64
 ; ISEL:       $r231 = COPY %{{[0-9]+}}
-; ISEL-NEXT:  CALL_STATE @i64_callee, csr_mmix, implicit $r254, implicit $r231
+; ISEL-NEXT:  CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 ; ISEL-NEXT:  ADJCALLSTACKUP 0, 0
 ; ISEL-NEXT:  %{{[0-9]+}}:gpr64codegen = COPY $r231
 define i64 @call_i64(i64 %value) {
@@ -39,7 +39,7 @@ define i64 @call_i64(i64 %value) {
 ; ISEL:       [[SHIFTED:%[0-9]+]]:{{[^ ]+}} = SLUI {{.*}}, 56
 ; ISEL-NEXT:  [[SEXT:%[0-9]+]]:{{[^ ]+}} = SRI killed [[SHIFTED]], 56
 ; ISEL:       $r231 = COPY [[SEXT]]
-; ISEL:       CALL_STATE @sext_callee, csr_mmix, implicit $r254, implicit $r231
+; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 define i64 @call_signext(i64 %value) {
   %narrow = trunc i64 %value to i8
   %result = call signext i8 @sext_callee(i8 signext %narrow)
@@ -50,7 +50,7 @@ define i64 @call_signext(i64 %value) {
 ; ISEL-LABEL: name: call_zeroext
 ; ISEL:       [[ZEXT:%[0-9]+]]:{{[^ ]+}} = AND
 ; ISEL:       $r231 = COPY [[ZEXT]]
-; ISEL:       CALL_STATE @zext_callee, csr_mmix, implicit $r254, implicit $r231
+; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 define i64 @call_zeroext(i64 %value) {
   %narrow = trunc i64 %value to i32
   %result = call zeroext i32 @zext_callee(i32 zeroext %narrow)
@@ -61,7 +61,7 @@ define i64 @call_zeroext(i64 %value) {
 ; f32 call slots carry the short-float bit representation in an i64 location.
 ; ISEL-LABEL: name: call_f32
 ; ISEL:       $r231 = COPY %{{[0-9]+}}
-; ISEL:       CALL_STATE @f32_callee, csr_mmix, implicit $r254, implicit $r231
+; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 ; ISEL:       %{{[0-9]+}}:gpr64codegen = COPY $r231
 define float @call_f32(float %value) {
   %result = call float @f32_callee(float %value)
@@ -74,14 +74,14 @@ define float @call_f32(float %value) {
 ; ISEL:       ADJCALLSTACKDOWN 16, 0
 ; ISEL:       STOUI {{.*}}, 8 :: (store (s64) into stack + 8)
 ; ISEL:       STOUI {{.*}}, 0 :: (store (s64) into stack)
-; ISEL:       CALL_STATE @many_callee, csr_mmix, implicit $r254, implicit $r231, implicit $r232, implicit $r233, implicit $r234, implicit $r235, implicit $r236, implicit $r237, implicit $r238, implicit $r239, implicit $r240, implicit $r241, implicit $r242, implicit $r243, implicit $r244, implicit $r245, implicit $r246
+; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231, implicit $r232, implicit $r233, implicit $r234, implicit $r235, implicit $r236, implicit $r237, implicit $r238, implicit $r239, implicit $r240, implicit $r241, implicit $r242, implicit $r243, implicit $r244, implicit $r245, implicit $r246
 ; ISEL-NEXT:  ADJCALLSTACKUP 16, 0
 ; PEI-LABEL: name: call_with_stack_arguments
 ; PEI:       stackSize: 16
 ; PEI:       maxCallFrameSize: 16
 ; PEI:       $r254 = frame-setup SUBUI $r254, 16
 ; PEI-NOT:   ADJCALLSTACK
-; PEI:       CALL_STATE @many_callee, csr_mmix
+; PEI:       CALL_STATE {{.*}}, csr_mmix
 define double @call_with_stack_arguments() {
   %result = call double @many_callee(
       i64 0, i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7,
@@ -90,10 +90,10 @@ define double @call_with_stack_arguments() {
   ret double %result
 }
 
-; Procedure instruction selection remains deferred: an indirect callee is
-; represented by the same neutral call-state pseudo with a register operand.
+; Procedure instruction selection happens after register allocation, so an
+; indirect callee is still neutral at the SelectionDAG instruction stage.
 ; ISEL-LABEL: name: call_indirect
-; ISEL:       CALL_STATE %{{[0-9]+}}, csr_mmix, implicit $r254, implicit $r231
+; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 define i64 @call_indirect(ptr %callee, i64 %value) {
   %result = call i64 %callee(i64 %value)
   ret i64 %result
@@ -102,7 +102,7 @@ define i64 @call_indirect(ptr %callee, i64 %value) {
 ; Tail-call optimization is deliberately disabled for the provisional ABI.
 ; ISEL-LABEL: name: tail_call_disabled
 ; ISEL:       hasTailCall: false
-; ISEL:       CALL_STATE @i64_callee, csr_mmix
+; ISEL:       CALL_STATE {{.*}}csr_mmix
 define i64 @tail_call_disabled(i64 %value) {
   %result = tail call i64 @i64_callee(i64 %value)
   ret i64 %result

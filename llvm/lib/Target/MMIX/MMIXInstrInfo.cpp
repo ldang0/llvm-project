@@ -105,6 +105,34 @@ void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
 }
 
 bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  if (MI.getOpcode() == MMIX::CALL_STATE) {
+    MachineBasicBlock &MBB = *MI.getParent();
+    MachineInstrBuilder MIB;
+    if (MI.getOperand(0).isReg()) {
+      MIB = BuildMI(MBB, MI.getIterator(), MI.getDebugLoc(),
+                    get(MMIX::PseudoPUSHGO))
+                .addReg(MMIX::R31)
+                .add(MI.getOperand(0))
+                .addImm(0);
+    } else {
+      MIB = BuildMI(MBB, MI.getIterator(), MI.getDebugLoc(),
+                    get(MMIX::PseudoPUSHJ))
+                .addReg(MMIX::R31)
+                .add(MI.getOperand(0));
+    }
+    for (unsigned I = 1; I != MI.getNumOperands(); ++I) {
+      const MachineOperand &MO = MI.getOperand(I);
+      if (MO.isReg() && MO.isImplicit() &&
+          (MO.getReg() == MMIX::RJ || MO.getReg() == MMIX::RL ||
+           MO.getReg() == MMIX::RO || MO.getReg() == MMIX::R254 ||
+           MO.getReg() == MMIX::RG))
+        continue;
+      MIB.add(MO);
+    }
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() == MMIX::SET_RD_ZERO) {
     BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
             get(MMIX::PUTI))

@@ -490,11 +490,28 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   SDValue Callee = CLI.Callee;
-  if (auto *GA = dyn_cast<GlobalAddressSDNode>(Callee))
-    Callee = DAG.getTargetGlobalAddress(GA->getGlobal(), CLI.DL, MVT::i64,
-                                        GA->getOffset());
-  else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Callee))
-    Callee = DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
+  if (auto *GA = dyn_cast<GlobalAddressSDNode>(Callee)) {
+    SDValue Target = DAG.getTargetGlobalAddress(
+        GA->getGlobal(), CLI.DL, MVT::i64, GA->getOffset());
+    const auto *TargetFunction = dyn_cast<Function>(GA->getGlobal());
+    const Function &SourceFunction = MF.getFunction();
+    bool HasStableTextLayout =
+        TargetFunction && !TargetFunction->isDeclaration() &&
+        !getTargetMachine().getFunctionSections() &&
+        !SourceFunction.hasSection() && !TargetFunction->hasSection() &&
+        !SourceFunction.hasComdat() && !TargetFunction->hasComdat();
+    bool IsLocalTarget =
+        TargetFunction == &SourceFunction ||
+        (TargetFunction &&
+         (TargetFunction->hasLocalLinkage() || TargetFunction->isDSOLocal()));
+    Callee = HasStableTextLayout && IsLocalTarget
+                 ? Target
+                 : DAG.getNode(MMIXISD::LOAD_ADDR, CLI.DL, MVT::i64, Target);
+  } else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Callee)) {
+    SDValue Target =
+        DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
+    Callee = DAG.getNode(MMIXISD::LOAD_ADDR, CLI.DL, MVT::i64, Target);
+  }
 
   SmallVector<SDValue, 20> CallOps = {Chain, Callee};
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();

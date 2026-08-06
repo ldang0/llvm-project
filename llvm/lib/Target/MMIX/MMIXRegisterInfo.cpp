@@ -34,11 +34,16 @@ MMIXRegisterInfo::getCallPreservedMask(const MachineFunction &,
   return CC == CallingConv::C ? CSR_MMIX_RegMask : nullptr;
 }
 
-BitVector MMIXRegisterInfo::getReservedRegs(const MachineFunction &) const {
+BitVector MMIXRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs(), true);
 
   for (MCPhysReg Reg : MMIX::GPR64CodeGenRegClass)
     Reserved.reset(Reg);
+
+  // A non-leaf function keeps its incoming rJ in the highest allocatable
+  // local register. Calls push through r31, which is the architectural hole.
+  if (MF.getFrameInfo().hasCalls())
+    Reserved.set(MMIX::R30);
 
   return Reserved;
 }

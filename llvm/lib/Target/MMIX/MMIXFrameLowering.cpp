@@ -84,6 +84,11 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc DL;
 
+  if (MFI.hasCalls())
+    BuildMI(MBB, MBBI, DL, TII->get(MMIX::GET), MMIX::R30)
+        .addReg(MMIX::RJ)
+        .setMIFlag(MachineInstr::FrameSetup);
+
   MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254, -int64_t(StackSize),
                    MachineInstr::FrameSetup);
 
@@ -108,6 +113,10 @@ void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
       *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
   MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254, int64_t(StackSize),
                    MachineInstr::FrameDestroy);
+  if (MF.getFrameInfo().hasCalls())
+    BuildMI(MBB, MBBI, DL, MMIXII.get(MMIX::PUT), MMIX::RJ)
+        .addReg(MMIX::R30)
+        .setMIFlag(MachineInstr::FrameDestroy);
 }
 
 MachineBasicBlock::iterator MMIXFrameLowering::eliminateCallFramePseudoInstr(

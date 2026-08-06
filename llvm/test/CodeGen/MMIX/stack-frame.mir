@@ -41,9 +41,11 @@
 # CHECK: stackSize: 32
 # CHECK: maxCallFrameSize: 32
 # CHECK: body:
-# CHECK: $r254 = frame-setup SUBUI $r254, 32
+# CHECK: $r30 = frame-setup GET $rj
+# CHECK-NEXT: $r254 = frame-setup SUBUI $r254, 32
 # CHECK-NOT: ADJCALLSTACK
 # CHECK: $r254 = frame-destroy ADDUI $r254, 32
+# CHECK-NEXT: $rj = frame-destroy PUT $r30
 # CHECK-NEXT: POP 0, 0
 
 # CHECK-LABEL: name: local_register

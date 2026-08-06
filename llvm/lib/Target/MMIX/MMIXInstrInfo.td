@@ -1760,13 +1760,33 @@ class MMIXPseudoInstruction<dag outs, dag ins, string asmstr>
   let isCodeGenOnly = true;
 }
 
-// Call-site lowering records the complete call state before the following
-// task chooses PUSHJ or PUSHGO and implements register-stack semantics.
+// Call-site lowering records the complete call state until physical registers
+// are assigned. Post-RA expansion then selects the procedure form and supplies
+// the register-stack operand.
 def MMIXCallTarget : Operand<i64>;
-let isCall = true, hasSideEffects = true, Uses = [R254] in
+let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
+    Defs = [RJ, RL, RO] in
 def CALL_STATE
     : MMIXPseudoInstruction<(outs), (ins MMIXCallTarget:$callee),
                             "# CALL_STATE $callee">;
+
+// Direction is a layout property, so direct calls remain neutral until MC
+// lowering. Indirect calls use the immediate-zero PUSHGO form.
+let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
+    Defs = [RJ, RL, RO] in {
+  def PseudoPUSHJ
+      : MMIXPseudoInstruction<(outs),
+                              (ins GPR64Op:$count,
+                                   MMIXBranchTarget:$callee), ""> {
+    let Size = 4;
+  }
+  def PseudoPUSHGO
+      : MMIXPseudoInstruction<(outs),
+                              (ins GPR64Op:$count, GPR64Op:$callee,
+                                   MMIXUImm8:$offset), ""> {
+    let Size = 4;
+  }
+}
 
 // Block layout determines whether MMIX must use a forward or backward opcode.
 // Keep CodeGen branches direction-neutral and resolve them only during final

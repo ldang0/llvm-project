@@ -32,7 +32,9 @@ public:
 
   void emitInstruction(const MachineInstr *MI) override {
     if (MI->isPseudo() && MI->getOpcode() != MMIX::PseudoB &&
-        MI->getOpcode() != MMIX::PseudoJMP)
+        MI->getOpcode() != MMIX::PseudoJMP &&
+        MI->getOpcode() != MMIX::PseudoPUSHJ &&
+        MI->getOpcode() != MMIX::PseudoPUSHGO)
       report_fatal_error(
           "MMIX CodeGen pseudo reached canonical assembly emission");
 
