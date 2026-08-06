@@ -4,7 +4,9 @@
 // records without requiring an assembler, object format, MMO image, or QEMU.
 include "../../../lib/Target/MMIX/MMIX.td"
 
-defvar MMIXInventoryRecords = !instances<MMIXInstruction>();
+defvar MMIXInventoryRecords =
+    !filter(Record, !instances<MMIXInstruction>(),
+            !eq(Record.isCodeGenOnly, 0));
 defvar MMIXUnclassifiedRecords =
     !filter(Record, MMIXInventoryRecords,
             !eq(Record.MMIXInventoryFamily, "unclassified"));

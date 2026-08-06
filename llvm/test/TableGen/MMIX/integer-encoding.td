@@ -4,8 +4,12 @@
 // The MC emitter and byte-level tests are added by later Milestone 2 tasks.
 include "../../../lib/Target/MMIX/MMIX.td"
 
-defvar MMIXIntegerRegReg = !instances<MMIXIntRegRegOpcode>();
-defvar MMIXIntegerRegImm = !instances<MMIXIntRegImmOpcode>();
+defvar MMIXConditionalSetReg = !instances<MMIXCondSetRegOpcode>();
+defvar MMIXConditionalSetImm = !instances<MMIXCondSetImmOpcode>();
+defvar MMIXIntegerRegReg = !listconcat(
+    !instances<MMIXIntRegRegOpcode>(), MMIXConditionalSetReg);
+defvar MMIXIntegerRegImm = !listconcat(
+    !instances<MMIXIntRegImmOpcode>(), MMIXConditionalSetImm);
 defvar MMIXNegReg = !instances<MMIXNegRegOpcode>();
 defvar MMIXNegImm = !instances<MMIXNegImmOpcode>();
 defvar MMIXIntegerConstants = !instances<MMIXIntConstOpcode>();
@@ -14,6 +18,10 @@ assert !eq(!size(MMIXIntegerRegReg), 50),
        "unexpected number of MMIX integer register forms";
 assert !eq(!size(MMIXIntegerRegImm), 50),
        "unexpected number of MMIX integer immediate forms";
+assert !eq(!size(MMIXConditionalSetReg), 8),
+       "unexpected number of MMIX conditional-set register forms";
+assert !eq(!size(MMIXConditionalSetImm), 8),
+       "unexpected number of MMIX conditional-set immediate forms";
 assert !eq(!size(MMIXNegReg), 2),
        "unexpected number of MMIX register negation forms";
 assert !eq(!size(MMIXNegImm), 2),
