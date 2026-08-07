@@ -31,6 +31,7 @@ add_llvm_target(MMIXCodeGen
   MMIXDisassembler
   MMIXDesc
   MMIXInfo
+  AsmPrinter
   CodeGen
   CodeGenTypes
   Core
