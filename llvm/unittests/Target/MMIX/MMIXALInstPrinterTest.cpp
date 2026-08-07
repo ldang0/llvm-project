@@ -303,6 +303,32 @@ TEST_F(MMIXALInstPrinterTest, PreservesMixedRegisterAndImmediateKinds) {
                   {MCOperand::createReg(MMIX::R7), MCOperand::createImm(7),
                    MCOperand::createReg(MMIX::R255)}),
             "\tSWYM $7, 7, $255");
+  EXPECT_EQ(print(MMIX::TRAP,
+                  {MCOperand::createReg(MMIX::R0), MCOperand::createImm(1),
+                   MCOperand::createReg(MMIX::R255)}),
+            "\tTRAP $0, 1, $255");
+  EXPECT_EQ(print(MMIX::TRIP,
+                  {MCOperand::createImm(255), MCOperand::createReg(MMIX::R1),
+                   MCOperand::createImm(0)}),
+            "\tTRIP 255, $1, 0");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsIdiosyncraticIntegerOperandForms) {
+  EXPECT_EQ(
+      print(MMIX::NEG, {MCOperand::createReg(MMIX::R1), MCOperand::createImm(2),
+                        MCOperand::createReg(MMIX::R3)}),
+      "\tNEG $1, 2, $3");
+  EXPECT_EQ(
+      print(MMIX::NEGI, {MCOperand::createReg(MMIX::R1),
+                         MCOperand::createImm(2), MCOperand::createImm(3)}),
+      "\tNEG $1, 2, 3");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsContextStateFixedFields) {
+  EXPECT_EQ(print(MMIX::SAVE, {MCOperand::createReg(MMIX::R255)}),
+            "\tSAVE $255, 0");
+  EXPECT_EQ(print(MMIX::UNSAVE, {MCOperand::createReg(MMIX::R0)}),
+            "\tUNSAVE $0");
 }
 
 TEST_F(MMIXALInstPrinterTest, PrintsEveryRoundingMode) {
@@ -345,6 +371,10 @@ TEST_F(MMIXALInstPrinterTest, RejectsOutOfRangeScalarOperands) {
                "invalid MMIXAL synchronization mode");
   EXPECT_DEATH(print(MMIX::RESUME, {MCOperand::createImm(2)}),
                "invalid MMIXAL resume mode");
+  EXPECT_DEATH(
+      print(MMIX::SWYM, {MCOperand::createImm(256), MCOperand::createImm(0),
+                         MCOperand::createImm(0)}),
+      "invalid MMIXAL register-or-byte operand");
   EXPECT_DEATH(
       print(MMIX::SWYM, {MCOperand::createReg(MMIX::RB),
                          MCOperand::createImm(0), MCOperand::createImm(0)}),

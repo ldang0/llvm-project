@@ -2101,7 +2101,7 @@ def PUT  : MMIXPutRegOpcode<0xF6>;
 def PUTI : MMIXPutImmOpcode<0xF7>;
 
 class MMIXSave : MMIXSystemInstruction<(outs GPR64Op:$state), (ins),
-                                        "SAVE $state"> {
+                                        "{SAVE $state|SAVE $state, 0}"> {
   bits<8> state;
   let MMIXX = state;
   let MMIXY = 0;
@@ -2111,6 +2111,8 @@ class MMIXSave : MMIXSystemInstruction<(outs GPR64Op:$state), (ins),
   let MMIXALSelection = "exact";
   let MMIXALOperandForm = "reg";
 }
+// MMIXAL's one-operand UNSAVE form fixes the architectural X and Y fields to
+// zero; unlike SAVE, it does not take a source-visible zero operand.
 class MMIXUnsave : MMIXSystemInstruction<(outs), (ins GPR64Op:$state),
                                           "UNSAVE $state"> {
   bits<8> state;
