@@ -17,6 +17,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
@@ -71,6 +72,20 @@ protected:
   MCOperand symbolicTarget(StringRef Name) {
     return MCOperand::createExpr(
         MCSymbolRefExpr::create(Ctx.getOrCreateSymbol(Name), Ctx));
+  }
+
+  const MCExpr *constant(int64_t Value) {
+    return MCConstantExpr::create(Value, Ctx);
+  }
+
+  const MCExpr *definedSymbol(StringRef Name, int64_t Value) {
+    MCSymbol *Symbol = Ctx.getOrCreateSymbol(Name);
+    Symbol->setVariableValue(constant(Value));
+    return MCSymbolRefExpr::create(Symbol, Ctx);
+  }
+
+  static MCOperand expression(const MCExpr *Expr) {
+    return MCOperand::createExpr(Expr);
   }
 
   void expectOpcodePair(unsigned RegisterOpcode, unsigned ImmediateOpcode,
@@ -146,6 +161,115 @@ TEST_F(MMIXALInstPrinterTest, PrintsUnsignedScalarBoundaries) {
   EXPECT_EQ(print(MMIX::POP,
                   {MCOperand::createImm(255), MCOperand::createImm(65535)}),
             "\tPOP 255, 65535");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsSupportedExpressionsWithMMIXALPrecedence) {
+  const MCExpr *A = definedSymbol("expr_a", 2);
+  const MCExpr *B = definedSymbol("expr_b", 3);
+  const MCExpr *C = definedSymbol("expr_c", 4);
+
+  EXPECT_EQ(print(MMIX::SETH,
+                  {MCOperand::createReg(MMIX::R1), expression(constant(7))}),
+            "\tSETH $1, 7");
+  EXPECT_EQ(print(MMIX::SETH, {MCOperand::createReg(MMIX::R1), expression(A)}),
+            "\tSETH $1, expr_a");
+  EXPECT_EQ(
+      print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                         expression(MCBinaryExpr::createAdd(
+                             A, MCBinaryExpr::createMul(B, C, Ctx), Ctx))}),
+      "\tSETH $1, expr_a+expr_b*expr_c");
+  EXPECT_EQ(
+      print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                         expression(MCBinaryExpr::createMul(
+                             MCBinaryExpr::createAdd(A, B, Ctx), C, Ctx))}),
+      "\tSETH $1, (expr_a+expr_b)*expr_c");
+  EXPECT_EQ(
+      print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                         expression(MCBinaryExpr::createSub(
+                             A, MCBinaryExpr::createSub(B, C, Ctx), Ctx))}),
+      "\tSETH $1, expr_a-(expr_b-expr_c)");
+
+  EXPECT_EQ(print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                               expression(MCUnaryExpr::createPlus(A, Ctx))}),
+            "\tSETH $1, +expr_a");
+  EXPECT_EQ(print(MMIX::SETH,
+                  {MCOperand::createReg(MMIX::R1),
+                   expression(MCBinaryExpr::createAnd(
+                       MCUnaryExpr::createMinus(A, Ctx), constant(255), Ctx))}),
+            "\tSETH $1, -expr_a&255");
+  EXPECT_EQ(print(MMIX::SETH,
+                  {MCOperand::createReg(MMIX::R1),
+                   expression(MCBinaryExpr::createAnd(
+                       MCUnaryExpr::createNot(A, Ctx), constant(255), Ctx))}),
+            "\tSETH $1, ~expr_a&255");
+
+  struct BinaryCase {
+    MCBinaryExpr::Opcode Opcode;
+    int64_t LHS;
+    int64_t RHS;
+    const char *Expected;
+  };
+  static constexpr BinaryCase Cases[] = {
+      {MCBinaryExpr::Add, 8, 2, "8+2"},  {MCBinaryExpr::Sub, 8, 2, "8-2"},
+      {MCBinaryExpr::Mul, 8, 2, "8*2"},  {MCBinaryExpr::And, 8, 2, "8&2"},
+      {MCBinaryExpr::Or, 8, 2, "8|2"},   {MCBinaryExpr::Xor, 8, 2, "8^2"},
+      {MCBinaryExpr::Shl, 8, 2, "8<<2"}, {MCBinaryExpr::LShr, 8, 2, "8>>2"},
+  };
+  for (const BinaryCase &Case : Cases) {
+    const MCExpr *Expr = MCBinaryExpr::create(Case.Opcode, constant(Case.LHS),
+                                              constant(Case.RHS), Ctx);
+    EXPECT_EQ(
+        print(MMIX::SETH, {MCOperand::createReg(MMIX::R1), expression(Expr)}),
+        std::string("\tSETH $1, ") + Case.Expected);
+  }
+}
+
+TEST_F(MMIXALInstPrinterTest, EnforcesMMIXALFutureExpressionRules) {
+  const MCExpr *Future =
+      MCSymbolRefExpr::create(Ctx.getOrCreateSymbol("future_target"), Ctx);
+  EXPECT_EQ(
+      printAt(0, MMIX::JMP, {expression(MCUnaryExpr::createPlus(Future, Ctx))}),
+      "\tJMP +future_target");
+  EXPECT_DEATH(
+      printAt(0, MMIX::JMP,
+              {expression(MCBinaryExpr::createAdd(Future, constant(4), Ctx))}),
+      "unsupported MMIXAL future instruction expression");
+  EXPECT_DEATH(
+      print(MMIX::SETH, {MCOperand::createReg(MMIX::R1), expression(Future)}),
+      "unsupported MMIXAL future instruction expression");
+}
+
+TEST_F(MMIXALInstPrinterTest, RejectsUnsupportedMMIXALExpressions) {
+  const MCExpr *Defined = definedSymbol("defined_symbol", 8);
+  MCSymbol *VariantSymbol = Ctx.getOrCreateSymbol("variant_symbol");
+  VariantSymbol->setVariableValue(constant(8));
+
+  EXPECT_DEATH(
+      print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                         expression(MCUnaryExpr::createLNot(Defined, Ctx))}),
+      "unsupported MMIXAL unary expression operator");
+  EXPECT_DEATH(
+      print(MMIX::SETH,
+            {MCOperand::createReg(MMIX::R1),
+             expression(MCBinaryExpr::createDiv(Defined, constant(2), Ctx))}),
+      "unsupported MMIXAL binary expression operator");
+  EXPECT_DEATH(
+      print(MMIX::SETH,
+            {MCOperand::createReg(MMIX::R1),
+             expression(MCSymbolRefExpr::create(
+                 VariantSymbol, MCSymbolRefExpr::FirstTargetSpecifier, Ctx))}),
+      "unsupported MMIXAL symbol reference variant");
+  EXPECT_DEATH(
+      print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                         expression(MCSpecifierExpr::create(Defined, 1, Ctx))}),
+      "unsupported MMIXAL relocation specifier");
+  EXPECT_DEATH(print(MMIX::SETH, {MCOperand::createReg(MMIX::R1),
+                                  expression(constant(65536))}),
+               "MMIXAL expression is not representable as wyde operand");
+  EXPECT_DEATH(print(MMIX::ADDI,
+                     {MCOperand::createReg(MMIX::R1),
+                      MCOperand::createReg(MMIX::R2), expression(constant(7))}),
+               "MMIXAL immediate-form instruction requires a byte operand");
 }
 
 TEST_F(MMIXALInstPrinterTest, PrintsRegisterImmediateOpcodePairs) {
