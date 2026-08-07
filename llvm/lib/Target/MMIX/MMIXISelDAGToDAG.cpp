@@ -126,6 +126,52 @@ private:
     CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, Ops);
   }
 
+  bool selectCacheAddress(SDValue Address, SDValue &Base, SDValue &Offset,
+                          const SDLoc &DL) {
+    bool HasImmediate = true;
+    Base = Address;
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    if (Address.getOpcode() == ISD::ADD) {
+      Base = Address.getOperand(0);
+      Offset = Address.getOperand(1);
+      if (auto *Constant = dyn_cast<ConstantSDNode>(Offset);
+          Constant && isUInt<8>(Constant->getZExtValue()))
+        Offset =
+            CurDAG->getTargetConstant(Constant->getZExtValue(), DL, MVT::i64);
+      else
+        HasImmediate = false;
+    }
+    if (auto *FrameIndex = dyn_cast<FrameIndexSDNode>(Base))
+      Base = CurDAG->getTargetFrameIndex(FrameIndex->getIndex(), MVT::i64);
+    return HasImmediate;
+  }
+
+  void selectCacheOperation(SDNode *Node) {
+    static constexpr unsigned RegisterOpcodes[] = {
+        MMIX::PRELD, MMIX::PREGO, MMIX::PREST, MMIX::SYNCD, MMIX::SYNCID};
+    static constexpr unsigned ImmediateOpcodes[] = {
+        MMIX::PRELDI, MMIX::PREGOI, MMIX::PRESTI, MMIX::SYNCDI, MMIX::SYNCIDI};
+    static_assert(sizeof(RegisterOpcodes) / sizeof(RegisterOpcodes[0]) ==
+                  MMIXISD::CacheOperationEnd);
+    static_assert(sizeof(ImmediateOpcodes) / sizeof(ImmediateOpcodes[0]) ==
+                  MMIXISD::CacheOperationEnd);
+
+    SDLoc DL(Node);
+    SDValue Base;
+    SDValue Offset;
+    bool HasImmediate =
+        selectCacheAddress(Node->getOperand(1), Base, Offset, DL);
+    unsigned Operation =
+        cast<ConstantSDNode>(Node->getOperand(3))->getZExtValue();
+    unsigned Opcode =
+        HasImmediate ? ImmediateOpcodes[Operation] : RegisterOpcodes[Operation];
+    SDValue Span = CurDAG->getTargetConstant(
+        cast<ConstantSDNode>(Node->getOperand(2))->getZExtValue(), DL,
+        MVT::i64);
+    SDValue Ops[] = {Span, Base, Offset, Node->getOperand(0)};
+    CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, Ops);
+  }
+
   void Select(SDNode *Node) override {
     if (Node->isMachineOpcode()) {
       Node->setNodeId(-1);
@@ -145,6 +191,21 @@ private:
     if (Node->getOpcode() == MMIXISD::GET_SPECIAL_REGISTER ||
         Node->getOpcode() == MMIXISD::PUT_SPECIAL_REGISTER) {
       selectSpecialRegisterAccess(Node);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::CACHE_OPERATION) {
+      selectCacheOperation(Node);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::SYNC) {
+      SDLoc DL(Node);
+      SDValue Mode = CurDAG->getTargetConstant(
+          cast<ConstantSDNode>(Node->getOperand(1))->getZExtValue(), DL,
+          MVT::i64);
+      CurDAG->SelectNodeTo(Node, MMIX::SYNC, MVT::Other, Mode,
+                           Node->getOperand(0));
       return;
     }
 

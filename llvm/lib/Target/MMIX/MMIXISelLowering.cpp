@@ -174,6 +174,78 @@ static SDValue lowerMMIXSpecialRegisterIntrinsic(SDValue Op,
                       DAG.getConstant(Selector, DL, MVT::i64)});
 }
 
+static SDValue lowerMMIXCacheIntrinsic(SDValue Op, unsigned IntrinsicID,
+                                       SelectionDAG &DAG) {
+  const MMIXSubtarget &STI =
+      DAG.getMachineFunction().getSubtarget<MMIXSubtarget>();
+  StringRef IntrinsicName;
+  unsigned Operation;
+  switch (IntrinsicID) {
+  case Intrinsic::mmix_preld:
+    IntrinsicName = "llvm.mmix.preld";
+    Operation = MMIXISD::CachePreload;
+    break;
+  case Intrinsic::mmix_prego:
+    IntrinsicName = "llvm.mmix.prego";
+    Operation = MMIXISD::CachePrefetchForExecution;
+    break;
+  case Intrinsic::mmix_prest:
+    IntrinsicName = "llvm.mmix.prest";
+    Operation = MMIXISD::CachePrestore;
+    break;
+  case Intrinsic::mmix_syncd:
+    IntrinsicName = "llvm.mmix.syncd";
+    Operation = MMIXISD::CacheSyncData;
+    break;
+  case Intrinsic::mmix_syncid:
+    IntrinsicName = "llvm.mmix.syncid";
+    Operation = MMIXISD::CacheSyncInstructionAndData;
+    break;
+  default:
+    llvm_unreachable("not an MMIX cache intrinsic");
+  }
+
+  if (!STI.hasMMIXCache())
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  "requires the cache target feature", DAG);
+
+  auto *SpanNode = dyn_cast<ConstantSDNode>(Op.getOperand(3));
+  if (!SpanNode)
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  "span must be an immediate", DAG);
+  uint64_t Span = SpanNode->getZExtValue();
+  if (!isUInt<8>(Span))
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  "span must be in the range [0, 255]", DAG);
+
+  SDLoc DL(Op);
+  return DAG.getNode(MMIXISD::CACHE_OPERATION, DL, MVT::Other,
+                     {Op.getOperand(0), Op.getOperand(2),
+                      DAG.getConstant(Span, DL, MVT::i64),
+                      DAG.getConstant(Operation, DL, MVT::i64)});
+}
+
+static SDValue lowerMMIXSyncIntrinsic(SDValue Op, SelectionDAG &DAG) {
+  const MMIXSubtarget &STI =
+      DAG.getMachineFunction().getSubtarget<MMIXSubtarget>();
+  if (!STI.hasMMIXSystem())
+    return emitMMIXIntrinsicError(Op, "llvm.mmix.sync",
+                                  "requires the system target feature", DAG);
+
+  auto *ModeNode = dyn_cast<ConstantSDNode>(Op.getOperand(2));
+  if (!ModeNode)
+    return emitMMIXIntrinsicError(Op, "llvm.mmix.sync",
+                                  "mode must be an immediate", DAG);
+  uint64_t Mode = ModeNode->getZExtValue();
+  if (!isUInt<3>(Mode))
+    return emitMMIXIntrinsicError(Op, "llvm.mmix.sync",
+                                  "mode must be in the range [0, 7]", DAG);
+
+  SDLoc DL(Op);
+  return DAG.getNode(MMIXISD::SYNC, DL, MVT::Other,
+                     {Op.getOperand(0), DAG.getConstant(Mode, DL, MVT::i64)});
+}
+
 MMIXTargetLowering::AsmOperandInfoVector
 MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
@@ -546,12 +618,21 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   if (Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
       Op.getOpcode() == ISD::INTRINSIC_VOID) {
     unsigned IntrinsicID = Op.getConstantOperandVal(1);
-    if ((Op.getOpcode() == ISD::INTRINSIC_W_CHAIN &&
-         IntrinsicID != Intrinsic::mmix_get) ||
-        (Op.getOpcode() == ISD::INTRINSIC_VOID &&
-         IntrinsicID != Intrinsic::mmix_put))
+    switch (IntrinsicID) {
+    case Intrinsic::mmix_get:
+    case Intrinsic::mmix_put:
+      return lowerMMIXSpecialRegisterIntrinsic(Op, DAG);
+    case Intrinsic::mmix_preld:
+    case Intrinsic::mmix_prego:
+    case Intrinsic::mmix_prest:
+    case Intrinsic::mmix_syncd:
+    case Intrinsic::mmix_syncid:
+      return lowerMMIXCacheIntrinsic(Op, IntrinsicID, DAG);
+    case Intrinsic::mmix_sync:
+      return lowerMMIXSyncIntrinsic(Op, DAG);
+    default:
       report_fatal_error("unsupported chained MMIX intrinsic");
-    return lowerMMIXSpecialRegisterIntrinsic(Op, DAG);
+    }
   }
 
   SDLoc DL(Op);

@@ -17,6 +17,15 @@ class MMIXSubtarget;
 
 namespace MMIXISD {
 
+enum CacheOperation : unsigned {
+  CachePreload,
+  CachePrefetchForExecution,
+  CachePrestore,
+  CacheSyncData,
+  CacheSyncInstructionAndData,
+  CacheOperationEnd,
+};
+
 enum NodeType : unsigned {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   LOAD_STACK_ARG,
@@ -31,6 +40,8 @@ enum NodeType : unsigned {
   SFLOTU,
   GET_SPECIAL_REGISTER,
   PUT_SPECIAL_REGISTER,
+  CACHE_OPERATION,
+  SYNC,
   CALL,
   RET_GLUE,
   RET_VALUE_GLUE,

@@ -18,5 +18,31 @@ def int_mmix_get
 def int_mmix_put
     : DefaultAttrsIntrinsic<[], [llvm_i32_ty, llvm_i64_ty],
                             [ImmArg<ArgIndex<0>>]>;
+def int_mmix_preld
+    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
+                [IntrInaccessibleMemOnly, NoCapture<ArgIndex<0>>,
+                 ReadNone<ArgIndex<0>>, ImmArg<ArgIndex<1>>,
+                 IntrNoDuplicate]>;
+def int_mmix_prego
+    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
+                [IntrInaccessibleMemOnly, NoCapture<ArgIndex<0>>,
+                 ReadNone<ArgIndex<0>>, ImmArg<ArgIndex<1>>,
+                 IntrNoDuplicate]>;
+def int_mmix_prest
+    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
+                [IntrInaccessibleMemOnly, NoCapture<ArgIndex<0>>,
+                 ReadNone<ArgIndex<0>>, ImmArg<ArgIndex<1>>,
+                 IntrNoDuplicate]>;
+def int_mmix_syncd
+    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
+                [IntrInaccessibleMemOrArgMemOnly, NoCapture<ArgIndex<0>>,
+                 ImmArg<ArgIndex<1>>, IntrNoDuplicate]>;
+def int_mmix_syncid
+    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
+                [IntrInaccessibleMemOrArgMemOnly, NoCapture<ArgIndex<0>>,
+                 ImmArg<ArgIndex<1>>, IntrNoDuplicate]>;
+def int_mmix_sync
+    : Intrinsic<[], [llvm_i32_ty],
+                [ImmArg<ArgIndex<0>>, IntrNoDuplicate]>;
 
 } // TargetPrefix = "mmix"

@@ -1550,10 +1550,12 @@ def PREGO   : MMIXCacheRegOpcode<0x9C, "PREGO">;
 def PREGOI  : MMIXCacheImmOpcode<0x9D, "PREGO">;
 def PREST   : MMIXCacheRegOpcode<0xBA, "PREST">;
 def PRESTI  : MMIXCacheImmOpcode<0xBB, "PREST">;
+let mayLoad = true, mayStore = true in {
 def SYNCD   : MMIXCacheRegOpcode<0xB8, "SYNCD">;
 def SYNCDI  : MMIXCacheImmOpcode<0xB9, "SYNCD">;
 def SYNCID  : MMIXCacheRegOpcode<0xBC, "SYNCID">;
 def SYNCIDI : MMIXCacheImmOpcode<0xBD, "SYNCID">;
+}
 
 class MMIXUncachedLoad<string Mnemonic>
     : MMIXCacheInstruction<(outs GPR64Op:$dst),
