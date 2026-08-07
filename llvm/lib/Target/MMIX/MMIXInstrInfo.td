@@ -1523,6 +1523,7 @@ class MMIXStoreConstantReg
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
   let MMIXInventoryForm = "imm8-reg-reg";
 }
 
@@ -1537,6 +1538,7 @@ class MMIXStoreConstantImm
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
   let MMIXInventoryForm = "imm8-reg-imm8";
 }
 

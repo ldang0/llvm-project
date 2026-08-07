@@ -73,6 +73,18 @@ define void @store_widths(ptr %p8, ptr %p16, ptr %p32, ptr %p64, i64 %v) {
   ret void
 }
 
+; STCO is an optional combine. Until that combine is implemented, an ordinary
+; aligned constant store uses the baseline full-width store sequence.
+define void @store_constant_octa(ptr %p) {
+; CHECK-LABEL: store_constant_octa:
+; CHECK-NOT:   STCO
+; CHECK:       SETL [[VALUE:r[0-9]+]], 255
+; CHECK-NEXT:  STOU [[VALUE]], r231, 0
+; CHECK-NOT:   STCO
+  store volatile i64 255, ptr %p, align 8
+  ret void
+}
+
 define i64 @load_small_offset(ptr %p) {
 ; CHECK-LABEL: load_small_offset:
 ; CHECK: LDOU r231, r231, 248

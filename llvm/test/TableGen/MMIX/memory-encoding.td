@@ -33,6 +33,9 @@ assert !eq(!size(!instances<MMIXStoreConstantRegOpcode>()), 1),
        "unexpected MMIX constant store register forms";
 assert !eq(!size(!instances<MMIXStoreConstantImmOpcode>()), 1),
        "unexpected MMIX constant store immediate forms";
+foreach Record = [STCO, STCOI] in
+  assert !eq(Record.mayStore, 1),
+         "MMIX constant octa store must retain its memory effect";
 assert !eq(!size(MMIXUncachedLoad), 1), "unexpected MMIX uncached load forms";
 assert !eq(!size(MMIXUncachedLoadImm), 1),
        "unexpected MMIX uncached load immediate forms";
