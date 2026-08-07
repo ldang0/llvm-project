@@ -92,6 +92,74 @@ define i8 @rmw_add_i8(ptr %p, i8 %value) {
   ret i8 %old
 }
 
+; Naturally aligned i16 and i32 RMW operations use the same big-endian masked
+; octabyte loop. The mask is ordinary SSA/GPR state, not architectural rM.
+; CHECK-LABEL: rmw_xor_i16:
+; CHECK-NOT:   PUT rM
+; CHECK:       ANDN
+; CHECK:       CSWAP
+; CHECK:       XOR
+; CHECK:       CSWAP
+; CHECK:       BNZB
+; CHECK-NOT:   PUT rM
+define i16 @rmw_xor_i16(ptr %p, i16 %value) {
+  %old = atomicrmw xor ptr %p, i16 %value monotonic
+  ret i16 %old
+}
+
+; CHECK-LABEL: rmw_or_i32:
+; CHECK-NOT:   PUT rM
+; CHECK:       ANDN
+; CHECK:       CSWAP
+; CHECK:       OR
+; CHECK:       CSWAP
+; CHECK:       BNZB
+; CHECK-NOT:   PUT rM
+define i32 @rmw_or_i32(ptr %p, i32 %value) {
+  %old = atomicrmw or ptr %p, i32 %value monotonic
+  ret i32 %old
+}
+
+; Narrow cmpxchg uses an aligned octabyte CSWAP while preserving the selected
+; big-endian subfield and returning the narrow old value and success flag.
+; CHECK-LABEL: cmp_i8:
+; CHECK-NOT:   PUT rM
+; CHECK:       PUT rP
+; CHECK:       CSWAP
+; CHECK:       GET {{.*}}, rP
+; CHECK-NOT:   PUT rM
+define i1 @cmp_i8(ptr %p, i8 %expected, i8 %new) {
+  %pair = cmpxchg ptr %p, i8 %expected, i8 %new monotonic monotonic
+  %ok = extractvalue { i8, i1 } %pair, 1
+  ret i1 %ok
+}
+
+; CHECK-LABEL: cmp_i16:
+; CHECK-NOT:   PUT rM
+; CHECK:       PUT rP
+; CHECK:       CSWAP
+; CHECK:       GET {{.*}}, rP
+; CHECK-NOT:   PUT rM
+define i16 @cmp_i16(ptr %p, i16 %expected, i16 %new) {
+  %pair = cmpxchg ptr %p, i16 %expected, i16 %new monotonic monotonic
+  %old = extractvalue { i16, i1 } %pair, 0
+  ret i16 %old
+}
+
+; CHECK-LABEL: cmp_i32:
+; CHECK-NOT:   PUT rM
+; CHECK:       ANDN
+; CHECK:       PUT rP
+; CHECK:       CSWAP
+; CHECK:       GET {{.*}}, rP
+; CHECK:       ANDN
+; CHECK-NOT:   PUT rM
+define i32 @cmp_i32(ptr %p, i32 %expected, i32 %new) {
+  %pair = cmpxchg ptr %p, i32 %expected, i32 %new monotonic monotonic
+  %old = extractvalue { i32, i1 } %pair, 0
+  ret i32 %old
+}
+
 ; Atomic loads use a no-change cmpxchg and acquire ordering is a trailing
 ; memory fence.
 ; CHECK-LABEL: load_acquire:
@@ -105,6 +173,43 @@ define i64 @load_acquire(ptr %p) {
   ret i64 %value
 }
 
+; CHECK-LABEL: load_monotonic_i8:
+; CHECK-NOT:   PUT rM
+; CHECK:       ANDN
+; CHECK:       PUT rP
+; CHECK:       CSWAP
+; CHECK:       GET {{.*}}, rP
+; CHECK:       SRU
+; CHECK-NOT:   PUT rM
+define i8 @load_monotonic_i8(ptr %p) {
+  %value = load atomic i8, ptr %p monotonic, align 1
+  ret i8 %value
+}
+
+; CHECK-LABEL: load_monotonic_i16:
+; CHECK-NOT:   PUT rM
+; CHECK:       ANDN
+; CHECK:       PUT rP
+; CHECK:       CSWAP
+; CHECK:       GET {{.*}}, rP
+; CHECK:       SRU
+; CHECK-NOT:   PUT rM
+define i16 @load_monotonic_i16(ptr %p) {
+  %value = load atomic i16, ptr %p monotonic, align 2
+  ret i16 %value
+}
+
+; CHECK-LABEL: load_acquire_i32:
+; CHECK-NOT:   PUT rM
+; CHECK:       CSWAP
+; CHECK:       GET
+; CHECK:       SYNC 3
+; CHECK-NOT:   PUT rM
+define i32 @load_acquire_i32(ptr %p) {
+  %value = load atomic i32, ptr %p acquire, align 4
+  ret i32 %value
+}
+
 ; Atomic stores use a retrying exchange loop and release ordering is a leading
 ; memory fence.
 ; CHECK-LABEL: store_release:
@@ -114,6 +219,18 @@ define i64 @load_acquire(ptr %p) {
 ; CHECK:       BNZB
 define void @store_release(ptr %p, i64 %value) {
   store atomic i64 %value, ptr %p release, align 8
+  ret void
+}
+
+; CHECK-LABEL: store_release_i16:
+; CHECK-NOT:   PUT rM
+; CHECK:       SYNC 3
+; CHECK:       CSWAP
+; CHECK:       CSWAP
+; CHECK:       BNZB
+; CHECK-NOT:   PUT rM
+define void @store_release_i16(ptr %p, i16 %value) {
+  store atomic i16 %value, ptr %p release, align 2
   ret void
 }
 

@@ -82,12 +82,9 @@ public:
   bool shouldInsertFencesForAtomic(const Instruction *) const override {
     return true;
   }
-  AtomicExpansionKind
-  shouldExpandAtomicLoadInIR(LoadInst *) const override {
-    return AtomicExpansionKind::CmpXChg;
-  }
-  AtomicExpansionKind
-  shouldExpandAtomicStoreInIR(StoreInst *) const override {
+  AtomicExpansionKind shouldExpandAtomicLoadInIR(LoadInst *LI) const override;
+  void emitExpandAtomicLoad(LoadInst *LI) const override;
+  AtomicExpansionKind shouldExpandAtomicStoreInIR(StoreInst *) const override {
     return AtomicExpansionKind::Expand;
   }
   AtomicExpansionKind

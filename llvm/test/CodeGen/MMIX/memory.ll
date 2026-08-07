@@ -100,6 +100,15 @@ define i64 @load_register_offset(ptr %p, i64 %offset) {
   ret i64 %r
 }
 
+define i64 @load_negative_offset(ptr %p) {
+; CHECK-LABEL: load_negative_offset:
+; CHECK: NEGU [[OFFSET:r[0-9]+]], 0, 8
+; CHECK: LDOU r231, r231, [[OFFSET]]
+  %q = getelementptr i8, ptr %p, i64 -8
+  %v = load i64, ptr %q, align 8
+  ret i64 %v
+}
+
 define void @store_small_offset(ptr %p, i64 %v) {
 ; CHECK-LABEL: store_small_offset:
 ; CHECK: STTU r232, r231, 16
@@ -115,6 +124,16 @@ define void @store_register_offset(ptr %p, i64 %offset, i64 %v) {
   %q = getelementptr i8, ptr %p, i64 %offset
   %v16 = trunc i64 %v to i16
   store i16 %v16, ptr %q, align 2
+  ret void
+}
+
+define void @store_large_offset(ptr %p, i64 %v) {
+; CHECK-LABEL: store_large_offset:
+; CHECK: SETL [[OFFSET:r[0-9]+]], 256
+; CHECK: STBU r232, r231, [[OFFSET]]
+  %q = getelementptr i8, ptr %p, i64 256
+  %v8 = trunc i64 %v to i8
+  store i8 %v8, ptr %q, align 1
   ret void
 }
 
@@ -152,6 +171,32 @@ define i64 @load_unaligned_i16(ptr %p) {
   %v = load i16, ptr %p, align 1
   %r = zext i16 %v to i64
   ret i64 %r
+}
+
+define i64 @load_unaligned_sext_i32(ptr %p) {
+; CHECK-LABEL: load_unaligned_sext_i32:
+; CHECK-COUNT-3: LDBU
+; CHECK: LDB
+; CHECK-NOT: LDT
+  %v = load i32, ptr %p, align 1
+  %r = sext i32 %v to i64
+  ret i64 %r
+}
+
+define void @store_unaligned_i16(ptr %p, i16 %v) {
+; CHECK-LABEL: store_unaligned_i16:
+; CHECK-COUNT-2: STBU
+; CHECK-NOT: STWU
+  store i16 %v, ptr %p, align 1
+  ret void
+}
+
+define void @store_unaligned_i32(ptr %p, i32 %v) {
+; CHECK-LABEL: store_unaligned_i32:
+; CHECK-COUNT-4: STBU
+; CHECK-NOT: STTU
+  store i32 %v, ptr %p, align 1
+  ret void
 }
 
 define void @store_unaligned_i64(ptr %p, i64 %v) {

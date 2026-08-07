@@ -967,9 +967,11 @@ static PartwordMaskValues createMaskInstrs(IRBuilderBase &Builder,
   }
 
   PMV.ShiftAmt = Builder.CreateTrunc(PMV.ShiftAmt, PMV.WordType, "ShiftAmt");
+  unsigned WordBits = cast<IntegerType>(PMV.WordType)->getBitWidth();
   PMV.Mask = Builder.CreateShl(
-      ConstantInt::get(PMV.WordType, (1 << (ValueSize * 8)) - 1), PMV.ShiftAmt,
-      "Mask");
+      ConstantInt::get(PMV.WordType,
+                       APInt::getLowBitsSet(WordBits, ValueSize * 8)),
+      PMV.ShiftAmt, "Mask");
 
   PMV.Inv_Mask = Builder.CreateNot(PMV.Mask, "Inv_Mask");
 
