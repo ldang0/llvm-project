@@ -4,6 +4,21 @@
 
 target triple = "mmix"
 
+; Writes that alter the provisional ABI or floating environment require a
+; complete module-level assembly routine that owns the affected state.
+module asm ".text"
+module asm "mmix_special_state_owner:"
+module asm "PUT rJ, r0"
+module asm "PUT rG, r0"
+module asm "PUT rL, r0"
+module asm "PUT rA, r0"
+
+; CHECK: mmix_special_state_owner:
+; CHECK: PUT rJ, r0
+; CHECK: PUT rG, r0
+; CHECK: PUT rL, r0
+; CHECK: PUT rA, r0
+
 declare i64 @llvm.mmix.get(i32 immarg)
 declare void @llvm.mmix.put(i32 immarg, i64)
 
@@ -113,5 +128,17 @@ define void @write_feature_state() {
 ; CHECK-NEXT:  PUT rV, 2
   call void @llvm.mmix.put(i32 8, i64 1)
   call void @llvm.mmix.put(i32 18, i64 2)
+  ret void
+}
+
+; Special-register words in labels and comments are not PUT instructions.
+define void @non_instruction_special_register_words() {
+; CHECK-LABEL: non_instruction_special_register_words:
+; CHECK:       #APP
+; CHECK-NEXT:  PUT:
+; CHECK-NEXT:  # PUT rA, r0 is a comment
+; CHECK-NEXT:  SWYM 0, 0, 0
+; CHECK:       #NO_APP
+  call void asm sideeffect "PUT:\0A\09# PUT rA, r0 is a comment\0A\09SWYM 0, 0, 0", ""()
   ret void
 }

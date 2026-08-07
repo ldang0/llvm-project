@@ -12,6 +12,8 @@ module asm "RESUME 0"
 module asm "mmix_trap_entry:"
 module asm "TRAP 0, 0, 0"
 module asm "RESUME 1"
+module asm "mmix_raw_jump:"
+module asm "GO r0, r1, 0"
 
 ; CHECK:      mmix_trip_entry:
 ; CHECK:      TRIP 1, 2, 3
@@ -19,6 +21,8 @@ module asm "RESUME 1"
 ; CHECK:      mmix_trap_entry:
 ; CHECK:      TRAP 0, 0, 0
 ; CHECK:      RESUME 1
+; CHECK:      mmix_raw_jump:
+; CHECK:      GO r0, r1, 0
 
 declare void @callee()
 
@@ -29,6 +33,7 @@ define void @ordinary_control_flow(i1 %condition) {
 ; CHECK-NOT:   TRAP
 ; CHECK-NOT:   TRIP
 ; CHECK-NOT:   RESUME
+; CHECK-NOT:   {{^ *GO }}
 ; CHECK:       POP 0, 0
 entry:
   br i1 %condition, label %call, label %return
@@ -46,9 +51,10 @@ define void @non_instruction_control_state_words() {
 ; CHECK-LABEL: non_instruction_control_state_words:
 ; CHECK:       #APP
 ; CHECK-NEXT:  TRAP:
-; CHECK-NEXT:  # TRIP and RESUME are comments
+; CHECK-NEXT:  GO:
+; CHECK-NEXT:  # TRIP, RESUME, and GO are comments
 ; CHECK-NEXT:  SWYM 0, 0, 0
 ; CHECK:       #NO_APP
-  call void asm sideeffect "TRAP:\0A\09# TRIP and RESUME are comments\0A\09SWYM 0, 0, 0", ""()
+  call void asm sideeffect "TRAP:\0A\09GO:\0A\09# TRIP, RESUME, and GO are comments\0A\09SWYM 0, 0, 0", ""()
   ret void
 }

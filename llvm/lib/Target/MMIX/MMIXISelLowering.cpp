@@ -81,13 +81,27 @@ static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
 }
 
 static StringRef getMMIXModuleOnlyMnemonic(StringRef Token) {
-  for (StringRef Mnemonic : {"TRAP", "TRIP", "RESUME", "SAVE", "UNSAVE"})
+  for (StringRef Mnemonic :
+       {"TRAP", "TRIP", "RESUME", "SAVE", "UNSAVE", "GO"})
     if (Token.equals_insensitive(Mnemonic))
       return Mnemonic;
   return {};
 }
 
-static StringRef findMMIXModuleOnlyInstruction(StringRef AsmString) {
+static StringRef getMMIXModuleOnlyPutRegister(StringRef Token) {
+  for (StringRef Register : {"rJ", "rG", "rL", "rA", "rN", "rO", "rS"})
+    if (Token.equals_insensitive(Register))
+      return Register;
+  return {};
+}
+
+struct MMIXModuleOnlyInstruction {
+  StringRef Mnemonic;
+  StringRef Operand;
+};
+
+static MMIXModuleOnlyInstruction
+findMMIXModuleOnlyInstruction(StringRef AsmString) {
   while (!AsmString.empty()) {
     auto [Line, RemainingLines] = AsmString.split('\n');
     AsmString = RemainingLines;
@@ -109,12 +123,21 @@ static StringRef findMMIXModuleOnlyInstruction(StringRef AsmString) {
         }
         if (StringRef Mnemonic = getMMIXModuleOnlyMnemonic(Token);
             !Mnemonic.empty())
-          return Mnemonic;
+          return {Mnemonic, {}};
+        if (TokenEnd != StringRef::npos && Token.equals_insensitive("PUT")) {
+          StringRef Operands = Statement.drop_front(TokenEnd).ltrim();
+          StringRef Register =
+              Operands.take_front(Operands.find_first_of(" \t,"));
+          if (StringRef RestrictedRegister =
+                  getMMIXModuleOnlyPutRegister(Register);
+              !RestrictedRegister.empty())
+            return {"PUT", RestrictedRegister};
+        }
         break;
       }
     }
   }
-  return {};
+  return {{}, {}};
 }
 
 static MCRegister getMMIXSpecialRegister(unsigned Selector,
@@ -327,11 +350,17 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
                                      const CallBase &Call) const {
   const auto *IA = dyn_cast<InlineAsm>(Call.getCalledOperand());
-  StringRef ModuleOnlyInstruction =
-      IA ? findMMIXModuleOnlyInstruction(IA->getAsmString()) : StringRef();
-  if (!ModuleOnlyInstruction.empty()) {
+  MMIXModuleOnlyInstruction ModuleOnlyInstruction =
+      IA ? findMMIXModuleOnlyInstruction(IA->getAsmString())
+         : MMIXModuleOnlyInstruction{};
+  if (!ModuleOnlyInstruction.Mnemonic.empty()) {
+    std::string InstructionName = ModuleOnlyInstruction.Mnemonic.str();
+    if (!ModuleOnlyInstruction.Operand.empty()) {
+      InstructionName += ' ';
+      InstructionName += ModuleOnlyInstruction.Operand;
+    }
     Call.getContext().emitError(
-        &Call, Twine("MMIX instruction '") + ModuleOnlyInstruction +
+        &Call, Twine("MMIX instruction '") + InstructionName +
                    "' is only permitted in module-level inline assembly");
     return {};
   }

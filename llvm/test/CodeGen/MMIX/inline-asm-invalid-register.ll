@@ -31,3 +31,21 @@ define void @stack_pointer_clobber() {
   call void asm sideeffect "SWYM 0, 0, 0", "~{r254}"()
   ret void
 }
+
+define void @unsafe_special_register_writes() {
+; CHECK: error: MMIX instruction 'PUT rJ' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'PUT rG' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'PUT rL' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'PUT rA' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'PUT rN' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'PUT rO' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'PUT rS' is only permitted in module-level inline assembly
+  call void asm sideeffect "PUT rJ, r0", ""()
+  call void asm sideeffect "put rG, r0", ""()
+  call void asm sideeffect "label:\0A\09PUT rL, r0", ""()
+  call void asm sideeffect "PUT rA, r0", ""()
+  call void asm sideeffect "PUT rN, r0", ""()
+  call void asm sideeffect "PUT rO, r0", ""()
+  call void asm sideeffect "PUT rS, r0", ""()
+  ret void
+}
