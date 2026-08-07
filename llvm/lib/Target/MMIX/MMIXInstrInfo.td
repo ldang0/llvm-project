@@ -86,9 +86,13 @@ def MMIXImm64 : MMIXImmediateOperand<64, true, "signed-64"> {
 }
 def MMIXUImm8 : MMIXImmediateOperand<8, false, "unsigned-8"> {
   let ParserMatchClass = MMIXUImm8AsmOperand;
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_UIMM8";
 }
 def MMIXUImm16 : MMIXImmediateOperand<16, false, "unsigned-16"> {
   let ParserMatchClass = MMIXUImm16AsmOperand;
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_UIMM16";
 }
 def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24"> {
   let ParserMatchClass = MMIXUImm24AsmOperand;
@@ -96,12 +100,18 @@ def MMIXUImm24 : MMIXImmediateOperand<24, false, "unsigned-24"> {
 def MMIXRoundingMode : MMIXImmediateOperand<3, false, "rounding-mode"> {
   let ParserMatchClass = MMIXRoundingModeAsmOperand;
   let DecoderMethod = "decodeRoundingMode";
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_ROUNDING_MODE";
 }
 def MMIXResumeMode : MMIXImmediateOperand<1, false, "resume-mode"> {
   let ParserMatchClass = MMIXResumeModeAsmOperand;
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_RESUME_MODE";
 }
 def MMIXSyncMode : MMIXImmediateOperand<3, false, "sync-mode"> {
   let ParserMatchClass = MMIXSyncModeAsmOperand;
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_SYNC_MODE";
 }
 
 class MMIXRegOrImmOperand<int Width, string Range>
@@ -118,6 +128,8 @@ def MMIXRegOrImm8AsmOperand
 }
 def MMIXRegOrImm8 : MMIXRegOrImmOperand<8, "unsigned-8"> {
   let ParserMatchClass = MMIXRegOrImm8AsmOperand;
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_REG_OR_IMM8";
 }
 
 class MMIXPCRelativeOperand<int Width, string Range> : Operand<OtherVT> {
@@ -156,6 +168,8 @@ def MMIXMemOffset8AsmOperand
     : MMIXImmediateParserOperand<"MMIXMemOffset8">;
 def MMIXMemOffset8 : MMIXMemoryOffsetOperand<8, false, "unsigned-8"> {
   let ParserMatchClass = MMIXMemOffset8AsmOperand;
+  let OperandNamespace = "MMIXII";
+  let OperandType = "OPERAND_UIMM8";
 }
 
 def MMIXMemAddrAsmOperand : MMIXImmediateParserOperand<"MMIXMemAddr">;

@@ -9,6 +9,7 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXBASEINFO_H
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXBASEINFO_H
 
+#include "llvm/MC/MCInstrDesc.h"
 #include <cstdint>
 
 namespace llvm {
@@ -17,6 +18,15 @@ namespace MMIXII {
 enum AsmVariant : unsigned {
   CanonicalAsmVariant = 0,
   MMIXALAsmVariant = 1,
+};
+
+enum OperandType : unsigned {
+  OPERAND_UIMM8 = MCOI::OPERAND_FIRST_TARGET,
+  OPERAND_UIMM16,
+  OPERAND_ROUNDING_MODE,
+  OPERAND_RESUME_MODE,
+  OPERAND_SYNC_MODE,
+  OPERAND_REG_OR_IMM8,
 };
 
 enum : uint64_t {

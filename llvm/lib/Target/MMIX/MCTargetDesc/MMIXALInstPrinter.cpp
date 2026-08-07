@@ -7,9 +7,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXALInstPrinter.h"
+#include "MMIXBaseInfo.h"
+#include "MMIXMCTargetDesc.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstrDesc.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <iterator>
 
 using namespace llvm;
 
@@ -26,14 +34,96 @@ void MMIXALInstPrinter::printInst(const MCInst *MI, uint64_t Address,
 
 void MMIXALInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
                                      raw_ostream &O) {
+  if (OpNo >= MI->getNumOperands())
+    report_fatal_error("invalid MMIXAL operand index");
+
+  const MCInstrDesc &Desc = MII.get(MI->getOpcode());
+  if (OpNo >= Desc.getNumOperands())
+    report_fatal_error("invalid MMIXAL instruction operand index");
+
   const MCOperand &Op = MI->getOperand(OpNo);
+  const MCOperandInfo &OpInfo = Desc.operands()[OpNo];
+
+  auto PrintUnsigned = [&](uint64_t Max, StringRef Kind) {
+    if (!Op.isImm() || Op.getImm() < 0 ||
+        static_cast<uint64_t>(Op.getImm()) > Max)
+      report_fatal_error(Twine("invalid MMIXAL ") + Kind);
+    O << static_cast<uint64_t>(Op.getImm());
+  };
+
+  auto PrintGeneralRegister = [&] {
+    if (!Op.isReg())
+      report_fatal_error("invalid MMIXAL general register operand");
+    if (!MRI.getRegClass(MMIX::GPR64RegClassID).contains(Op.getReg()))
+      report_fatal_error("invalid MMIXAL general register operand");
+    const unsigned Encoding = MRI.getEncodingValue(Op.getReg());
+    if (Encoding > 255)
+      report_fatal_error("invalid MMIXAL general register encoding");
+    O << '$' << Encoding;
+  };
+
+  switch (OpInfo.OperandType) {
+  case MMIXII::OPERAND_UIMM8:
+    PrintUnsigned(0xff, "byte operand");
+    return;
+  case MMIXII::OPERAND_UIMM16:
+    PrintUnsigned(0xffff, "wyde operand");
+    return;
+  case MMIXII::OPERAND_ROUNDING_MODE: {
+    static constexpr const char *Names[] = {
+        "ROUND_CURRENT", "ROUND_OFF", "ROUND_UP", "ROUND_DOWN", "ROUND_NEAR"};
+    if (!Op.isImm() || Op.getImm() < 0 ||
+        static_cast<uint64_t>(Op.getImm()) >= std::size(Names))
+      report_fatal_error("invalid MMIXAL rounding mode");
+    O << Names[Op.getImm()];
+    return;
+  }
+  case MMIXII::OPERAND_RESUME_MODE:
+    PrintUnsigned(1, "resume mode");
+    return;
+  case MMIXII::OPERAND_SYNC_MODE:
+    PrintUnsigned(7, "synchronization mode");
+    return;
+  case MMIXII::OPERAND_REG_OR_IMM8:
+    if (Op.isReg())
+      PrintGeneralRegister();
+    else
+      PrintUnsigned(0xff, "register-or-byte operand");
+    return;
+  default:
+    break;
+  }
+
   if (Op.isReg()) {
-    O << getRegisterName(Op.getReg());
-  } else if (Op.isImm()) {
+    if (OpInfo.RegClass == MMIX::GPR64RegClassID ||
+        OpInfo.RegClass == MMIX::FPR64RegClassID) {
+      PrintGeneralRegister();
+      return;
+    }
+
+    if (OpInfo.RegClass == MMIX::SPR64RegClassID) {
+      if (!MRI.getRegClass(MMIX::SPR64RegClassID).contains(Op.getReg()))
+        report_fatal_error("invalid MMIXAL special register operand");
+      static constexpr const char *Names[] = {
+          "rB", "rD", "rE", "rH",  "rJ", "rM", "rR",  "rBB", "rC",  "rN", "rO",
+          "rS", "rI", "rT", "rTT", "rK", "rQ", "rU",  "rV",  "rG",  "rL", "rA",
+          "rF", "rP", "rW", "rX",  "rY", "rZ", "rWW", "rXX", "rYY", "rZZ"};
+      const unsigned Encoding = MRI.getEncodingValue(Op.getReg());
+      if (Encoding >= std::size(Names))
+        report_fatal_error("invalid MMIXAL special register encoding");
+      O << Names[Encoding];
+      return;
+    }
+
+    report_fatal_error("invalid MMIXAL register operand");
+  }
+
+  if (Op.isImm()) {
     O << formatImm(Op.getImm());
-  } else {
-    assert(Op.isExpr() && "expected an MMIX register, immediate, or symbol");
+  } else if (Op.isExpr()) {
     MAI.printExpr(O, *Op.getExpr());
+  } else {
+    report_fatal_error("invalid MMIXAL operand");
   }
 }
 
