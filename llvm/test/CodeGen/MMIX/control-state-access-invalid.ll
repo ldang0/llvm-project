@@ -2,7 +2,9 @@
 
 target triple = "mmix"
 
-; CHECK-COUNT-3: error: MMIX instructions TRAP, TRIP, and RESUME are only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'TRAP' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'TRIP' is only permitted in module-level inline assembly
+; CHECK: error: MMIX instruction 'RESUME' is only permitted in module-level inline assembly
 
 define void @function_control_state_assembly_is_rejected() {
   call void asm sideeffect "TRAP 0, 0, 0", "~{memory}"()

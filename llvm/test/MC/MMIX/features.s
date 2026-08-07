@@ -17,6 +17,14 @@ RESUME 0
 # ALL: RESUME 0{{.*}}[0xf9,0x00,0x00,0x00]
 # NO-SYSTEM: error: instruction requires: system
 
+SAVE r255
+# ALL: SAVE r255{{.*}}[0xfa,0xff,0x00,0x00]
+# NO-SYSTEM: error: instruction requires: system
+
+UNSAVE r255
+# ALL: UNSAVE r255{{.*}}[0xfb,0x00,0x00,0xff]
+# NO-SYSTEM: error: instruction requires: system
+
 LDUNC r1, r2, 4
 # ALL: LDUNC r1, r2, 4{{.*}}[0x97,0x01,0x02,0x04]
 # NO-CACHE: error: instruction requires: cache

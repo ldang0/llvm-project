@@ -24,6 +24,12 @@ TRAP 256, 1, 2
 TRIP 1, -1, 2
 # CHECK: error: invalid operand for instruction
 
+SAVE 255
+# CHECK: error: invalid operand for instruction
+
+UNSAVE rA
+# CHECK: error: invalid operand for instruction
+
 SYNC 8
 # CHECK: error: invalid operand for instruction
 

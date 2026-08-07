@@ -80,7 +80,14 @@ static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
   }
 }
 
-static bool containsMMIXControlStateInstruction(StringRef AsmString) {
+static StringRef getMMIXModuleOnlyMnemonic(StringRef Token) {
+  for (StringRef Mnemonic : {"TRAP", "TRIP", "RESUME", "SAVE", "UNSAVE"})
+    if (Token.equals_insensitive(Mnemonic))
+      return Mnemonic;
+  return {};
+}
+
+static StringRef findMMIXModuleOnlyInstruction(StringRef AsmString) {
   while (!AsmString.empty()) {
     auto [Line, RemainingLines] = AsmString.split('\n');
     AsmString = RemainingLines;
@@ -100,15 +107,14 @@ static bool containsMMIXControlStateInstruction(StringRef AsmString) {
           Statement = Statement.drop_front(TokenEnd + 1).ltrim();
           continue;
         }
-        if (Token.equals_insensitive("TRAP") ||
-            Token.equals_insensitive("TRIP") ||
-            Token.equals_insensitive("RESUME"))
-          return true;
+        if (StringRef Mnemonic = getMMIXModuleOnlyMnemonic(Token);
+            !Mnemonic.empty())
+          return Mnemonic;
         break;
       }
     }
   }
-  return false;
+  return {};
 }
 
 static MCRegister getMMIXSpecialRegister(unsigned Selector,
@@ -321,10 +327,12 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
                                      const CallBase &Call) const {
   const auto *IA = dyn_cast<InlineAsm>(Call.getCalledOperand());
-  if (IA && containsMMIXControlStateInstruction(IA->getAsmString())) {
+  StringRef ModuleOnlyInstruction =
+      IA ? findMMIXModuleOnlyInstruction(IA->getAsmString()) : StringRef();
+  if (!ModuleOnlyInstruction.empty()) {
     Call.getContext().emitError(
-        &Call, "MMIX instructions TRAP, TRIP, and RESUME are only permitted "
-               "in module-level inline assembly");
+        &Call, Twine("MMIX instruction '") + ModuleOnlyInstruction +
+                   "' is only permitted in module-level inline assembly");
     return {};
   }
 
