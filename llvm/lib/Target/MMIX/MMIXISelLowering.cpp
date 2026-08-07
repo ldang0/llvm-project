@@ -270,6 +270,20 @@ static SDValue lowerMMIXUncachedMemoryIntrinsic(SDValue Op,
       Mem->getMemoryVT(), Mem->getMemOperand());
 }
 
+static SDValue lowerMMIXVirtualTranslationIntrinsic(SDValue Op,
+                                                    SelectionDAG &DAG) {
+  const MMIXSubtarget &STI =
+      DAG.getMachineFunction().getSubtarget<MMIXSubtarget>();
+  if (!STI.hasMMIXVirtualMemory())
+    return emitMMIXIntrinsicError(Op, "llvm.mmix.ldvts",
+                                  "requires the virtual-memory target feature",
+                                  DAG);
+
+  return DAG.getNode(MMIXISD::VIRTUAL_TRANSLATION_SEARCH, SDLoc(Op),
+                     {MVT::i64, MVT::Other},
+                     {Op.getOperand(0), Op.getOperand(2)});
+}
+
 MMIXTargetLowering::AsmOperandInfoVector
 MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
@@ -681,6 +695,8 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
     case Intrinsic::mmix_ldunc:
     case Intrinsic::mmix_stunc:
       return lowerMMIXUncachedMemoryIntrinsic(Op, IntrinsicID, DAG);
+    case Intrinsic::mmix_ldvts:
+      return lowerMMIXVirtualTranslationIntrinsic(Op, DAG);
     default:
       report_fatal_error("unsupported chained MMIX intrinsic");
     }

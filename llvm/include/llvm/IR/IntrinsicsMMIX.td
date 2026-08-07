@@ -59,5 +59,9 @@ def int_mmix_stunc
                  WriteOnly<ArgIndex<0>>, Align<ArgIndex<0>, 8>,
                  IntrNoDuplicate],
                 "", [SDNPMemOperand]>;
+def int_mmix_ldvts
+    : Intrinsic<[llvm_i64_ty], [llvm_i64_ty],
+                [IntrInaccessibleMemOnly, IntrNoDuplicate,
+                 NoUndef<RetIndex>, Range<RetIndex, 0, 4>]>;
 
 } // TargetPrefix = "mmix"

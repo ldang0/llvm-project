@@ -194,6 +194,16 @@ private:
     CurDAG->setNodeMemRefs(cast<MachineSDNode>(Selected), {MemRef});
   }
 
+  void selectVirtualTranslationSearch(SDNode *Node) {
+    SDLoc DL(Node);
+    SDValue Base;
+    SDValue Offset;
+    bool HasImmediate = selectAddress(Node->getOperand(1), Base, Offset, DL);
+    unsigned Opcode = HasImmediate ? MMIX::LDVTSI : MMIX::LDVTS;
+    SDValue Ops[] = {Base, Offset, Node->getOperand(0)};
+    CurDAG->SelectNodeTo(Node, Opcode, MVT::i64, MVT::Other, Ops);
+  }
+
   void Select(SDNode *Node) override {
     if (Node->isMachineOpcode()) {
       Node->setNodeId(-1);
@@ -224,6 +234,11 @@ private:
     if (Node->getOpcode() == MMIXISD::UNCACHED_LOAD ||
         Node->getOpcode() == MMIXISD::UNCACHED_STORE) {
       selectUncachedMemoryOperation(Node);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::VIRTUAL_TRANSLATION_SEARCH) {
+      selectVirtualTranslationSearch(Node);
       return;
     }
 
