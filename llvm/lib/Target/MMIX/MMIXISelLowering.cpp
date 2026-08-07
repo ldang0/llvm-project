@@ -16,6 +16,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/IntrinsicsMMIX.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -77,6 +78,37 @@ static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
   default:
     return false;
   }
+}
+
+static bool containsMMIXControlStateInstruction(StringRef AsmString) {
+  while (!AsmString.empty()) {
+    auto [Line, RemainingLines] = AsmString.split('\n');
+    AsmString = RemainingLines;
+    Line = Line.split('#').first;
+
+    while (!Line.empty()) {
+      auto [Statement, RemainingStatements] = Line.split(';');
+      Line = RemainingStatements;
+      Statement = Statement.trim();
+
+      // Skip labels so a complete instruction statement is classified by its
+      // mnemonic rather than by the surrounding inline-assembly layout.
+      while (!Statement.empty()) {
+        size_t TokenEnd = Statement.find_first_of(" \t:");
+        StringRef Token = Statement.take_front(TokenEnd);
+        if (TokenEnd != StringRef::npos && Statement[TokenEnd] == ':') {
+          Statement = Statement.drop_front(TokenEnd + 1).ltrim();
+          continue;
+        }
+        if (Token.equals_insensitive("TRAP") ||
+            Token.equals_insensitive("TRIP") ||
+            Token.equals_insensitive("RESUME"))
+          return true;
+        break;
+      }
+    }
+  }
+  return false;
 }
 
 static MCRegister getMMIXSpecialRegister(unsigned Selector,
@@ -288,6 +320,14 @@ MMIXTargetLowering::AsmOperandInfoVector
 MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
                                      const CallBase &Call) const {
+  const auto *IA = dyn_cast<InlineAsm>(Call.getCalledOperand());
+  if (IA && containsMMIXControlStateInstruction(IA->getAsmString())) {
+    Call.getContext().emitError(
+        &Call, "MMIX instructions TRAP, TRIP, and RESUME are only permitted "
+               "in module-level inline assembly");
+    return {};
+  }
+
   AsmOperandInfoVector Operands =
       TargetLowering::ParseConstraints(DL, TRI, Call);
   for (const AsmOperandInfo &Operand : Operands) {

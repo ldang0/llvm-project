@@ -18,6 +18,12 @@ SETH r1, 65536
 RESUME 2
 # CHECK: error: invalid operand for instruction
 
+TRAP 256, 1, 2
+# CHECK: error: invalid operand for instruction
+
+TRIP 1, -1, 2
+# CHECK: error: invalid operand for instruction
+
 SYNC 8
 # CHECK: error: invalid operand for instruction
 

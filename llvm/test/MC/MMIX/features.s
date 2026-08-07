@@ -9,6 +9,14 @@ TRAP 1, 2, 3
 # ALL: TRAP 1, 2, 3{{.*}}[0x00,0x01,0x02,0x03]
 # NO-SYSTEM: error: instruction requires: system
 
+TRIP 4, 5, 6
+# ALL: TRIP 4, 5, 6{{.*}}[0xff,0x04,0x05,0x06]
+# NO-SYSTEM: error: instruction requires: system
+
+RESUME 0
+# ALL: RESUME 0{{.*}}[0xf9,0x00,0x00,0x00]
+# NO-SYSTEM: error: instruction requires: system
+
 LDUNC r1, r2, 4
 # ALL: LDUNC r1, r2, 4{{.*}}[0x97,0x01,0x02,0x04]
 # NO-CACHE: error: instruction requires: cache
