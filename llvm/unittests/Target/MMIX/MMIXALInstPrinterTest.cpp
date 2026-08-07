@@ -23,8 +23,10 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 #include "gtest/gtest.h"
+#include <array>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <string>
 
@@ -506,6 +508,89 @@ TEST_F(MMIXALInstPrinterTest, RejectsOutOfRangeScalarOperands) {
   EXPECT_DEATH(print(MMIX::GET, {MCOperand::createReg(MMIX::R0),
                                  MCOperand::createReg(MMIX::R0)}),
                "invalid MMIXAL special register operand");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsEveryArchitecturalOpcodeRecord) {
+  constexpr unsigned MissingOpcode = std::numeric_limits<unsigned>::max();
+  std::array<unsigned, 256> RecordsByArchitecturalOpcode;
+  RecordsByArchitecturalOpcode.fill(MissingOpcode);
+
+  unsigned ArchitecturalRecordCount = 0;
+  for (unsigned Opcode = 0; Opcode != MII->getNumOpcodes(); ++Opcode) {
+    const MCInstrDesc &Desc = MII->get(Opcode);
+    const MMIXII::MMIXALSelectionKind Selection =
+        MMIXII::getMMIXALSelection(Desc.TSFlags);
+    if (Selection == MMIXII::MMIXALSelectionUnclassified)
+      continue;
+
+    EXPECT_FALSE(Desc.isPseudo()) << MII->getName(Opcode).str();
+    const unsigned ArchitecturalOpcode = Desc.TSFlags & MMIXII::OpcodeMask;
+    ASSERT_EQ(RecordsByArchitecturalOpcode[ArchitecturalOpcode], MissingOpcode)
+        << "duplicate architectural opcode " << ArchitecturalOpcode;
+    RecordsByArchitecturalOpcode[ArchitecturalOpcode] = Opcode;
+    ++ArchitecturalRecordCount;
+  }
+  ASSERT_EQ(ArchitecturalRecordCount, 256u);
+
+  constexpr uint64_t Address = 0x1000;
+  for (unsigned ArchitecturalOpcode = 0; ArchitecturalOpcode != 256;
+       ++ArchitecturalOpcode) {
+    const unsigned Opcode = RecordsByArchitecturalOpcode[ArchitecturalOpcode];
+    ASSERT_NE(Opcode, MissingOpcode)
+        << "missing architectural opcode " << ArchitecturalOpcode;
+
+    const MCInstrDesc &Desc = MII->get(Opcode);
+    const MMIXII::MMIXALSelectionKind Selection =
+        MMIXII::getMMIXALSelection(Desc.TSFlags);
+    ASSERT_TRUE(Selection == MMIXII::MMIXALSelectionExact ||
+                Selection == MMIXII::MMIXALSelectionRegister ||
+                Selection == MMIXII::MMIXALSelectionImmediate ||
+                Selection == MMIXII::MMIXALSelectionForward ||
+                Selection == MMIXII::MMIXALSelectionBackward)
+        << MII->getName(Opcode).str();
+
+    MCInst Inst;
+    Inst.setOpcode(Opcode);
+    for (const MCOperandInfo &Operand : Desc.operands()) {
+      if (Operand.RegClass == MMIX::GPR64RegClassID ||
+          Operand.RegClass == MMIX::FPR64RegClassID) {
+        Inst.addOperand(MCOperand::createReg(MMIX::R1));
+        continue;
+      }
+      if (Operand.RegClass == MMIX::SPR64RegClassID) {
+        Inst.addOperand(MCOperand::createReg(MMIX::RB));
+        continue;
+      }
+
+      switch (Operand.OperandType) {
+      case MCOI::OPERAND_PCREL: {
+        const uint64_t Target = Selection == MMIXII::MMIXALSelectionBackward
+                                    ? Address - 4
+                                    : Address + 4;
+        Inst.addOperand(constantTarget(Target));
+        break;
+      }
+      case MMIXII::OPERAND_UIMM8:
+      case MMIXII::OPERAND_UIMM16:
+      case MMIXII::OPERAND_REG_OR_IMM8:
+        Inst.addOperand(MCOperand::createImm(1));
+        break;
+      case MMIXII::OPERAND_ROUNDING_MODE:
+      case MMIXII::OPERAND_RESUME_MODE:
+      case MMIXII::OPERAND_SYNC_MODE:
+        Inst.addOperand(MCOperand::createImm(0));
+        break;
+      default:
+        FAIL() << "unhandled operand type for " << MII->getName(Opcode).str();
+      }
+    }
+
+    std::string Output;
+    raw_string_ostream OS(Output);
+    Printer.printInst(&Inst, Address, "", *STI, OS);
+    OS.flush();
+    EXPECT_FALSE(Output.empty()) << MII->getName(Opcode).str();
+  }
 }
 
 TEST(MMIXALInstPrinterFactoryTest, PublicFactoryRejectsMMIXALVariant) {

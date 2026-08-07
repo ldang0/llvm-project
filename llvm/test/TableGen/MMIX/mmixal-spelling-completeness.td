@@ -150,6 +150,20 @@ assert !eq(!size(MMIXALExpectedSelections), 256),
 assert !eq(!size(MMIXALExpectedOperandForms), 256),
        "MMIXAL operand-form inventory is incomplete";
 
+defvar MMIXALMissingPrinterPaths =
+    !filter(Record, MMIXInventoryRecords,
+            !or(!eq(Record.AsmString, ""),
+                !eq(!find(Record.AsmString, Record.MMIXALMnemonic), -1)));
+defvar MMIXALCodeGenOnlyRecords =
+    !filter(Record, !instances<MMIXInstruction>(),
+            !and(!eq(Record.isCodeGenOnly, 1),
+                 !ne(Record.MMIXALSelection, "unclassified")));
+
+assert !eq(!size(MMIXALMissingPrinterPaths), 0),
+       "MMIX architectural instruction has no generated MMIXAL printer path";
+assert !eq(!size(MMIXALCodeGenOnlyRecords), 0),
+       "MMIX CodeGen-only record entered the MMIXAL printer inventory";
+
 foreach Opcode = 0-255 in {
   assert !eq(MMIXExpectedRecordsByOpcode[Opcode].MMIXOpcode, Opcode),
          "MMIXAL spelling is attached to the wrong opcode record";
