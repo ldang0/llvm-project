@@ -1,15 +1,14 @@
-; XFAIL: *
-; FIXME: Remove XFAIL once MMIX assembly generation is implemented.
+; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -asm-verbose=false %s -o - \
+; RUN:   | FileCheck %s
 ;
-; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm %s -o - | FileCheck %s
-;
-; This is an LLVM-only output contract test. It must not invoke MMIXAL or QEMU.
+; This LLVM-only test checks canonical assembly. MMIXAL compatibility and
+; external execution belong to the separate bare-metal validation contract.
 
 ; CHECK: .text
+; CHECK: .globl Main
 ; CHECK-LABEL: Main:
-; CHECK: JMP bare_metal_success
-; CHECK-LABEL: bare_metal_success:
-; CHECK-NEXT: JMP bare_metal_success
+; CHECK-NEXT: [[LOOP:\.[A-Za-z0-9_.$]+]]:
+; CHECK-NEXT: JMPB [[LOOP]]
 
 target triple = "mmix-unknown-elf"
 
