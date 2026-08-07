@@ -1,4 +1,6 @@
 # RUN: llvm-mc -triple=mmix -show-encoding %s | FileCheck %s
+# RUN: llvm-mc -triple=mmix -show-encoding %s | \
+# RUN:   llvm-mc -triple=mmix -show-encoding | FileCheck %s
 # RUN: llvm-mc -triple=mmix -filetype=obj %s -o %t
 # RUN: llvm-objdump --triple=mmix --no-print-imm-hex -d %t | FileCheck %s \
 # RUN:   --check-prefix=DISASM --implicit-check-not='<unknown>'
@@ -87,6 +89,22 @@ SUBU r1, r2, r3
 # CHECK: SUBU r1, r2, r3{{.*}}[0x26,0x01,0x02,0x03]
 SUBU r1, r2, 3
 # CHECK: SUBU r1, r2, 3{{.*}}[0x27,0x01,0x02,0x03]
+2ADDU r1, r2, r3
+# CHECK: 2ADDU r1, r2, r3{{.*}}[0x28,0x01,0x02,0x03]
+2ADDU r1, r2, 3
+# CHECK: 2ADDU r1, r2, 3{{.*}}[0x29,0x01,0x02,0x03]
+4ADDU r1, r2, r3
+# CHECK: 4ADDU r1, r2, r3{{.*}}[0x2a,0x01,0x02,0x03]
+4ADDU r1, r2, 3
+# CHECK: 4ADDU r1, r2, 3{{.*}}[0x2b,0x01,0x02,0x03]
+8ADDU r1, r2, r3
+# CHECK: 8ADDU r1, r2, r3{{.*}}[0x2c,0x01,0x02,0x03]
+8ADDU r1, r2, 3
+# CHECK: 8ADDU r1, r2, 3{{.*}}[0x2d,0x01,0x02,0x03]
+16ADDU r1, r2, r3
+# CHECK: 16ADDU r1, r2, r3{{.*}}[0x2e,0x01,0x02,0x03]
+16ADDU r1, r2, 3
+# CHECK: 16ADDU r1, r2, 3{{.*}}[0x2f,0x01,0x02,0x03]
 CMP r1, r2, r3
 # CHECK: CMP r1, r2, r3{{.*}}[0x30,0x01,0x02,0x03]
 CMP r1, r2, 3
@@ -140,7 +158,7 @@ BODB r1, -2
 BNN r1, 2
 # CHECK: BNN r1, 2{{.*}}[0x48,0x01,0x00,0x02]
 BNNB r1, -2
-# CHECK: BN{{.*}}[0x49,0x01,0xff,0xfe]
+# CHECK: BNNB r1, -2{{.*}}[0x49,0x01,0xff,0xfe]
 BNZ r1, 2
 # CHECK: BNZ r1, 2{{.*}}[0x4a,0x01,0x00,0x02]
 BNZB r1, -2

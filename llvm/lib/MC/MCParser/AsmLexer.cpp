@@ -868,6 +868,16 @@ AsmToken AsmLexer::LexToken() {
   IsAtStartOfLine = false;
   bool OldIsAtStartOfStatement = IsAtStartOfStatement;
   IsAtStartOfStatement = false;
+
+  if (OldIsAtStartOfStatement &&
+      MAI.doesAllowDigitAtStartOfIdentifier() && isDigit(CurChar)) {
+    const char *LookAhead = CurPtr;
+    while (isDigit(*LookAhead))
+      ++LookAhead;
+    if (isAlpha(*LookAhead))
+      return LexIdentifier();
+  }
+
   switch (CurChar) {
   default:
     // Handle identifier: [a-zA-Z_.$@#?][a-zA-Z0-9_.$@#?]*

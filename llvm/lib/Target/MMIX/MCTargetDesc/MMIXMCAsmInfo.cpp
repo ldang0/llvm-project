@@ -22,6 +22,7 @@ MMIXMCAsmInfo::MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   Data64bitsDirective = "\t.8byte\t";
   ZeroDirective = "\t.space\t";
   MinInstAlignment = 4;
+  AllowDigitAtStartOfIdentifier = true;
   UsesELFSectionDirectiveForBSS = true;
   IsLittleEndian = false;
 }

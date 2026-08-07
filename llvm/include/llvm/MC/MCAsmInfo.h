@@ -197,6 +197,10 @@ protected:
   /// still be lexed as a comment.
   bool AllowAtAtStartOfIdentifier = false;
 
+  /// This is true if an identifier at the start of a statement may begin with
+  /// one or more decimal digits followed by an alphabetic character.
+  bool AllowDigitAtStartOfIdentifier = false;
+
   /// If this is true, symbol names with invalid characters will be printed in
   /// quotes.
   bool SupportsQuotedNames = true;
@@ -590,6 +594,9 @@ public:
   }
   bool doesAllowDollarAtStartOfIdentifier() const {
     return AllowDollarAtStartOfIdentifier;
+  }
+  bool doesAllowDigitAtStartOfIdentifier() const {
+    return AllowDigitAtStartOfIdentifier;
   }
   bool supportsNameQuoting() const { return SupportsQuotedNames; }
 
