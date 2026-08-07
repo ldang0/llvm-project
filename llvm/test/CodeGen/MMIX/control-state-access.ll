@@ -13,6 +13,7 @@ module asm "mmix_trap_entry:"
 module asm "TRAP 0, 0, 0"
 module asm "RESUME 1"
 module asm "mmix_raw_jump:"
+module asm "GO r0, r1, r2"
 module asm "GO r0, r1, 0"
 
 ; CHECK:      mmix_trip_entry:
@@ -22,6 +23,7 @@ module asm "GO r0, r1, 0"
 ; CHECK:      TRAP 0, 0, 0
 ; CHECK:      RESUME 1
 ; CHECK:      mmix_raw_jump:
+; CHECK:      GO r0, r1, r2
 ; CHECK:      GO r0, r1, 0
 
 declare void @callee()

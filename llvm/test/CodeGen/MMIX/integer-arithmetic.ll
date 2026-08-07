@@ -87,6 +87,15 @@ define i64 @negate(i64 %value) {
   ret i64 %result
 }
 
+; Poison on signed overflow does not authorize MMIX's trapping NEG form.
+; CHECK-LABEL: negate_nsw:
+; CHECK:       NEGU r231, 0, r231
+; CHECK-NEXT:  POP 0, 0
+define i64 @negate_nsw(i64 %value) {
+  %result = sub nsw i64 0, %value
+  ret i64 %result
+}
+
 ; LLVM overflow flags never select the trapping ADD or SUB instructions.
 ; CHECK-LABEL: add_nsw:
 ; CHECK:       ADDU r231, r231, r232

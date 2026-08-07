@@ -171,6 +171,24 @@ false:
   ret i64 6
 }
 
+; Branch weights do not select MMIX probable branches until the backend has a
+; reviewed probability threshold and late direction-aware hint policy.
+; CHECK-LABEL: branch_profile_hint:
+; CHECK-NOT:   PB
+; CHECK:       CMPU [[CMP:r[0-9]+]], r231, 0
+; CHECK-NEXT:  BZ [[CMP]],
+define i64 @branch_profile_hint(i64 %value) {
+entry:
+  %condition = icmp ne i64 %value, 0
+  br i1 %condition, label %likely, label %unlikely, !prof !0
+
+likely:
+  ret i64 1
+
+unlikely:
+  ret i64 0
+}
+
 ; MMIX keeps switches as compare-and-branch chains until indirect jump-table
 ; control transfer and ELF table-entry semantics are defined.
 ; CHECK-LABEL: switch_chain:
@@ -196,3 +214,5 @@ four:
 default:
   ret i64 0
 }
+
+!0 = !{!"branch_weights", i32 1000, i32 1}

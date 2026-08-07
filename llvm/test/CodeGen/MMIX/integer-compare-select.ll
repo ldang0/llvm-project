@@ -56,6 +56,15 @@ define i1 @compare_immediate(i64 %value) {
   ret i1 %result
 }
 
+; CHECK-LABEL: compare_signed_immediate:
+; CHECK:       CMP [[CMP:r[0-9]+]], r231, 255
+; CHECK-NEXT:  ZSN r231, [[CMP]], 1
+; CHECK-NEXT:  POP 0, 0
+define i1 @compare_signed_immediate(i64 %value) {
+  %result = icmp slt i64 %value, 255
+  ret i1 %result
+}
+
 ; CHECK-LABEL: compare_signed_i8:
 ; CHECK:       SLU
 ; CHECK-NEXT:  SR
