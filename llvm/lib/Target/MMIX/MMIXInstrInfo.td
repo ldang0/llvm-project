@@ -193,8 +193,12 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   let TSFlags{7-0} = MMIXOpcode;
   let TSFlags{8} = MMIXPCRelativeBackward;
   let TSFlags{13-9} = MMIXPCRelativeWidth;
+  // These fields give inventory tests stable semantic classifications that do
+  // not depend on the instruction-format inheritance hierarchy.
   string MMIXInventoryStatus = "modeled";
   string MMIXInventoryFamily = "unclassified";
+  string MMIXInventoryForm = "unclassified";
+  string MMIXInventoryFeature = "base";
 }
 
 // The ordinary integer form has a register or unsigned-byte Z operand. The
@@ -211,6 +215,7 @@ class MMIXIntRegReg<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXIntRegImm<string Mnemonic>
@@ -224,6 +229,7 @@ class MMIXIntRegImm<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 // NEG and NEGU use an unsigned byte in the Y field even in their register-Z
@@ -239,6 +245,7 @@ class MMIXNegReg<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-imm8-reg";
 }
 
 class MMIXNegImm<string Mnemonic>
@@ -252,6 +259,7 @@ class MMIXNegImm<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-imm8-imm8";
 }
 
 class MMIXIntConst<string Mnemonic>
@@ -264,6 +272,7 @@ class MMIXIntConst<string Mnemonic>
   let MMIXY = value{15-8};
   let MMIXZ = value{7-0};
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-imm16";
 }
 
 class MMIXIntRegRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -292,6 +301,7 @@ class MMIXCondSetRegOpcode<bits<8> Opcode, string Mnemonic>
   let MMIXOpcode = Opcode;
   let Constraints = "$dst = $old";
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXCondSetImmOpcode<bits<8> Opcode, string Mnemonic>
@@ -307,6 +317,7 @@ class MMIXCondSetImmOpcode<bits<8> Opcode, string Mnemonic>
   let MMIXOpcode = Opcode;
   let Constraints = "$dst = $old";
   let MMIXInventoryFamily = "integer";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXNegRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -670,6 +681,7 @@ class MMIXLoadReg<string Mnemonic>
   let MMIXZ = offset;
   let mayLoad = true;
   let MMIXInventoryFamily = "memory";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXLoadImm<string Mnemonic>
@@ -684,6 +696,7 @@ class MMIXLoadImm<string Mnemonic>
   let MMIXZ = offset;
   let mayLoad = true;
   let MMIXInventoryFamily = "memory";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXStoreReg<string Mnemonic>
@@ -698,6 +711,7 @@ class MMIXStoreReg<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXStoreImm<string Mnemonic>
@@ -713,6 +727,7 @@ class MMIXStoreImm<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXLoadRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -883,6 +898,7 @@ class MMIXCompareSwapReg
   let mayLoad = true;
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXCompareSwapImm
@@ -902,6 +918,7 @@ class MMIXCompareSwapImm
   let mayLoad = true;
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXCompareSwapRegOpcode<bits<8> Opcode>
@@ -934,6 +951,8 @@ class MMIXCondBranchOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXCondBranch<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
+  let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
+                                         "reg-pcrel16-forward");
 }
 
 def BN   : MMIXCondBranchOpcode<0x40, "BN">;
@@ -984,6 +1003,8 @@ class MMIXJump<string Mnemonic>
 class MMIXJumpOpcode<bits<8> Opcode, string Mnemonic> : MMIXJump<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
+  let MMIXInventoryForm = !if(Opcode{0}, "pcrel24-backward",
+                                         "pcrel24-forward");
 }
 
 def JMP  : MMIXJumpOpcode<0xF0, "JMP">;
@@ -1005,6 +1026,8 @@ class MMIXGetAddressOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXGetAddress<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
+  let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
+                                         "reg-pcrel16-forward");
 }
 
 def GETA  : MMIXGetAddressOpcode<0xF4, "GETA">;
@@ -1026,6 +1049,8 @@ class MMIXPushJumpOpcode<bits<8> Opcode, string Mnemonic>
     : MMIXPushJump<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
+  let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
+                                         "reg-pcrel16-forward");
 }
 
 def PUSHJ  : MMIXPushJumpOpcode<0xF2, "PUSHJ">;
@@ -1042,6 +1067,7 @@ class MMIXGoReg
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXGoImm
@@ -1055,6 +1081,7 @@ class MMIXGoImm
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXGoRegOpcode<bits<8> Opcode> : MMIXGoReg {
@@ -1079,6 +1106,7 @@ class MMIXPushGoReg
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXPushGoImm
@@ -1092,6 +1120,7 @@ class MMIXPushGoImm
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXPushGoRegOpcode<bits<8> Opcode> : MMIXPushGoReg {
@@ -1114,6 +1143,7 @@ class MMIXPop : MMIXInstruction<(outs),
   let MMIXY = target{15-8};
   let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
+  let MMIXInventoryForm = "imm8-imm16";
 }
 
 def POP : MMIXPop {
@@ -1155,6 +1185,7 @@ class MMIXFPBinary<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-reg-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1185,6 +1216,7 @@ class MMIXFPCompare<string Mnemonic>
   let MMIXY = lhs;
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXFPCompareOpcode<bits<8> Opcode, string Mnemonic>
@@ -1217,6 +1249,7 @@ class MMIXFPUnaryRounded<string Mnemonic>
   let MMIXY{2-0} = round;
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-round-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1249,6 +1282,7 @@ class MMIXFix<string Mnemonic>
   let MMIXY{2-0} = round;
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-round-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1271,6 +1305,7 @@ class MMIXFloatFromIntReg<string Mnemonic>
   let MMIXY{2-0} = round;
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-round-reg";
   string MMIXSourceForm = "register";
   let mayRaiseFPException = true;
 }
@@ -1287,6 +1322,7 @@ class MMIXFloatFromIntImm<string Mnemonic>
   let MMIXY{2-0} = round;
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-round-imm8";
   string MMIXSourceForm = "immediate";
   let mayRaiseFPException = true;
 }
@@ -1339,6 +1375,7 @@ class MMIXFPLoadReg<string Mnemonic>
   let MMIXZ = offset;
   let mayLoad = true;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXFPLoadImm<string Mnemonic>
@@ -1353,6 +1390,7 @@ class MMIXFPLoadImm<string Mnemonic>
   let MMIXZ = offset;
   let mayLoad = true;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXFPStoreReg<string Mnemonic>
@@ -1367,6 +1405,7 @@ class MMIXFPStoreReg<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-reg-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1383,6 +1422,7 @@ class MMIXFPStoreImm<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
+  let MMIXInventoryForm = "reg-reg-imm8";
   let mayRaiseFPException = true;
 }
 
@@ -1457,16 +1497,19 @@ class MMIXMachineInstruction<dag outs, dag ins, string asmstr>
 class MMIXSystemInstruction<dag outs, dag ins, string asmstr>
     : MMIXMachineInstruction<outs, ins, asmstr> {
   let Predicates = [HasMMIXSystem];
+  let MMIXInventoryFeature = "system";
 }
 
 class MMIXCacheInstruction<dag outs, dag ins, string asmstr>
     : MMIXMachineInstruction<outs, ins, asmstr> {
   let Predicates = [HasMMIXCache];
+  let MMIXInventoryFeature = "cache";
 }
 
 class MMIXVirtualMemoryInstruction<dag outs, dag ins, string asmstr>
     : MMIXMachineInstruction<outs, ins, asmstr> {
   let Predicates = [HasMMIXVirtualMemory];
+  let MMIXInventoryFeature = "virtual-memory";
 }
 
 class MMIXStoreConstantReg
@@ -1480,6 +1523,7 @@ class MMIXStoreConstantReg
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let MMIXInventoryForm = "imm8-reg-reg";
 }
 
 class MMIXStoreConstantImm
@@ -1493,6 +1537,7 @@ class MMIXStoreConstantImm
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let MMIXInventoryForm = "imm8-reg-imm8";
 }
 
 class MMIXStoreConstantRegOpcode<bits<8> Opcode>
@@ -1519,6 +1564,7 @@ class MMIXCacheReg<string Mnemonic>
   let MMIXX = count;
   let MMIXY = base;
   let MMIXZ = offset;
+  let MMIXInventoryForm = "imm8-reg-reg";
 }
 
 class MMIXCacheImm<string Mnemonic>
@@ -1532,6 +1578,7 @@ class MMIXCacheImm<string Mnemonic>
   let MMIXX = count;
   let MMIXY = base;
   let MMIXZ = offset;
+  let MMIXInventoryForm = "imm8-reg-imm8";
 }
 
 class MMIXCacheRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -1568,6 +1615,7 @@ class MMIXUncachedLoad<string Mnemonic>
   let MMIXY = base;
   let MMIXZ = offset;
   let mayLoad = true;
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXUncachedLoadImm<string Mnemonic>
@@ -1581,6 +1629,7 @@ class MMIXUncachedLoadImm<string Mnemonic>
   let MMIXY = base;
   let MMIXZ = offset;
   let mayLoad = true;
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXUncachedStore<string Mnemonic>
@@ -1595,6 +1644,7 @@ class MMIXUncachedStore<string Mnemonic>
   let MMIXY = base;
   let MMIXZ = offset;
   let mayStore = true;
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXUncachedStoreImm<string Mnemonic>
@@ -1609,6 +1659,7 @@ class MMIXUncachedStoreImm<string Mnemonic>
   let MMIXY = base;
   let MMIXZ = offset;
   let mayStore = true;
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXUncachedLoadOpcode<bits<8> Opcode, string Mnemonic>
@@ -1646,6 +1697,7 @@ class MMIXVirtualTranslationReg
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let MMIXInventoryForm = "reg-reg-reg";
 }
 
 class MMIXVirtualTranslationImm
@@ -1659,6 +1711,7 @@ class MMIXVirtualTranslationImm
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let MMIXInventoryForm = "reg-reg-imm8";
 }
 
 class MMIXVirtualTranslationRegOpcode<bits<8> Opcode>
@@ -1681,6 +1734,7 @@ class MMIXSync : MMIXSystemInstruction<(outs), (ins MMIXSyncMode:$mode),
   let MMIXY = 0;
   let MMIXZ{7-3} = 0;
   let MMIXZ{2-0} = mode;
+  let MMIXInventoryForm = "sync-mode";
 }
 
 def SYNC : MMIXSync {
@@ -1697,6 +1751,7 @@ class MMIXSwym : MMIXMachineInstruction<
   let MMIXX = x;
   let MMIXY = y;
   let MMIXZ = z;
+  let MMIXInventoryForm = "reg-or-imm8-reg-or-imm8-reg-or-imm8";
 }
 
 def SWYM : MMIXSwym {
@@ -1714,6 +1769,7 @@ class MMIXTrapInstruction<string Mnemonic>
   let MMIXX = x;
   let MMIXY = y;
   let MMIXZ = z;
+  let MMIXInventoryForm = "reg-or-imm8-reg-or-imm8-reg-or-imm8";
 }
 
 class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
@@ -1732,6 +1788,7 @@ class MMIXResume
   let MMIXY = 0;
   let MMIXZ{7-1} = 0;
   let MMIXZ{0} = mode;
+  let MMIXInventoryForm = "resume-mode";
 }
 
 def RESUME : MMIXResume {
@@ -1746,6 +1803,7 @@ class MMIXGet : MMIXMachineInstruction<(outs GPR64Op:$dst), (ins SPR64Op:$src),
   let MMIXY = 0;
   let MMIXZ{7-5} = 0;
   let MMIXZ{4-0} = src;
+  let MMIXInventoryForm = "reg-special-reg";
 }
 
 def GET : MMIXGet {
@@ -1761,6 +1819,7 @@ class MMIXPutReg
   let MMIXX{4-0} = dst;
   let MMIXY = 0;
   let MMIXZ = src;
+  let MMIXInventoryForm = "special-reg-reg";
 }
 
 class MMIXPutImm
@@ -1772,6 +1831,7 @@ class MMIXPutImm
   let MMIXX{4-0} = dst;
   let MMIXY = 0;
   let MMIXZ = src;
+  let MMIXInventoryForm = "special-reg-imm8";
 }
 
 class MMIXPutRegOpcode<bits<8> Opcode> : MMIXPutReg {
@@ -1791,6 +1851,7 @@ class MMIXSave : MMIXSystemInstruction<(outs GPR64Op:$state), (ins),
   let MMIXX = state;
   let MMIXY = 0;
   let MMIXZ = 0;
+  let MMIXInventoryForm = "reg";
 }
 class MMIXUnsave : MMIXSystemInstruction<(outs), (ins GPR64Op:$state),
                                           "UNSAVE $state"> {
@@ -1798,6 +1859,7 @@ class MMIXUnsave : MMIXSystemInstruction<(outs), (ins GPR64Op:$state),
   let MMIXX = 0;
   let MMIXY = 0;
   let MMIXZ = state;
+  let MMIXInventoryForm = "reg";
 }
 
 def SAVE : MMIXSave {
