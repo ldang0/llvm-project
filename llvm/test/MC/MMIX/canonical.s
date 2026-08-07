@@ -1,4 +1,8 @@
 # RUN: llvm-mc -triple=mmix -show-encoding %s | FileCheck %s
+# RUN: llvm-mc -triple=mmix -filetype=asm %s -o %t.default
+# RUN: llvm-mc -triple=mmix -filetype=asm --output-asm-variant=0 %s \
+# RUN:   -o %t.explicit
+# RUN: diff -u %t.default %t.explicit
 
 ADD r1, r2, r3
 # CHECK: ADD r1, r2, r3{{.*}}[0x20,0x01,0x02,0x03]
