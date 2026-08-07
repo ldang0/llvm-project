@@ -126,8 +126,8 @@ private:
     CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, Ops);
   }
 
-  bool selectCacheAddress(SDValue Address, SDValue &Base, SDValue &Offset,
-                          const SDLoc &DL) {
+  bool selectAddress(SDValue Address, SDValue &Base, SDValue &Offset,
+                     const SDLoc &DL) {
     bool HasImmediate = true;
     Base = Address;
     Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
@@ -159,8 +159,7 @@ private:
     SDLoc DL(Node);
     SDValue Base;
     SDValue Offset;
-    bool HasImmediate =
-        selectCacheAddress(Node->getOperand(1), Base, Offset, DL);
+    bool HasImmediate = selectAddress(Node->getOperand(1), Base, Offset, DL);
     unsigned Operation =
         cast<ConstantSDNode>(Node->getOperand(3))->getZExtValue();
     unsigned Opcode =
@@ -170,6 +169,29 @@ private:
         MVT::i64);
     SDValue Ops[] = {Span, Base, Offset, Node->getOperand(0)};
     CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, Ops);
+  }
+
+  void selectUncachedMemoryOperation(SDNode *Node) {
+    bool IsLoad = Node->getOpcode() == MMIXISD::UNCACHED_LOAD;
+    SDLoc DL(Node);
+    SDValue Base;
+    SDValue Offset;
+    bool HasImmediate = selectAddress(Node->getOperand(1), Base, Offset, DL);
+    unsigned Opcode;
+    SmallVector<SDValue, 4> Ops;
+    if (IsLoad) {
+      Opcode = HasImmediate ? MMIX::LDUNCI : MMIX::LDUNC;
+      Ops = {Base, Offset, Node->getOperand(0)};
+    } else {
+      Opcode = HasImmediate ? MMIX::STUNCI : MMIX::STUNC;
+      Ops = {Node->getOperand(2), Base, Offset, Node->getOperand(0)};
+    }
+
+    MachineMemOperand *MemRef = cast<MemIntrinsicSDNode>(Node)->getMemOperand();
+    SDNode *Selected =
+        IsLoad ? CurDAG->SelectNodeTo(Node, Opcode, MVT::i64, MVT::Other, Ops)
+               : CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, Ops);
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(Selected), {MemRef});
   }
 
   void Select(SDNode *Node) override {
@@ -196,6 +218,12 @@ private:
 
     if (Node->getOpcode() == MMIXISD::CACHE_OPERATION) {
       selectCacheOperation(Node);
+      return;
+    }
+
+    if (Node->getOpcode() == MMIXISD::UNCACHED_LOAD ||
+        Node->getOpcode() == MMIXISD::UNCACHED_STORE) {
+      selectUncachedMemoryOperation(Node);
       return;
     }
 

@@ -44,5 +44,20 @@ def int_mmix_syncid
 def int_mmix_sync
     : Intrinsic<[], [llvm_i32_ty],
                 [ImmArg<ArgIndex<0>>, IntrNoDuplicate]>;
+def int_mmix_ldunc
+    : Intrinsic<[llvm_i64_ty], [llvm_ptr_ty],
+                [IntrRead<[ArgMem, InaccessibleMem]>,
+                 IntrWrite<[InaccessibleMem]>, NoCapture<ArgIndex<0>>,
+                 ReadOnly<ArgIndex<0>>, Align<ArgIndex<0>, 8>,
+                 IntrNoDuplicate],
+                "", [SDNPMemOperand]>;
+def int_mmix_stunc
+    : Intrinsic<[], [llvm_ptr_ty, llvm_i64_ty],
+                [IntrRead<[InaccessibleMem]>,
+                 IntrWrite<[ArgMem, InaccessibleMem]>,
+                 NoCapture<ArgIndex<0>>,
+                 WriteOnly<ArgIndex<0>>, Align<ArgIndex<0>, 8>,
+                 IntrNoDuplicate],
+                "", [SDNPMemOperand]>;
 
 } // TargetPrefix = "mmix"

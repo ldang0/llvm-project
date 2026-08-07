@@ -12,6 +12,7 @@
 #include "MMIXFrameLowering.h"
 #include "MMIXISelLowering.h"
 #include "MMIXInstrInfo.h"
+#include "MMIXSelectionDAGInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 
 #define GET_SUBTARGETINFO_HEADER
@@ -31,6 +32,7 @@ class MMIXSubtarget : public MMIXGenSubtargetInfo {
   MMIXInstrInfo InstrInfo;
   MMIXFrameLowering FrameLowering;
   MMIXTargetLowering TLInfo;
+  MMIXSelectionDAGInfo TSInfo;
 
 public:
   MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
@@ -52,6 +54,9 @@ public:
   }
   const MMIXTargetLowering *getTargetLowering() const override {
     return &TLInfo;
+  }
+  const MMIXSelectionDAGInfo *getSelectionDAGInfo() const override {
+    return &TSInfo;
   }
 };
 

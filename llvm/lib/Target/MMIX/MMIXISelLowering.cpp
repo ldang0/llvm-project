@@ -246,6 +246,30 @@ static SDValue lowerMMIXSyncIntrinsic(SDValue Op, SelectionDAG &DAG) {
                      {Op.getOperand(0), DAG.getConstant(Mode, DL, MVT::i64)});
 }
 
+static SDValue lowerMMIXUncachedMemoryIntrinsic(SDValue Op,
+                                                unsigned IntrinsicID,
+                                                SelectionDAG &DAG) {
+  const MMIXSubtarget &STI =
+      DAG.getMachineFunction().getSubtarget<MMIXSubtarget>();
+  bool IsLoad = IntrinsicID == Intrinsic::mmix_ldunc;
+  StringRef IntrinsicName = IsLoad ? "llvm.mmix.ldunc" : "llvm.mmix.stunc";
+  if (!STI.hasMMIXCache())
+    return emitMMIXIntrinsicError(Op, IntrinsicName,
+                                  "requires the cache target feature", DAG);
+
+  auto *Mem = cast<MemIntrinsicSDNode>(Op);
+  SDLoc DL(Op);
+  if (IsLoad)
+    return DAG.getMemIntrinsicNode(MMIXISD::UNCACHED_LOAD, DL, Op->getVTList(),
+                                   {Op.getOperand(0), Op.getOperand(2)},
+                                   Mem->getMemoryVT(), Mem->getMemOperand());
+
+  return DAG.getMemIntrinsicNode(
+      MMIXISD::UNCACHED_STORE, DL, Op->getVTList(),
+      {Op.getOperand(0), Op.getOperand(2), Op.getOperand(3)},
+      Mem->getMemoryVT(), Mem->getMemOperand());
+}
+
 MMIXTargetLowering::AsmOperandInfoVector
 MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
@@ -530,6 +554,30 @@ bool MMIXTargetLowering::allowsMisalignedMemoryAccesses(
   return false;
 }
 
+void MMIXTargetLowering::getTgtMemIntrinsic(
+    SmallVectorImpl<IntrinsicInfo> &Infos, const CallBase &I, MachineFunction &,
+    unsigned IntrinsicID) const {
+  IntrinsicInfo Info;
+  switch (IntrinsicID) {
+  case Intrinsic::mmix_ldunc:
+    Info.opc = ISD::INTRINSIC_W_CHAIN;
+    Info.flags = MachineMemOperand::MOLoad;
+    break;
+  case Intrinsic::mmix_stunc:
+    Info.opc = ISD::INTRINSIC_VOID;
+    Info.flags = MachineMemOperand::MOStore;
+    break;
+  default:
+    return;
+  }
+
+  Info.memVT = MVT::i64;
+  Info.ptrVal = I.getArgOperand(0);
+  Info.size = 8;
+  Info.align = Align(8);
+  Infos.push_back(Info);
+}
+
 SDValue MMIXTargetLowering::PerformDAGCombine(SDNode *N,
                                               DAGCombinerInfo &DCI) const {
   auto *Store = dyn_cast<StoreSDNode>(N);
@@ -630,6 +678,9 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
       return lowerMMIXCacheIntrinsic(Op, IntrinsicID, DAG);
     case Intrinsic::mmix_sync:
       return lowerMMIXSyncIntrinsic(Op, DAG);
+    case Intrinsic::mmix_ldunc:
+    case Intrinsic::mmix_stunc:
+      return lowerMMIXUncachedMemoryIntrinsic(Op, IntrinsicID, DAG);
     default:
       report_fatal_error("unsupported chained MMIX intrinsic");
     }

@@ -1567,6 +1567,7 @@ class MMIXUncachedLoad<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayLoad = true;
 }
 
 class MMIXUncachedLoadImm<string Mnemonic>
@@ -1579,6 +1580,7 @@ class MMIXUncachedLoadImm<string Mnemonic>
   let MMIXX = dst;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayLoad = true;
 }
 
 class MMIXUncachedStore<string Mnemonic>
@@ -1592,6 +1594,7 @@ class MMIXUncachedStore<string Mnemonic>
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
 }
 
 class MMIXUncachedStoreImm<string Mnemonic>
@@ -1605,6 +1608,7 @@ class MMIXUncachedStoreImm<string Mnemonic>
   let MMIXX = value;
   let MMIXY = base;
   let MMIXZ = offset;
+  let mayStore = true;
 }
 
 class MMIXUncachedLoadOpcode<bits<8> Opcode, string Mnemonic>

@@ -42,6 +42,8 @@ enum NodeType : unsigned {
   PUT_SPECIAL_REGISTER,
   CACHE_OPERATION,
   SYNC,
+  UNCACHED_LOAD,
+  UNCACHED_STORE,
   CALL,
   RET_GLUE,
   RET_VALUE_GLUE,
@@ -71,6 +73,9 @@ public:
       EVT VT, unsigned AddrSpace, Align Alignment,
       MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
       unsigned *Fast = nullptr) const override;
+  void getTgtMemIntrinsic(SmallVectorImpl<IntrinsicInfo> &Infos,
+                          const CallBase &I, MachineFunction &MF,
+                          unsigned Intrinsic) const override;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
   bool shouldInsertFencesForAtomic(const Instruction *) const override {
