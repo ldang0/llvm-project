@@ -147,6 +147,47 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
 
 void MMIXALInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
                                      unsigned OpNo, raw_ostream &O) {
-  (void)Address;
+  const MCInstrDesc &Desc = MII.get(MI->getOpcode());
+  const MMIXII::MMIXALSelectionKind Selection =
+      MMIXII::getMMIXALSelection(Desc.TSFlags);
+  if (Selection == MMIXII::MMIXALSelectionForward ||
+      Selection == MMIXII::MMIXALSelectionBackward) {
+    if (OpNo >= MI->getNumOperands())
+      report_fatal_error("invalid MMIXAL relative target index");
+
+    const MCOperand &Op = MI->getOperand(OpNo);
+    if (!Op.isExpr())
+      report_fatal_error("MMIXAL relative target requires an expression");
+
+    int64_t AbsoluteTarget;
+    if (Op.getExpr()->evaluateAsAbsolute(AbsoluteTarget)) {
+      const uint64_t Target = static_cast<uint64_t>(AbsoluteTarget);
+      if ((Target & 3) != 0)
+        report_fatal_error("MMIXAL relative target is not four-byte aligned");
+
+      const bool IsBackward = Selection == MMIXII::MMIXALSelectionBackward;
+      if ((!IsBackward && Target < Address) ||
+          (IsBackward && Target >= Address))
+        report_fatal_error(
+            "MMIXAL relative target direction does not match instruction");
+
+      const uint64_t Distance =
+          IsBackward ? Address - Target : Target - Address;
+      if ((Distance & 3) != 0)
+        report_fatal_error("MMIXAL relative target is not four-byte aligned");
+
+      const unsigned Width = MMIXII::getPCRelativeWidth(Desc.TSFlags);
+      if (Width != 16 && Width != 24)
+        report_fatal_error("invalid MMIXAL relative target width");
+      const uint64_t MaxWords =
+          IsBackward ? uint64_t(1) << Width : (uint64_t(1) << Width) - 1;
+      if (Distance / 4 > MaxWords)
+        report_fatal_error("MMIXAL relative target is out of range");
+    }
+
+    MAI.printExpr(O, *Op.getExpr());
+    return;
+  }
+
   printOperand(MI, OpNo, O);
 }

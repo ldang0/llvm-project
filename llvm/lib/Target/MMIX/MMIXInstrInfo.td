@@ -1029,6 +1029,8 @@ class MMIXCondBranchOpcode<bits<8> Opcode, string Mnemonic,
                            string MMIXALDirection = "unclassified",
                            string MMIXALForm = "unclassified">
     : MMIXCondBranch<Mnemonic> {
+  let AsmString = "{" # Mnemonic # "|" # MMIXALName #
+                      "} $condition, $target";
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
@@ -1120,6 +1122,7 @@ class MMIXJumpOpcode<bits<8> Opcode, string Mnemonic,
                      string MMIXALDirection = "unclassified",
                      string MMIXALForm = "unclassified">
     : MMIXJump<Mnemonic> {
+  let AsmString = "{" # Mnemonic # "|" # MMIXALName # "} $target";
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "pcrel24-backward",
@@ -1151,6 +1154,7 @@ class MMIXGetAddressOpcode<bits<8> Opcode, string Mnemonic,
                            string MMIXALDirection = "unclassified",
                            string MMIXALForm = "unclassified">
     : MMIXGetAddress<Mnemonic> {
+  let AsmString = "{" # Mnemonic # "|" # MMIXALName # "} $dst, $target";
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
@@ -1182,6 +1186,7 @@ class MMIXPushJumpOpcode<bits<8> Opcode, string Mnemonic,
                          string MMIXALDirection = "unclassified",
                          string MMIXALForm = "unclassified">
     : MMIXPushJump<Mnemonic> {
+  let AsmString = "{" # Mnemonic # "|" # MMIXALName # "} $link, $target";
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",

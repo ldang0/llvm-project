@@ -11,6 +11,8 @@
 #include "MCTargetDesc/MMIXMCAsmInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "TargetInfo/MMIXTargetInfo.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -39,10 +41,11 @@ protected:
   std::unique_ptr<MCRegisterInfo> MRI{createMMIXMCRegisterInfo(TT)};
   std::unique_ptr<MCSubtargetInfo> STI{
       createMMIXMCSubtargetInfo(TT, "generic", "")};
+  MCContext Ctx{TT, MAI, *MRI, *STI};
   MMIXALInstPrinter Printer{MAI, *MII, *MRI};
 
-  std::string print(unsigned Opcode,
-                    std::initializer_list<MCOperand> Operands) {
+  std::string printAt(uint64_t Address, unsigned Opcode,
+                      std::initializer_list<MCOperand> Operands) {
     MCInst Inst;
     Inst.setOpcode(Opcode);
     for (const MCOperand &Operand : Operands)
@@ -50,9 +53,24 @@ protected:
 
     std::string Output;
     raw_string_ostream OS(Output);
-    Printer.printInst(&Inst, 0, "", *STI, OS);
+    Printer.printInst(&Inst, Address, "", *STI, OS);
     OS.flush();
     return Output;
+  }
+
+  std::string print(unsigned Opcode,
+                    std::initializer_list<MCOperand> Operands) {
+    return printAt(0, Opcode, Operands);
+  }
+
+  MCOperand constantTarget(uint64_t Target) {
+    return MCOperand::createExpr(
+        MCConstantExpr::create(static_cast<int64_t>(Target), Ctx));
+  }
+
+  MCOperand symbolicTarget(StringRef Name) {
+    return MCOperand::createExpr(
+        MCSymbolRefExpr::create(Ctx.getOrCreateSymbol(Name), Ctx));
   }
 
   void expectOpcodePair(unsigned RegisterOpcode, unsigned ImmediateOpcode,
@@ -183,6 +201,101 @@ TEST_F(MMIXALInstPrinterTest, RejectsOpcodePairOperandKindMismatch) {
                                   MCOperand::createReg(MMIX::R1),
                                   MCOperand::createReg(MMIX::R2)}),
                "immediate-form instruction requires a byte operand");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsEveryRelativeInstructionFamily) {
+  EXPECT_EQ(printAt(0x1000, MMIX::BN,
+                    {MCOperand::createReg(MMIX::R1),
+                     symbolicTarget("branch_target")}),
+            "\tBN $1, branch_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::BNB,
+                    {MCOperand::createReg(MMIX::R1),
+                     symbolicTarget("branch_target")}),
+            "\tBN $1, branch_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::PBN,
+                    {MCOperand::createReg(MMIX::R2),
+                     symbolicTarget("probable_target")}),
+            "\tPBN $2, probable_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::PBNB,
+                    {MCOperand::createReg(MMIX::R2),
+                     symbolicTarget("probable_target")}),
+            "\tPBN $2, probable_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::JMP, {symbolicTarget("jump_target")}),
+            "\tJMP jump_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::JMPB, {symbolicTarget("jump_target")}),
+            "\tJMP jump_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::GETA,
+                    {MCOperand::createReg(MMIX::R3),
+                     symbolicTarget("address_target")}),
+            "\tGETA $3, address_target");
+  EXPECT_EQ(printAt(0x1000, MMIX::GETAB,
+                    {MCOperand::createReg(MMIX::R3),
+                     symbolicTarget("address_target")}),
+            "\tGETA $3, address_target");
+  EXPECT_EQ(
+      printAt(0x1000, MMIX::PUSHJ,
+              {MCOperand::createReg(MMIX::R4), symbolicTarget("call_target")}),
+      "\tPUSHJ $4, call_target");
+  EXPECT_EQ(
+      printAt(0x1000, MMIX::PUSHJB,
+              {MCOperand::createReg(MMIX::R4), symbolicTarget("call_target")}),
+      "\tPUSHJ $4, call_target");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsRelativeTargetBoundaries) {
+  constexpr uint64_t BranchAddress = 0x100000;
+  constexpr uint64_t BranchForwardLimit = BranchAddress + 65535 * 4;
+  constexpr uint64_t BranchBackwardLimit = BranchAddress - 65536 * 4;
+  EXPECT_EQ(
+      printAt(BranchAddress, MMIX::BN,
+              {MCOperand::createReg(MMIX::R1), constantTarget(BranchAddress)}),
+      "\tBN $1, " + std::to_string(BranchAddress));
+  EXPECT_EQ(printAt(BranchAddress, MMIX::GETA,
+                    {MCOperand::createReg(MMIX::R2),
+                     constantTarget(BranchForwardLimit)}),
+            "\tGETA $2, " + std::to_string(BranchForwardLimit));
+  EXPECT_EQ(printAt(BranchAddress, MMIX::PUSHJB,
+                    {MCOperand::createReg(MMIX::R3),
+                     constantTarget(BranchBackwardLimit)}),
+            "\tPUSHJ $3, " + std::to_string(BranchBackwardLimit));
+
+  constexpr uint64_t JumpAddress = 0x10000000;
+  constexpr uint64_t JumpForwardLimit = JumpAddress + 16777215 * 4;
+  constexpr uint64_t JumpBackwardLimit = JumpAddress - 16777216 * 4;
+  EXPECT_EQ(printAt(JumpAddress, MMIX::JMP, {constantTarget(JumpForwardLimit)}),
+            "\tJMP " + std::to_string(JumpForwardLimit));
+  EXPECT_EQ(
+      printAt(JumpAddress, MMIX::JMPB, {constantTarget(JumpBackwardLimit)}),
+      "\tJMP " + std::to_string(JumpBackwardLimit));
+}
+
+TEST_F(MMIXALInstPrinterTest, RejectsInvalidRelativeTargets) {
+  constexpr uint64_t Address = 0x100000;
+  EXPECT_DEATH(
+      printAt(Address, MMIX::BNB,
+              {MCOperand::createReg(MMIX::R1), constantTarget(Address)}),
+      "relative target direction does not match instruction");
+  EXPECT_DEATH(
+      printAt(Address, MMIX::BN,
+              {MCOperand::createReg(MMIX::R1), constantTarget(Address - 4)}),
+      "relative target direction does not match instruction");
+  EXPECT_DEATH(
+      printAt(Address, MMIX::BN,
+              {MCOperand::createReg(MMIX::R1), constantTarget(Address + 2)}),
+      "relative target is not four-byte aligned");
+  EXPECT_DEATH(printAt(Address, MMIX::BN,
+                       {MCOperand::createReg(MMIX::R1),
+                        constantTarget(Address + 65536 * 4)}),
+               "relative target is out of range");
+  EXPECT_DEATH(printAt(Address, MMIX::BNB,
+                       {MCOperand::createReg(MMIX::R1),
+                        constantTarget(Address - 65537 * 4)}),
+               "relative target is out of range");
+  EXPECT_DEATH(
+      printAt(Address, MMIX::JMP, {constantTarget(Address + 16777216 * 4)}),
+      "relative target is out of range");
+  EXPECT_DEATH(printAt(Address, MMIX::JMP, {MCOperand::createImm(1)}),
+               "relative target requires an expression");
 }
 
 TEST_F(MMIXALInstPrinterTest, PreservesMixedRegisterAndImmediateKinds) {
