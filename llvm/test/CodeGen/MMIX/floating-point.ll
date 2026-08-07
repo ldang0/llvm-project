@@ -43,8 +43,50 @@ define double @add_fast(double %lhs, double %rhs) {
   ret double %result
 }
 
+; Sign-only operations expand through integer bit operations so NaN payloads
+; and all non-sign bits remain unchanged.
+; CHECK-LABEL: negate:
+; CHECK:       XOR
+; CHECK-NOT:   FADD
+; CHECK-NOT:   FSUB
+define double @negate(double %value) {
+  %result = fneg double %value
+  ret double %result
+}
+
+; CHECK-LABEL: absolute:
+; CHECK:       NOR
+; CHECK:       AND
+; CHECK-NOT:   FADD
+define double @absolute(double %value) {
+  %result = call double @llvm.fabs.f64(double %value)
+  ret double %result
+}
+
+; CHECK-LABEL: copy_sign:
+; CHECK:       AND
+; CHECK:       NOR
+; CHECK:       AND
+; CHECK:       OR
+; CHECK-NOT:   FADD
+define double @copy_sign(double %magnitude, double %sign) {
+  %result = call double @llvm.copysign.f64(double %magnitude, double %sign)
+  ret double %result
+}
+
+; Floating select reuses integer bit selection so either complete input,
+; including a signaling NaN payload, reaches the result unchanged.
+; CHECK-LABEL: select_double:
+; CHECK:       CSNZ
+; CHECK-NOT:   FCMP
+define double @select_double(i1 %condition, double %if_true,
+                             double %if_false) {
+  %result = select i1 %condition, double %if_true, double %if_false
+  ret double %result
+}
+
 ; CHECK-LABEL: square_root:
-; CHECK:       FSQRT r231, 0, r231
+; CHECK:       FSQRT r231, 4, r231
 ; CHECK-NEXT:  POP 0, 0
 define double @square_root(double %value) {
   %result = call double @llvm.sqrt.f64(double %value)
@@ -53,6 +95,7 @@ define double @square_root(double %value) {
 
 ; FEQL implements quiet ordered equality and treats both signed zeros as equal.
 ; CHECK-LABEL: ordered_equal_signed_zero:
+; CHECK-NOT:   FEQLE
 ; CHECK:       FEQL r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
 define i1 @ordered_equal_signed_zero(double %lhs, double %rhs) {
@@ -61,6 +104,7 @@ define i1 @ordered_equal_signed_zero(double %lhs, double %rhs) {
 }
 
 ; CHECK-LABEL: ordered_greater:
+; CHECK-NOT:   FCMPE
 ; CHECK:       FCMP [[CMP:r[0-9]+]], r231, r232
 ; CHECK:       ZSP r231, [[CMP]], 1
 define i1 @ordered_greater(double %lhs, double %rhs) {
@@ -124,6 +168,7 @@ define i1 @ordered(double %lhs, double %rhs) {
 
 ; FUN is a quiet unordered test, including for signaling NaNs.
 ; CHECK-LABEL: unordered:
+; CHECK-NOT:   FUNE
 ; CHECK:       FUN r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
 define i1 @unordered(double %lhs, double %rhs) {
@@ -204,3 +249,5 @@ false:
 
 
 declare double @llvm.sqrt.f64(double)
+declare double @llvm.fabs.f64(double)
+declare double @llvm.copysign.f64(double, double)

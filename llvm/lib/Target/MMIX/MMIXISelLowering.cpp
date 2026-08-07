@@ -579,9 +579,13 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
        {ISD::FTRUNC, ISD::FCEIL, ISD::FFLOOR, ISD::FROUNDEVEN, ISD::FRINT})
     setOperationAction(Opcode, MVT::f64, Legal);
 
+  for (unsigned Opcode : {ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN})
+    setOperationAction(Opcode, MVT::f64, Expand);
+  setOperationAction(ISD::SELECT, MVT::f64, Custom);
+  setOperationAction(ISD::SELECT_CC, MVT::f64, Expand);
+
   static constexpr unsigned UnsupportedFloatingOperations[] = {
-      ISD::FREM,   ISD::FNEG,      ISD::FABS,   ISD::FCOPYSIGN, ISD::FMA,
-      ISD::SELECT, ISD::SELECT_CC, ISD::FROUND, ISD::FNEARBYINT};
+      ISD::FREM, ISD::FMA, ISD::FROUND, ISD::FNEARBYINT};
   for (unsigned Opcode : UnsupportedFloatingOperations)
     RejectOperation(Opcode, MVT::f64);
 
@@ -799,6 +803,7 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   case ISD::UDIVREM:
   case ISD::SDIVREM:
   case ISD::SETCC:
+  case ISD::SELECT:
     break;
   default:
     report_fatal_error(
@@ -833,6 +838,16 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   }
 
   SDLoc DL(Op);
+  if (Op.getOpcode() == ISD::SELECT) {
+    SDValue TrueBits =
+        DAG.getNode(ISD::BITCAST, DL, MVT::i64, Op.getOperand(1));
+    SDValue FalseBits =
+        DAG.getNode(ISD::BITCAST, DL, MVT::i64, Op.getOperand(2));
+    SDValue Selected = DAG.getNode(ISD::SELECT, DL, MVT::i64, Op.getOperand(0),
+                                   TrueBits, FalseBits);
+    return DAG.getNode(ISD::BITCAST, DL, MVT::f64, Selected);
+  }
+
   if (Op.getOpcode() == ISD::SETCC) {
     SDValue LHS = Op.getOperand(0);
     SDValue RHS = Op.getOperand(1);

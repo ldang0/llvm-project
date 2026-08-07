@@ -131,7 +131,7 @@ define double @round_even_to_integral(double %value) {
 }
 
 ; CHECK-LABEL: rint_to_integral:
-; CHECK:       FINT r231, 0, r231
+; CHECK:       FINT r231, 4, r231
 define double @rint_to_integral(double %value) {
   %result = call double @llvm.rint.f64(double %value)
   ret double %result
@@ -156,6 +156,16 @@ define double @load_short_float_offset(ptr %address) {
   ret double %result
 }
 
+; CHECK-LABEL: load_short_float_register_offset:
+; CHECK:       SLU [[OFFSET:r[0-9]+]], r232, 2
+; CHECK:       LDSF r231, r231, [[OFFSET]]
+define double @load_short_float_register_offset(ptr %address, i64 %index) {
+  %element = getelementptr float, ptr %address, i64 %index
+  %short = load float, ptr %element, align 4
+  %result = fpext float %short to double
+  ret double %result
+}
+
 ; CHECK-LABEL: store_short_float:
 ; CHECK:       STSF r232, r231, 0
 define void @store_short_float(ptr %address, double %value) {
@@ -170,6 +180,30 @@ define void @store_short_float_offset(ptr %address, double %value) {
   %element = getelementptr float, ptr %address, i64 5
   %short = fptrunc double %value to float
   store float %short, ptr %element, align 4
+  ret void
+}
+
+; CHECK-LABEL: store_short_float_register_offset:
+; CHECK:       SLU [[OFFSET:r[0-9]+]], r232, 2
+; CHECK:       STSF r233, r231, [[OFFSET]]
+define void @store_short_float_register_offset(ptr %address, i64 %index,
+                                                double %value) {
+  %element = getelementptr float, ptr %address, i64 %index
+  %short = fptrunc double %value to float
+  store float %short, ptr %element, align 4
+  ret void
+}
+
+; Under-aligned short-float memory operations must not use LDSF or STSF,
+; because MMIX rounds their addresses down to a four-byte boundary.
+; CHECK-LABEL: copy_unaligned_short_float:
+; CHECK-COUNT-4: LDBU
+; CHECK-COUNT-4: STBU
+; CHECK-NOT:   LDSF
+; CHECK-NOT:   STSF
+define void @copy_unaligned_short_float(ptr %out, ptr %in) {
+  %value = load float, ptr %in, align 1
+  store float %value, ptr %out, align 1
   ret void
 }
 

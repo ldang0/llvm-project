@@ -1261,14 +1261,14 @@ class MMIXFPUnaryRoundedOpcode<bits<8> Opcode, string Mnemonic>
 def FSQRT : MMIXFPUnaryRoundedOpcode<0x15, "FSQRT">;
 def FINT  : MMIXFPUnaryRoundedOpcode<0x17, "FINT">;
 
-// A zero Y field selects the rounding mode in rA, as used by the binary
-// floating-point operations.
-def : Pat<(fsqrt f64:$src), (FSQRT 0, $src)>;
+// Unconstrained LLVM floating-point operations assume the default
+// round-to-nearest mode, independently of the dynamic mode in rA.
+def : Pat<(fsqrt f64:$src), (FSQRT 4, $src)>;
 def : Pat<(ftrunc f64:$src), (FINT 1, $src)>;
 def : Pat<(fceil f64:$src), (FINT 2, $src)>;
 def : Pat<(ffloor f64:$src), (FINT 3, $src)>;
 def : Pat<(froundeven f64:$src), (FINT 4, $src)>;
-def : Pat<(frint f64:$src), (FINT 0, $src)>;
+def : Pat<(frint f64:$src), (FINT 4, $src)>;
 
 class MMIXFix<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst),
