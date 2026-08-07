@@ -28,6 +28,24 @@ using namespace llvm;
 void MMIXALInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                   StringRef Annot, const MCSubtargetInfo &STI,
                                   raw_ostream &O) {
+  const MCInstrDesc &Desc = MII.get(MI->getOpcode());
+  const MMIXII::MMIXALSelectionKind Selection =
+      MMIXII::getMMIXALSelection(Desc.TSFlags);
+  if (Selection == MMIXII::MMIXALSelectionRegister ||
+      Selection == MMIXII::MMIXALSelectionImmediate) {
+    const unsigned SelectableOp = Desc.getNumOperands() - 1;
+    if (SelectableOp >= MI->getNumOperands())
+      report_fatal_error("missing MMIXAL selectable operand");
+
+    const MCOperand &Operand = MI->getOperand(SelectableOp);
+    if (Selection == MMIXII::MMIXALSelectionRegister && !Operand.isReg())
+      report_fatal_error(
+          "MMIXAL register-form instruction requires a register operand");
+    if (Selection == MMIXII::MMIXALSelectionImmediate && !Operand.isImm())
+      report_fatal_error(
+          "MMIXAL immediate-form instruction requires a byte operand");
+  }
+
   printInstruction(MI, Address, O);
   printAnnotation(O, Annot);
 }

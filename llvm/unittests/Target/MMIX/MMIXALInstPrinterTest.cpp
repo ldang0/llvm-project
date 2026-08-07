@@ -54,6 +54,30 @@ protected:
     OS.flush();
     return Output;
   }
+
+  void expectOpcodePair(unsigned RegisterOpcode, unsigned ImmediateOpcode,
+                        std::initializer_list<MCOperand> LeadingOperands,
+                        StringRef ExpectedPrefix) {
+    auto Check = [&](unsigned Opcode, MCOperand SelectableOperand,
+                     StringRef ExpectedOperand) {
+      MCInst Inst;
+      Inst.setOpcode(Opcode);
+      for (const MCOperand &Operand : LeadingOperands)
+        Inst.addOperand(Operand);
+      Inst.addOperand(SelectableOperand);
+
+      std::string Output;
+      raw_string_ostream OS(Output);
+      Printer.printInst(&Inst, 0, "", *STI, OS);
+      OS.flush();
+
+      EXPECT_EQ(Output, (ExpectedPrefix + ExpectedOperand).str());
+      EXPECT_EQ(Inst.getOpcode(), Opcode);
+    };
+
+    Check(RegisterOpcode, MCOperand::createReg(MMIX::R7), "$7");
+    Check(ImmediateOpcode, MCOperand::createImm(7), "7");
+  }
 };
 
 TEST_F(MMIXALInstPrinterTest, PrintsGeneralAndFloatingRegisterBoundaries) {
@@ -104,6 +128,61 @@ TEST_F(MMIXALInstPrinterTest, PrintsUnsignedScalarBoundaries) {
   EXPECT_EQ(print(MMIX::POP,
                   {MCOperand::createImm(255), MCOperand::createImm(65535)}),
             "\tPOP 255, 65535");
+}
+
+TEST_F(MMIXALInstPrinterTest, PrintsRegisterImmediateOpcodePairs) {
+  expectOpcodePair(
+      MMIX::ADD, MMIX::ADDI,
+      {MCOperand::createReg(MMIX::R1), MCOperand::createReg(MMIX::R2)},
+      "\tADD $1, $2, ");
+  expectOpcodePair(MMIX::CSN, MMIX::CSNI,
+                   {MCOperand::createReg(MMIX::R1),
+                    MCOperand::createReg(MMIX::R1),
+                    MCOperand::createReg(MMIX::R2)},
+                   "\tCSN $1, $2, ");
+  expectOpcodePair(
+      MMIX::LDB, MMIX::LDBI,
+      {MCOperand::createReg(MMIX::R1), MCOperand::createReg(MMIX::R2)},
+      "\tLDB $1, $2, ");
+  expectOpcodePair(
+      MMIX::STB, MMIX::STBI,
+      {MCOperand::createReg(MMIX::R1), MCOperand::createReg(MMIX::R2)},
+      "\tSTB $1, $2, ");
+  expectOpcodePair(MMIX::PRELD, MMIX::PRELDI,
+                   {MCOperand::createImm(1), MCOperand::createReg(MMIX::R2)},
+                   "\tPRELD 1, $2, ");
+  expectOpcodePair(MMIX::CSWAP, MMIX::CSWAPI,
+                   {MCOperand::createReg(MMIX::R1),
+                    MCOperand::createReg(MMIX::R1),
+                    MCOperand::createReg(MMIX::R2)},
+                   "\tCSWAP $1, $2, ");
+  expectOpcodePair(MMIX::FLOT, MMIX::FLOTI,
+                   {MCOperand::createReg(MMIX::R1), MCOperand::createImm(4)},
+                   "\tFLOT $1, ROUND_NEAR, ");
+  expectOpcodePair(
+      MMIX::GO, MMIX::GOI,
+      {MCOperand::createReg(MMIX::R1), MCOperand::createReg(MMIX::R2)},
+      "\tGO $1, $2, ");
+  expectOpcodePair(
+      MMIX::PUSHGO, MMIX::PUSHGOI,
+      {MCOperand::createReg(MMIX::R1), MCOperand::createReg(MMIX::R2)},
+      "\tPUSHGO $1, $2, ");
+  expectOpcodePair(MMIX::PUT, MMIX::PUTI, {MCOperand::createReg(MMIX::RB)},
+                   "\tPUT rB, ");
+}
+
+TEST_F(MMIXALInstPrinterTest, RejectsOpcodePairOperandKindMismatch) {
+  EXPECT_DEATH(print(MMIX::ADDI, {MCOperand::createReg(MMIX::R0),
+                                  MCOperand::createReg(MMIX::R1)}),
+               "missing MMIXAL selectable operand");
+  EXPECT_DEATH(print(MMIX::ADD,
+                     {MCOperand::createReg(MMIX::R0),
+                      MCOperand::createReg(MMIX::R1), MCOperand::createImm(2)}),
+               "register-form instruction requires a register operand");
+  EXPECT_DEATH(print(MMIX::ADDI, {MCOperand::createReg(MMIX::R0),
+                                  MCOperand::createReg(MMIX::R1),
+                                  MCOperand::createReg(MMIX::R2)}),
+               "immediate-form instruction requires a byte operand");
 }
 
 TEST_F(MMIXALInstPrinterTest, PreservesMixedRegisterAndImmediateKinds) {

@@ -29,6 +29,15 @@ enum OperandType : unsigned {
   OPERAND_REG_OR_IMM8,
 };
 
+enum MMIXALSelectionKind : unsigned {
+  MMIXALSelectionUnclassified,
+  MMIXALSelectionExact,
+  MMIXALSelectionRegister,
+  MMIXALSelectionImmediate,
+  MMIXALSelectionForward,
+  MMIXALSelectionBackward,
+};
+
 enum : uint64_t {
   OpcodeMask = 0xff,
   PCRelativeBackward = uint64_t(1) << 8,
@@ -36,6 +45,8 @@ enum : uint64_t {
   PCRelativeWidthMask = uint64_t(0x1f) << PCRelativeWidthShift,
   PutSpecialRegister = uint64_t(1) << 14,
   PutSpecialRegisterImmediate = uint64_t(1) << 15,
+  MMIXALSelectionShift = 16,
+  MMIXALSelectionMask = uint64_t(0x7) << MMIXALSelectionShift,
 };
 
 enum MachineOperandFlags {
@@ -48,6 +59,11 @@ enum MachineOperandFlags {
 
 inline unsigned getPCRelativeWidth(uint64_t TSFlags) {
   return (TSFlags & PCRelativeWidthMask) >> PCRelativeWidthShift;
+}
+
+inline MMIXALSelectionKind getMMIXALSelection(uint64_t TSFlags) {
+  return static_cast<MMIXALSelectionKind>((TSFlags & MMIXALSelectionMask) >>
+                                          MMIXALSelectionShift);
 }
 
 } // namespace MMIXII
