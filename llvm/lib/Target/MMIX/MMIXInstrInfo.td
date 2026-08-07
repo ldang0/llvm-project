@@ -199,6 +199,12 @@ class MMIXInstruction<dag outs, dag ins, string asmstr> : Instruction {
   string MMIXInventoryFamily = "unclassified";
   string MMIXInventoryForm = "unclassified";
   string MMIXInventoryFeature = "base";
+  // MMIXAL-compatible output uses these independently reviewed spellings.
+  // Keep them separate from AsmString so the canonical LLVM syntax remains
+  // unchanged.
+  string MMIXALMnemonic = "unclassified";
+  string MMIXALSelection = "unclassified";
+  string MMIXALOperandForm = "unclassified";
 }
 
 // The ordinary integer form has a register or unsigned-byte Z operand. The
@@ -216,6 +222,9 @@ class MMIXIntRegReg<string Mnemonic>
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXIntRegImm<string Mnemonic>
@@ -230,6 +239,9 @@ class MMIXIntRegImm<string Mnemonic>
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 // NEG and NEGU use an unsigned byte in the Y field even in their register-Z
@@ -246,6 +258,9 @@ class MMIXNegReg<string Mnemonic>
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-imm8-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-imm8-reg";
 }
 
 class MMIXNegImm<string Mnemonic>
@@ -260,6 +275,9 @@ class MMIXNegImm<string Mnemonic>
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-imm8-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-imm8-imm8";
 }
 
 class MMIXIntConst<string Mnemonic>
@@ -273,6 +291,9 @@ class MMIXIntConst<string Mnemonic>
   let MMIXZ = value{7-0};
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-imm16";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-imm16";
 }
 
 class MMIXIntRegRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -302,6 +323,9 @@ class MMIXCondSetRegOpcode<bits<8> Opcode, string Mnemonic>
   let Constraints = "$dst = $old";
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXCondSetImmOpcode<bits<8> Opcode, string Mnemonic>
@@ -318,6 +342,9 @@ class MMIXCondSetImmOpcode<bits<8> Opcode, string Mnemonic>
   let Constraints = "$dst = $old";
   let MMIXInventoryFamily = "integer";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXNegRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -682,6 +709,9 @@ class MMIXLoadReg<string Mnemonic>
   let mayLoad = true;
   let MMIXInventoryFamily = "memory";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXLoadImm<string Mnemonic>
@@ -697,6 +727,9 @@ class MMIXLoadImm<string Mnemonic>
   let mayLoad = true;
   let MMIXInventoryFamily = "memory";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXStoreReg<string Mnemonic>
@@ -712,6 +745,9 @@ class MMIXStoreReg<string Mnemonic>
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXStoreImm<string Mnemonic>
@@ -728,6 +764,9 @@ class MMIXStoreImm<string Mnemonic>
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXLoadRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -899,6 +938,9 @@ class MMIXCompareSwapReg
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = "CSWAP";
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXCompareSwapImm
@@ -919,6 +961,9 @@ class MMIXCompareSwapImm
   let mayStore = true;
   let MMIXInventoryFamily = "memory";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = "CSWAP";
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXCompareSwapRegOpcode<bits<8> Opcode>
@@ -947,47 +992,85 @@ class MMIXCondBranch<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-class MMIXCondBranchOpcode<bits<8> Opcode, string Mnemonic>
+class MMIXCondBranchOpcode<bits<8> Opcode, string Mnemonic,
+                           string MMIXALName = Mnemonic,
+                           string MMIXALDirection = "unclassified",
+                           string MMIXALForm = "unclassified">
     : MMIXCondBranch<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
                                          "reg-pcrel16-forward");
+  let MMIXALMnemonic = MMIXALName;
+  let MMIXALSelection = MMIXALDirection;
+  let MMIXALOperandForm = MMIXALForm;
 }
 
-def BN   : MMIXCondBranchOpcode<0x40, "BN">;
-def BNB  : MMIXCondBranchOpcode<0x41, "BNB">;
-def BZ   : MMIXCondBranchOpcode<0x42, "BZ">;
-def BZB  : MMIXCondBranchOpcode<0x43, "BZB">;
-def BP   : MMIXCondBranchOpcode<0x44, "BP">;
-def BPB  : MMIXCondBranchOpcode<0x45, "BPB">;
-def BOD  : MMIXCondBranchOpcode<0x46, "BOD">;
-def BODB : MMIXCondBranchOpcode<0x47, "BODB">;
-def BNN  : MMIXCondBranchOpcode<0x48, "BNN">;
-def BNNB : MMIXCondBranchOpcode<0x49, "BNNB">;
-def BNZ  : MMIXCondBranchOpcode<0x4A, "BNZ">;
-def BNZB : MMIXCondBranchOpcode<0x4B, "BNZB">;
-def BNP  : MMIXCondBranchOpcode<0x4C, "BNP">;
-def BNPB : MMIXCondBranchOpcode<0x4D, "BNPB">;
-def BEV  : MMIXCondBranchOpcode<0x4E, "BEV">;
-def BEVB : MMIXCondBranchOpcode<0x4F, "BEVB">;
+def BN   : MMIXCondBranchOpcode<0x40, "BN", "BN", "forward",
+                                "reg-pcrel16-forward">;
+def BNB  : MMIXCondBranchOpcode<0x41, "BNB", "BN", "backward",
+                                "reg-pcrel16-backward">;
+def BZ   : MMIXCondBranchOpcode<0x42, "BZ", "BZ", "forward",
+                                "reg-pcrel16-forward">;
+def BZB  : MMIXCondBranchOpcode<0x43, "BZB", "BZ", "backward",
+                                "reg-pcrel16-backward">;
+def BP   : MMIXCondBranchOpcode<0x44, "BP", "BP", "forward",
+                                "reg-pcrel16-forward">;
+def BPB  : MMIXCondBranchOpcode<0x45, "BPB", "BP", "backward",
+                                "reg-pcrel16-backward">;
+def BOD  : MMIXCondBranchOpcode<0x46, "BOD", "BOD", "forward",
+                                "reg-pcrel16-forward">;
+def BODB : MMIXCondBranchOpcode<0x47, "BODB", "BOD", "backward",
+                                "reg-pcrel16-backward">;
+def BNN  : MMIXCondBranchOpcode<0x48, "BNN", "BNN", "forward",
+                                "reg-pcrel16-forward">;
+def BNNB : MMIXCondBranchOpcode<0x49, "BNNB", "BNN", "backward",
+                                "reg-pcrel16-backward">;
+def BNZ  : MMIXCondBranchOpcode<0x4A, "BNZ", "BNZ", "forward",
+                                "reg-pcrel16-forward">;
+def BNZB : MMIXCondBranchOpcode<0x4B, "BNZB", "BNZ", "backward",
+                                "reg-pcrel16-backward">;
+def BNP  : MMIXCondBranchOpcode<0x4C, "BNP", "BNP", "forward",
+                                "reg-pcrel16-forward">;
+def BNPB : MMIXCondBranchOpcode<0x4D, "BNPB", "BNP", "backward",
+                                "reg-pcrel16-backward">;
+def BEV  : MMIXCondBranchOpcode<0x4E, "BEV", "BEV", "forward",
+                                "reg-pcrel16-forward">;
+def BEVB : MMIXCondBranchOpcode<0x4F, "BEVB", "BEV", "backward",
+                                "reg-pcrel16-backward">;
 
-def PBN   : MMIXCondBranchOpcode<0x50, "PBN">;
-def PBNB  : MMIXCondBranchOpcode<0x51, "PBNB">;
-def PBZ   : MMIXCondBranchOpcode<0x52, "PBZ">;
-def PBZB  : MMIXCondBranchOpcode<0x53, "PBZB">;
-def PBP   : MMIXCondBranchOpcode<0x54, "PBP">;
-def PBPB  : MMIXCondBranchOpcode<0x55, "PBPB">;
-def PBOD  : MMIXCondBranchOpcode<0x56, "PBOD">;
-def PBODB : MMIXCondBranchOpcode<0x57, "PBODB">;
-def PBNN  : MMIXCondBranchOpcode<0x58, "PBNN">;
-def PBNNB : MMIXCondBranchOpcode<0x59, "PBNNB">;
-def PBNZ  : MMIXCondBranchOpcode<0x5A, "PBNZ">;
-def PBNZB : MMIXCondBranchOpcode<0x5B, "PBNZB">;
-def PBNP  : MMIXCondBranchOpcode<0x5C, "PBNP">;
-def PBNPB : MMIXCondBranchOpcode<0x5D, "PBNPB">;
-def PBEV  : MMIXCondBranchOpcode<0x5E, "PBEV">;
-def PBEVB : MMIXCondBranchOpcode<0x5F, "PBEVB">;
+def PBN   : MMIXCondBranchOpcode<0x50, "PBN", "PBN", "forward",
+                                 "reg-pcrel16-forward">;
+def PBNB  : MMIXCondBranchOpcode<0x51, "PBNB", "PBN", "backward",
+                                 "reg-pcrel16-backward">;
+def PBZ   : MMIXCondBranchOpcode<0x52, "PBZ", "PBZ", "forward",
+                                 "reg-pcrel16-forward">;
+def PBZB  : MMIXCondBranchOpcode<0x53, "PBZB", "PBZ", "backward",
+                                 "reg-pcrel16-backward">;
+def PBP   : MMIXCondBranchOpcode<0x54, "PBP", "PBP", "forward",
+                                 "reg-pcrel16-forward">;
+def PBPB  : MMIXCondBranchOpcode<0x55, "PBPB", "PBP", "backward",
+                                 "reg-pcrel16-backward">;
+def PBOD  : MMIXCondBranchOpcode<0x56, "PBOD", "PBOD", "forward",
+                                 "reg-pcrel16-forward">;
+def PBODB : MMIXCondBranchOpcode<0x57, "PBODB", "PBOD", "backward",
+                                 "reg-pcrel16-backward">;
+def PBNN  : MMIXCondBranchOpcode<0x58, "PBNN", "PBNN", "forward",
+                                 "reg-pcrel16-forward">;
+def PBNNB : MMIXCondBranchOpcode<0x59, "PBNNB", "PBNN", "backward",
+                                 "reg-pcrel16-backward">;
+def PBNZ  : MMIXCondBranchOpcode<0x5A, "PBNZ", "PBNZ", "forward",
+                                 "reg-pcrel16-forward">;
+def PBNZB : MMIXCondBranchOpcode<0x5B, "PBNZB", "PBNZ", "backward",
+                                 "reg-pcrel16-backward">;
+def PBNP  : MMIXCondBranchOpcode<0x5C, "PBNP", "PBNP", "forward",
+                                 "reg-pcrel16-forward">;
+def PBNPB : MMIXCondBranchOpcode<0x5D, "PBNPB", "PBNP", "backward",
+                                 "reg-pcrel16-backward">;
+def PBEV  : MMIXCondBranchOpcode<0x5E, "PBEV", "PBEV", "forward",
+                                 "reg-pcrel16-forward">;
+def PBEVB : MMIXCondBranchOpcode<0x5F, "PBEVB", "PBEV", "backward",
+                                 "reg-pcrel16-backward">;
 
 class MMIXJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins MMIXJumpTarget:$target),
@@ -1000,15 +1083,24 @@ class MMIXJump<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-class MMIXJumpOpcode<bits<8> Opcode, string Mnemonic> : MMIXJump<Mnemonic> {
+class MMIXJumpOpcode<bits<8> Opcode, string Mnemonic,
+                     string MMIXALName = Mnemonic,
+                     string MMIXALDirection = "unclassified",
+                     string MMIXALForm = "unclassified">
+    : MMIXJump<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "pcrel24-backward",
                                          "pcrel24-forward");
+  let MMIXALMnemonic = MMIXALName;
+  let MMIXALSelection = MMIXALDirection;
+  let MMIXALOperandForm = MMIXALForm;
 }
 
-def JMP  : MMIXJumpOpcode<0xF0, "JMP">;
-def JMPB : MMIXJumpOpcode<0xF1, "JMPB">;
+def JMP  : MMIXJumpOpcode<0xF0, "JMP", "JMP", "forward",
+                          "pcrel24-forward">;
+def JMPB : MMIXJumpOpcode<0xF1, "JMPB", "JMP", "backward",
+                          "pcrel24-backward">;
 
 class MMIXGetAddress<string Mnemonic>
     : MMIXInstruction<(outs GPR64Op:$dst), (ins MMIXBranchTarget:$target),
@@ -1022,16 +1114,24 @@ class MMIXGetAddress<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-class MMIXGetAddressOpcode<bits<8> Opcode, string Mnemonic>
+class MMIXGetAddressOpcode<bits<8> Opcode, string Mnemonic,
+                           string MMIXALName = Mnemonic,
+                           string MMIXALDirection = "unclassified",
+                           string MMIXALForm = "unclassified">
     : MMIXGetAddress<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
                                          "reg-pcrel16-forward");
+  let MMIXALMnemonic = MMIXALName;
+  let MMIXALSelection = MMIXALDirection;
+  let MMIXALOperandForm = MMIXALForm;
 }
 
-def GETA  : MMIXGetAddressOpcode<0xF4, "GETA">;
-def GETAB : MMIXGetAddressOpcode<0xF5, "GETAB">;
+def GETA  : MMIXGetAddressOpcode<0xF4, "GETA", "GETA", "forward",
+                                 "reg-pcrel16-forward">;
+def GETAB : MMIXGetAddressOpcode<0xF5, "GETAB", "GETA", "backward",
+                                 "reg-pcrel16-backward">;
 
 class MMIXPushJump<string Mnemonic>
     : MMIXInstruction<(outs), (ins GPR64Op:$link, MMIXBranchTarget:$target),
@@ -1045,16 +1145,24 @@ class MMIXPushJump<string Mnemonic>
   let MMIXInventoryFamily = "control-flow";
 }
 
-class MMIXPushJumpOpcode<bits<8> Opcode, string Mnemonic>
+class MMIXPushJumpOpcode<bits<8> Opcode, string Mnemonic,
+                         string MMIXALName = Mnemonic,
+                         string MMIXALDirection = "unclassified",
+                         string MMIXALForm = "unclassified">
     : MMIXPushJump<Mnemonic> {
   let MMIXOpcode = Opcode;
   let MMIXPCRelativeBackward = Opcode{0};
   let MMIXInventoryForm = !if(Opcode{0}, "reg-pcrel16-backward",
                                          "reg-pcrel16-forward");
+  let MMIXALMnemonic = MMIXALName;
+  let MMIXALSelection = MMIXALDirection;
+  let MMIXALOperandForm = MMIXALForm;
 }
 
-def PUSHJ  : MMIXPushJumpOpcode<0xF2, "PUSHJ">;
-def PUSHJB : MMIXPushJumpOpcode<0xF3, "PUSHJB">;
+def PUSHJ  : MMIXPushJumpOpcode<0xF2, "PUSHJ", "PUSHJ", "forward",
+                                 "reg-pcrel16-forward">;
+def PUSHJB : MMIXPushJumpOpcode<0xF3, "PUSHJB", "PUSHJ", "backward",
+                                 "reg-pcrel16-backward">;
 
 class MMIXGoReg
     : MMIXInstruction<(outs GPR64Op:$link),
@@ -1068,6 +1176,9 @@ class MMIXGoReg
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = "GO";
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXGoImm
@@ -1082,6 +1193,9 @@ class MMIXGoImm
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = "GO";
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXGoRegOpcode<bits<8> Opcode> : MMIXGoReg {
@@ -1107,6 +1221,9 @@ class MMIXPushGoReg
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = "PUSHGO";
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXPushGoImm
@@ -1121,6 +1238,9 @@ class MMIXPushGoImm
   let MMIXZ = offset;
   let MMIXInventoryFamily = "control-flow";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = "PUSHGO";
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXPushGoRegOpcode<bits<8> Opcode> : MMIXPushGoReg {
@@ -1144,6 +1264,9 @@ class MMIXPop : MMIXInstruction<(outs),
   let MMIXZ = target{7-0};
   let MMIXInventoryFamily = "control-flow";
   let MMIXInventoryForm = "imm8-imm16";
+  let MMIXALMnemonic = "POP";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "imm8-imm16";
 }
 
 def POP : MMIXPop {
@@ -1186,6 +1309,9 @@ class MMIXFPBinary<string Mnemonic>
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-reg-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1217,6 +1343,9 @@ class MMIXFPCompare<string Mnemonic>
   let MMIXZ = rhs;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXFPCompareOpcode<bits<8> Opcode, string Mnemonic>
@@ -1250,6 +1379,9 @@ class MMIXFPUnaryRounded<string Mnemonic>
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-round-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-round-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1283,6 +1415,9 @@ class MMIXFix<string Mnemonic>
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-round-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-round-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1306,6 +1441,9 @@ class MMIXFloatFromIntReg<string Mnemonic>
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-round-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-round-reg";
   string MMIXSourceForm = "register";
   let mayRaiseFPException = true;
 }
@@ -1323,6 +1461,9 @@ class MMIXFloatFromIntImm<string Mnemonic>
   let MMIXZ = src;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-round-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-round-imm8";
   string MMIXSourceForm = "immediate";
   let mayRaiseFPException = true;
 }
@@ -1376,6 +1517,9 @@ class MMIXFPLoadReg<string Mnemonic>
   let mayLoad = true;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXFPLoadImm<string Mnemonic>
@@ -1391,6 +1535,9 @@ class MMIXFPLoadImm<string Mnemonic>
   let mayLoad = true;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXFPStoreReg<string Mnemonic>
@@ -1406,6 +1553,9 @@ class MMIXFPStoreReg<string Mnemonic>
   let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
   let mayRaiseFPException = true;
 }
 
@@ -1423,6 +1573,9 @@ class MMIXFPStoreImm<string Mnemonic>
   let mayStore = true;
   let MMIXInventoryFamily = "floating-point";
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
   let mayRaiseFPException = true;
 }
 
@@ -1525,6 +1678,9 @@ class MMIXStoreConstantReg
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryForm = "imm8-reg-reg";
+  let MMIXALMnemonic = "STCO";
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "imm8-reg-reg";
 }
 
 class MMIXStoreConstantImm
@@ -1540,6 +1696,9 @@ class MMIXStoreConstantImm
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryForm = "imm8-reg-imm8";
+  let MMIXALMnemonic = "STCO";
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "imm8-reg-imm8";
 }
 
 class MMIXStoreConstantRegOpcode<bits<8> Opcode>
@@ -1567,6 +1726,9 @@ class MMIXCacheReg<string Mnemonic>
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryForm = "imm8-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "imm8-reg-reg";
 }
 
 class MMIXCacheImm<string Mnemonic>
@@ -1581,6 +1743,9 @@ class MMIXCacheImm<string Mnemonic>
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryForm = "imm8-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "imm8-reg-imm8";
 }
 
 class MMIXCacheRegOpcode<bits<8> Opcode, string Mnemonic>
@@ -1618,6 +1783,9 @@ class MMIXUncachedLoad<string Mnemonic>
   let MMIXZ = offset;
   let mayLoad = true;
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXUncachedLoadImm<string Mnemonic>
@@ -1632,6 +1800,9 @@ class MMIXUncachedLoadImm<string Mnemonic>
   let MMIXZ = offset;
   let mayLoad = true;
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXUncachedStore<string Mnemonic>
@@ -1647,6 +1818,9 @@ class MMIXUncachedStore<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXUncachedStoreImm<string Mnemonic>
@@ -1662,6 +1836,9 @@ class MMIXUncachedStoreImm<string Mnemonic>
   let MMIXZ = offset;
   let mayStore = true;
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXUncachedLoadOpcode<bits<8> Opcode, string Mnemonic>
@@ -1700,6 +1877,9 @@ class MMIXVirtualTranslationReg
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryForm = "reg-reg-reg";
+  let MMIXALMnemonic = "LDVTS";
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "reg-reg-reg";
 }
 
 class MMIXVirtualTranslationImm
@@ -1714,6 +1894,9 @@ class MMIXVirtualTranslationImm
   let MMIXY = base;
   let MMIXZ = offset;
   let MMIXInventoryForm = "reg-reg-imm8";
+  let MMIXALMnemonic = "LDVTS";
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "reg-reg-imm8";
 }
 
 class MMIXVirtualTranslationRegOpcode<bits<8> Opcode>
@@ -1737,6 +1920,9 @@ class MMIXSync : MMIXSystemInstruction<(outs), (ins MMIXSyncMode:$mode),
   let MMIXZ{7-3} = 0;
   let MMIXZ{2-0} = mode;
   let MMIXInventoryForm = "sync-mode";
+  let MMIXALMnemonic = "SYNC";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "sync-mode";
 }
 
 def SYNC : MMIXSync {
@@ -1754,6 +1940,9 @@ class MMIXSwym : MMIXMachineInstruction<
   let MMIXY = y;
   let MMIXZ = z;
   let MMIXInventoryForm = "reg-or-imm8-reg-or-imm8-reg-or-imm8";
+  let MMIXALMnemonic = "SWYM";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-or-imm8-reg-or-imm8-reg-or-imm8";
 }
 
 def SWYM : MMIXSwym {
@@ -1772,6 +1961,9 @@ class MMIXTrapInstruction<string Mnemonic>
   let MMIXY = y;
   let MMIXZ = z;
   let MMIXInventoryForm = "reg-or-imm8-reg-or-imm8-reg-or-imm8";
+  let MMIXALMnemonic = Mnemonic;
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-or-imm8-reg-or-imm8-reg-or-imm8";
 }
 
 class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
@@ -1791,6 +1983,9 @@ class MMIXResume
   let MMIXZ{7-1} = 0;
   let MMIXZ{0} = mode;
   let MMIXInventoryForm = "resume-mode";
+  let MMIXALMnemonic = "RESUME";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "resume-mode";
 }
 
 def RESUME : MMIXResume {
@@ -1806,6 +2001,9 @@ class MMIXGet : MMIXMachineInstruction<(outs GPR64Op:$dst), (ins SPR64Op:$src),
   let MMIXZ{7-5} = 0;
   let MMIXZ{4-0} = src;
   let MMIXInventoryForm = "reg-special-reg";
+  let MMIXALMnemonic = "GET";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg-special-reg";
 }
 
 def GET : MMIXGet {
@@ -1822,6 +2020,9 @@ class MMIXPutReg
   let MMIXY = 0;
   let MMIXZ = src;
   let MMIXInventoryForm = "special-reg-reg";
+  let MMIXALMnemonic = "PUT";
+  let MMIXALSelection = "register";
+  let MMIXALOperandForm = "special-reg-reg";
 }
 
 class MMIXPutImm
@@ -1834,6 +2035,9 @@ class MMIXPutImm
   let MMIXY = 0;
   let MMIXZ = src;
   let MMIXInventoryForm = "special-reg-imm8";
+  let MMIXALMnemonic = "PUT";
+  let MMIXALSelection = "immediate";
+  let MMIXALOperandForm = "special-reg-imm8";
 }
 
 class MMIXPutRegOpcode<bits<8> Opcode> : MMIXPutReg {
@@ -1854,6 +2058,9 @@ class MMIXSave : MMIXSystemInstruction<(outs GPR64Op:$state), (ins),
   let MMIXY = 0;
   let MMIXZ = 0;
   let MMIXInventoryForm = "reg";
+  let MMIXALMnemonic = "SAVE";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg";
 }
 class MMIXUnsave : MMIXSystemInstruction<(outs), (ins GPR64Op:$state),
                                           "UNSAVE $state"> {
@@ -1862,6 +2069,9 @@ class MMIXUnsave : MMIXSystemInstruction<(outs), (ins GPR64Op:$state),
   let MMIXY = 0;
   let MMIXZ = state;
   let MMIXInventoryForm = "reg";
+  let MMIXALMnemonic = "UNSAVE";
+  let MMIXALSelection = "exact";
+  let MMIXALOperandForm = "reg";
 }
 
 def SAVE : MMIXSave {
