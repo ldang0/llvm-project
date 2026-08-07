@@ -52,13 +52,19 @@ public:
     const int64_t Min = IsBackward ? -(int64_t(1) << Width) : 0;
     const int64_t Max = IsBackward ? -1 : (int64_t(1) << Width) - 1;
 
-    if (IsResolved && (Delta & 3) != 0) {
+    if (!IsResolved) {
+      getContext().reportError(
+          Fixup.getLoc(),
+          "unresolved MMIX PC-relative fixup requires relocation support");
+      return;
+    }
+    if ((Delta & 3) != 0) {
       getContext().reportError(
           Fixup.getLoc(), "MMIX PC-relative fixup is not instruction aligned");
       return;
     }
     Delta /= 4;
-    if (IsResolved && (Delta < Min || Delta > Max)) {
+    if (Delta < Min || Delta > Max) {
       getContext().reportError(Fixup.getLoc(),
                                "MMIX PC-relative fixup is out of range");
       return;

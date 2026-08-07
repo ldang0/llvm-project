@@ -1,6 +1,10 @@
 # RUN: llvm-mc -triple=mmix -show-encoding %s | FileCheck %s
 # RUN: llvm-mc -triple=mmix -show-encoding %s | \
 # RUN:   llvm-mc -triple=mmix -show-encoding | FileCheck %s
+# RUN: sed -n '/^# CHECK:.*0x/{s/.*\[//;s/\]$//;s/,/ /g;p;}' %s | \
+# RUN:   llvm-mc -triple=mmix -disassemble -show-encoding | FileCheck %s
+# RUN: sed -n '/^# CHECK:.*0x/{s/.*\[//;s/,.*//;p;}' %s | \
+# RUN:   sort -u | count 256
 # RUN: llvm-mc -triple=mmix -filetype=obj %s -o %t
 # RUN: llvm-objdump --triple=mmix --no-print-imm-hex -d %t | FileCheck %s \
 # RUN:   --check-prefix=DISASM --implicit-check-not='<unknown>'
@@ -527,8 +531,8 @@ UNSAVE r1
 # CHECK: UNSAVE r1{{.*}}[0xfb,0x00,0x00,0x01]
 SYNC 1
 # CHECK: SYNC 1{{.*}}[0xfc,0x00,0x00,0x01]
-SWYM 1, r2, 3
-# CHECK: SWYM 1, r2, 3{{.*}}[0xfd,0x01,0x02,0x03]
+SWYM 1, 2, 3
+# CHECK: SWYM 1, 2, 3{{.*}}[0xfd,0x01,0x02,0x03]
 GET r1, rA
 # CHECK: GET r1, rA{{.*}}[0xfe,0x01,0x00,0x15]
 TRAP 1, 2, 3

@@ -1,6 +1,8 @@
 # RUN: llvm-mc -triple=mmix -show-encoding %s | FileCheck %s
 # RUN: llvm-mc -triple=mmix -show-encoding %s | \
 # RUN:   llvm-mc -triple=mmix -show-encoding | FileCheck %s
+# RUN: sed -n '/^# CHECK:.*0x/{s/.*\[//;s/\]$//;s/,/ /g;p;}' %s | \
+# RUN:   llvm-mc -triple=mmix -disassemble -show-encoding | FileCheck %s
 
 # All 32 special-register selectors have canonical names.
 GET r1, rB
