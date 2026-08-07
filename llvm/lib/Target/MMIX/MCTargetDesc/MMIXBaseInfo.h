@@ -14,6 +14,11 @@
 namespace llvm {
 namespace MMIXII {
 
+enum AsmVariant : unsigned {
+  CanonicalAsmVariant = 0,
+  MMIXALAsmVariant = 1,
+};
+
 enum : uint64_t {
   OpcodeMask = 0xff,
   PCRelativeBackward = uint64_t(1) << 8,

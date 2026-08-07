@@ -7,8 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXMCTargetDesc.h"
-#include "MMIXMCAsmInfo.h"
+#include "MMIXBaseInfo.h"
 #include "MMIXInstPrinter.h"
+#include "MMIXMCAsmInfo.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -53,7 +54,7 @@ MCSubtargetInfo *llvm::createMMIXMCSubtargetInfo(const Triple &TT,
 static MCInstPrinter *createMMIXMCInstPrinter(
     const Triple &, unsigned SyntaxVariant, const MCAsmInfo &MAI,
     const MCInstrInfo &MII, const MCRegisterInfo &MRI) {
-  if (SyntaxVariant != 0)
+  if (SyntaxVariant != MMIXII::CanonicalAsmVariant)
     return nullptr;
   return new MMIXInstPrinter(MAI, MII, MRI);
 }

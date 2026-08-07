@@ -62,9 +62,24 @@ include "MMIXInstrInfo.td"
 def MMIXInstrInfo : InstrInfo;
 
 //===----------------------------------------------------------------------===//
+// Assembly writers
+//===----------------------------------------------------------------------===//
+
+def MMIXCanonicalAsmWriter : AsmWriter {
+  string AsmWriterClassName = "InstPrinter";
+  int Variant = 0;
+}
+
+def MMIXALAsmWriter : AsmWriter {
+  string AsmWriterClassName = "ALInstPrinter";
+  int Variant = 1;
+}
+
+//===----------------------------------------------------------------------===//
 // Target declaration
 //===----------------------------------------------------------------------===//
 
 def MMIX : Target {
   let InstructionSet = MMIXInstrInfo;
+  let AssemblyWriters = [MMIXCanonicalAsmWriter, MMIXALAsmWriter];
 }
