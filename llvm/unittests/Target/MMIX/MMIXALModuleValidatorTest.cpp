@@ -17,6 +17,7 @@
 #include "gtest/gtest.h"
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace llvm;
@@ -260,6 +261,74 @@ TEST_F(MMIXALModuleValidatorTest, RejectsFunctionInlineAssembly) {
   )",
       "MMIXAL output variant 1 does not support inline assembly in function "
       "'opaque_goto'");
+}
+
+TEST_F(MMIXALModuleValidatorTest, AcceptsClosedModuleDefinitions) {
+  const Function *Entry = expectModule(R"(
+    @external_data = global i64 1
+    @internal_data = internal global i64 2
+    @private_data = private global i64 3
+    @data_alias = alias i64, ptr @external_data
+
+    declare void @unused()
+    declare i64 @llvm.ctpop.i64(i64)
+
+    define void @Main() {
+      %value = call i64 @llvm.ctpop.i64(i64 7)
+      store volatile i64 %value, ptr @data_alias
+      br label %loop
+    loop:
+      br label %loop
+    }
+
+    define internal void @internal_function() {
+      ret void
+    }
+
+    define private void @private_function() {
+      ret void
+    }
+
+    define void @external_function() {
+      ret void
+    }
+
+    @function_alias = alias void (), ptr @external_function
+  )");
+  ASSERT_NE(Entry, nullptr);
+  EXPECT_EQ(Entry->getName(), "Main");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsReferencedDeclarations) {
+  for (auto [Reference, Symbol] : {
+           std::pair{R"(
+             declare void @external_function()
+             define void @owner() {
+               call void @external_function()
+               ret void
+             }
+           )",
+                     "external_function"},
+           std::pair{R"(
+             @external_data = external global i64
+             @address = global ptr @external_data
+           )",
+                     "external_data"},
+       }) {
+    SCOPED_TRACE(Symbol);
+    std::string IR = (Twine(R"(
+      define void @Main() {
+        br label %loop
+      loop:
+        br label %loop
+      }
+    )") + Reference)
+                         .str();
+    expectModuleError(
+        IR, (Twine("MMIXAL output variant 1 cannot resolve referenced symbol '") +
+             Symbol + "'")
+                .str());
+  }
 }
 
 } // namespace

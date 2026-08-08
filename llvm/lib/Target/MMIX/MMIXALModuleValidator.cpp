@@ -11,6 +11,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
@@ -105,6 +106,16 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
               Twine("MMIXAL output variant 1 does not support inline assembly "
                     "in function '") +
               F.getName() + "'");
+
+  for (const GlobalValue &GV : M.global_values()) {
+    if (!GV.isDeclaration() || GV.use_empty())
+      continue;
+    if (const auto *F = dyn_cast<Function>(&GV); F && F->isIntrinsic())
+      continue;
+    return createStringError(
+        Twine("MMIXAL output variant 1 cannot resolve referenced symbol '") +
+        GV.getName() + "'");
+  }
 
   return *Entry;
 }
