@@ -554,6 +554,221 @@ TEST_F(MMIXALAsmStreamerTest, RejectsInitializedContentInZeroStorage) {
   EXPECT_TRUE(Output.empty());
 }
 
+TEST_F(MMIXALAsmStreamerTest,
+       EmitsPlannedLocationsAliasesInstructionsAndExecutablePadding) {
+  using Kind = MMIXALSymbolTable::PrivateSymbolKind;
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Function = Context.getOrCreateSymbol("canonical_function");
+  MCSymbol *EntryAlias = Context.getOrCreateSymbol("canonical_entry_alias");
+  MCSymbol *FunctionAlias =
+      Context.getOrCreateSymbol("canonical_function_alias");
+  MCSymbol *Block = Context.getOrCreateSymbol(".Lcanonical_block");
+  MCSymbol *Target = Context.getOrCreateSymbol(".Lcanonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Function, "entry_function"));
+  expectSuccess(Streamer->registerUserSymbol(*EntryAlias, "entry_alias"));
+  expectSuccess(Streamer->registerUserSymbol(*FunctionAlias, "function_alias"));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Block, "function",
+                                                        Kind::BasicBlock, 0));
+  expectSuccess(Streamer->registerSourceBlock(*Block, "function", "success"));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Target, "function",
+                                                        Kind::BasicBlock, 1));
+
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Function);
+  Streamer->emitLabel(EntryAlias);
+  MCInst Add;
+  Add.setOpcode(MMIX::ADD);
+  Add.addOperand(MCOperand::createReg(MMIX::R1));
+  Add.addOperand(MCOperand::createReg(MMIX::R2));
+  Add.addOperand(MCOperand::createReg(MMIX::R3));
+  Streamer->emitInstruction(Add, *STI);
+  Streamer->emitAssignment(FunctionAlias,
+                           MCSymbolRefExpr::create(Function, Context));
+
+  Streamer->emitCodeAlignment(Align(16), *STI, 12);
+  Streamer->emitLabel(Block);
+  MCInst Jump;
+  Jump.setOpcode(MMIX::JMP);
+  Jump.addOperand(
+      MCOperand::createExpr(MCSymbolRefExpr::create(Target, Context)));
+  Streamer->emitInstruction(Jump, *STI);
+
+  Streamer->emitLabel(Target);
+  Streamer->emitInstruction(Add, *STI);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_TRUE(Diagnostic.empty());
+  EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
+                    "entry_function\tIS @\n"
+                    "entry_alias\tIS @\n"
+                    "\tADD $1, $2, $3\n"
+                    "function_alias\tIS entry_function\n"
+                    "\tLOC #0000000000000104\n"
+                    "\tSWYM 0, 0, 0\n"
+                    "\tSWYM 0, 0, 0\n"
+                    "\tSWYM 0, 0, 0\n"
+                    "__LLVM_L_F_66756E6374696F6E_BB_0\tIS @\n"
+                    "success\tIS @\n"
+                    "\tJMP __LLVM_L_F_66756E6374696F6E_BB_1\n"
+                    "\tLOC #0000000000000114\n"
+                    "__LLVM_L_F_66756E6374696F6E_BB_1\tIS @\n"
+                    "\tADD $1, $2, $3\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       RejectsRelativeDirectionMismatchWithoutPartialOutput) {
+  using Kind = MMIXALSymbolTable::PrivateSymbolKind;
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Source = Context.getOrCreateSymbol(".Lsource");
+  MCSymbol *Target = Context.getOrCreateSymbol(".Ltarget");
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Source, "function",
+                                                        Kind::BasicBlock, 0));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Target, "function",
+                                                        Kind::BasicBlock, 1));
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Source);
+  MCInst Jump;
+  Jump.setOpcode(MMIX::JMPB);
+  Jump.addOperand(
+      MCOperand::createExpr(MCSymbolRefExpr::create(Target, Context)));
+  Streamer->emitInstruction(Jump, *STI);
+  Streamer->emitLabel(Target);
+
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL relative target direction does not match instruction");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsMisalignedAndOutOfRangeRelativeTargets) {
+  struct RelativeCase {
+    unsigned Opcode;
+    uint64_t Target;
+    const char *Diagnostic;
+  };
+  const RelativeCase Cases[] = {
+      {MMIX::JMP, 0x102, "MMIXAL relative target is not four-byte aligned"},
+      {MMIX::BN, 0x40100, "MMIXAL relative target is out of range"},
+  };
+
+  for (const RelativeCase &Case : Cases) {
+    SCOPED_TRACE(Case.Opcode);
+    MCContext Context(TT, MAI, *MRI, *STI);
+    std::string Diagnostic;
+    captureDiagnostic(Context, Diagnostic);
+    std::string Output;
+    raw_string_ostream OutputOS(Output);
+    auto Streamer = createStreamer(Context, OutputOS);
+    Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                       ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+
+    MCInst Inst;
+    Inst.setOpcode(Case.Opcode);
+    if (Case.Opcode == MMIX::BN)
+      Inst.addOperand(MCOperand::createReg(MMIX::R1));
+    Inst.addOperand(MCOperand::createExpr(
+        MCConstantExpr::create(static_cast<int64_t>(Case.Target), Context)));
+    Streamer->emitInstruction(Inst, *STI);
+    Streamer->finish();
+
+    EXPECT_TRUE(Context.hadError());
+    EXPECT_EQ(Diagnostic, Case.Diagnostic);
+    EXPECT_TRUE(Output.empty());
+  }
+}
+
+TEST_F(MMIXALAsmStreamerTest, UsesLocationForNonFallthroughTextAlignment) {
+  using Kind = MMIXALSymbolTable::PrivateSymbolKind;
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Source = Context.getOrCreateSymbol(".Lsource");
+  MCSymbol *Target = Context.getOrCreateSymbol(".Ltarget");
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Source, "function",
+                                                        Kind::BasicBlock, 0));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Target, "function",
+                                                        Kind::BasicBlock, 1));
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Source);
+  MCInst Jump;
+  Jump.setOpcode(MMIX::JMP);
+  Jump.addOperand(
+      MCOperand::createExpr(MCSymbolRefExpr::create(Target, Context)));
+  Streamer->emitInstruction(Jump, *STI);
+
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Target);
+  MCInst Add;
+  Add.setOpcode(MMIX::ADD);
+  Add.addOperand(MCOperand::createReg(MMIX::R1));
+  Add.addOperand(MCOperand::createReg(MMIX::R2));
+  Add.addOperand(MCOperand::createReg(MMIX::R3));
+  Streamer->emitInstruction(Add, *STI);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
+                    "__LLVM_L_F_66756E6374696F6E_BB_0\tIS @\n"
+                    "\tJMP __LLVM_L_F_66756E6374696F6E_BB_1\n"
+                    "\tLOC #0000000000000108\n"
+                    "__LLVM_L_F_66756E6374696F6E_BB_1\tIS @\n"
+                    "\tADD $1, $2, $3\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsAliasToLaterDifferentAddress) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Anchor = Context.getOrCreateSymbol("canonical_anchor");
+  MCSymbol *Alias = Context.getOrCreateSymbol("canonical_alias");
+  MCSymbol *Target = Context.getOrCreateSymbol("canonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Anchor, "anchor"));
+  expectSuccess(Streamer->registerUserSymbol(*Alias, "alias"));
+  expectSuccess(Streamer->registerUserSymbol(*Target, "target"));
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Anchor);
+  Streamer->emitAssignment(Alias, MCSymbolRefExpr::create(Target, Context));
+  MCInst Add;
+  Add.setOpcode(MMIX::ADD);
+  Add.addOperand(MCOperand::createReg(MMIX::R1));
+  Add.addOperand(MCOperand::createReg(MMIX::R2));
+  Add.addOperand(MCOperand::createReg(MMIX::R3));
+  Streamer->emitInstruction(Add, *STI);
+  Streamer->emitLabel(Target);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL alias target 'canonical_target' is not defined before "
+            "the alias");
+  EXPECT_TRUE(Output.empty());
+}
+
 TEST_F(MMIXALAsmStreamerTest, ReportsLayoutFailureBeforeEmission) {
   MCContext Context(TT, MAI, *MRI, *STI);
   std::string Diagnostic;

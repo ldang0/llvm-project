@@ -10,15 +10,18 @@
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALLAYOUT_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Error.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace llvm {
 
 class MCSection;
+class MCSubtargetInfo;
 class MCSymbol;
 
 enum class MMIXALLogicalGroup : uint8_t {
@@ -38,6 +41,7 @@ struct MMIXALAlignmentRequest {
   uint8_t FillLength = 1;
   unsigned MaxBytesToEmit = 0;
   bool IsCodeAlignment = false;
+  const MCSubtargetInfo *STI = nullptr;
 };
 
 struct MMIXALBufferedItem {
@@ -83,12 +87,14 @@ struct MMIXALPlacedItem {
 
 class MMIXALLayoutPlan {
   SmallVector<MMIXALPlacedItem, 0> Items;
+  DenseMap<const MCSymbol *, uint64_t> SymbolAddresses;
 
   friend Expected<MMIXALLayoutPlan>
   planMMIXALBareMetalLayout(const MMIXALItemGroups &Groups);
 
 public:
   ArrayRef<MMIXALPlacedItem> getItems() const { return Items; }
+  std::optional<uint64_t> getSymbolAddress(const MCSymbol &Symbol) const;
 };
 
 Expected<MMIXALLayoutPlan>

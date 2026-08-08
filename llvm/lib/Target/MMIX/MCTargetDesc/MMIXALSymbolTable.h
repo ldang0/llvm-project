@@ -84,6 +84,9 @@ public:
   bool isRegistered(const MCSymbol &Symbol) const {
     return SymbolIndices.contains(&Symbol);
   }
+  bool hasSourceBlockAlias(const MCSymbol &Symbol) const {
+    return SourceBlockIndices.contains(&Symbol);
+  }
   std::optional<PrivateSymbolKind>
   getPrivateSymbolKind(const MCSymbol &Symbol) const;
   size_t getNumRegisteredSymbols() const { return RegisteredSymbols.size(); }

@@ -173,9 +173,22 @@ llvm::planMMIXALBareMetalLayout(const MMIXALItemGroups &Groups) {
       if (!Plan.Items.empty() && Placed->Begin < Plan.Items.back().End)
         return makeLayoutError(*Item,
                                "assigned interval overlaps a prior item");
+      for (const MCSymbol *Symbol : Item->OwningSymbols)
+        if (!Plan.SymbolAddresses.try_emplace(Symbol, Placed->Begin).second)
+          return makeLayoutError(*Item,
+                                 Twine("symbol '") + Symbol->getName() +
+                                     "' is assigned by more than one item");
       Cursor = Placed->End;
       Plan.Items.push_back(std::move(*Placed));
     }
   }
   return Plan;
+}
+
+std::optional<uint64_t>
+MMIXALLayoutPlan::getSymbolAddress(const MCSymbol &Symbol) const {
+  const auto It = SymbolAddresses.find(&Symbol);
+  if (It == SymbolAddresses.end())
+    return std::nullopt;
+  return It->second;
 }

@@ -26,9 +26,9 @@ namespace llvm {
 
 class formatted_raw_ostream;
 class MCExpr;
-class MCInstPrinter;
 class MCSection;
 class MCSymbol;
+class MMIXALInstPrinter;
 class Twine;
 
 class MMIXALAsmStreamer final : public MCStreamer {
@@ -40,6 +40,7 @@ public:
 private:
   enum class EventKind {
     Alignment,
+    Assignment,
     Bytes,
     CommonSymbol,
     Fill,
@@ -73,7 +74,7 @@ private:
   };
 
   std::unique_ptr<formatted_raw_ostream> Output;
-  std::unique_ptr<MCInstPrinter> InstPrinter;
+  std::unique_ptr<MMIXALInstPrinter> InstPrinter;
   SmallVector<BufferedEvent, 0> Events;
   MMIXALItemGroups ItemGroups;
   std::optional<BufferedItem> CurrentItem;
@@ -100,11 +101,12 @@ private:
                                 bool IsPayload = true);
   void updateCurrentItemGroupForSymbol(const MCSymbol &Symbol);
   void observeSymbol(const MCSymbol &Symbol);
+  Error renderTextModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
 
 public:
   MMIXALAsmStreamer(MCContext &Context,
                     std::unique_ptr<formatted_raw_ostream> Output,
-                    std::unique_ptr<MCInstPrinter> InstPrinter);
+                    std::unique_ptr<MMIXALInstPrinter> InstPrinter);
   ~MMIXALAsmStreamer() override;
 
   void reset() override;
@@ -112,6 +114,7 @@ public:
   void emitBytes(StringRef Data) override;
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
+  void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override;
   void visitUsedSymbol(const MCSymbol &Symbol) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,

@@ -7,14 +7,22 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXALAsmStreamer.h"
+#include "MMIXALInstPrinter.h"
+#include "MMIXBaseInfo.h"
+#include "MMIXMCTargetDesc.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/FormattedStream.h"
 #include <cassert>
 #include <limits>
@@ -24,6 +32,9 @@
 using namespace llvm;
 
 namespace {
+
+constexpr StringLiteral UnsupportedBufferedModule =
+    "MMIXAL buffered module emission is not implemented";
 
 bool hasUnsupportedSpecialPurpose(StringRef Name) {
   return Name == ".eh_frame" || Name.starts_with(".gcc_except_table") ||
@@ -36,11 +47,104 @@ bool hasUnsupportedSpecialPurpose(StringRef Name) {
          Name.starts_with(".mmix") || Name.starts_with(".MMIX");
 }
 
+const MCSymbol *getBareSymbol(const MCExpr &Expr) {
+  if (const auto *Symbol = dyn_cast<MCSymbolRefExpr>(&Expr))
+    return Symbol->getKind() == 0 ? &Symbol->getSymbol() : nullptr;
+  if (const auto *Unary = dyn_cast<MCUnaryExpr>(&Expr))
+    if (Unary->getOpcode() == MCUnaryExpr::Plus)
+      return getBareSymbol(*Unary->getSubExpr());
+  return nullptr;
+}
+
+void emitAbsoluteLocation(uint64_t Address, raw_ostream &OS) {
+  OS << "\tLOC #" << format_hex_no_prefix(Address, 16, /*Upper=*/true) << '\n';
+}
+
+Error validateInstructionAddress(
+    const MCInst &Inst, uint64_t Address, const MMIXALInstPrinter &Printer,
+    const MMIXALLayoutPlan &Layout,
+    const DenseMap<const MCSymbol *, uint64_t> &AliasAddresses,
+    const DenseSet<const MCSymbol *> &DefinedSymbols,
+    ArrayRef<const MCSymbol *> Dependencies) {
+  if ((Address & 3) != 0)
+    return createStringError("MMIXAL instruction address is not four-byte "
+                             "aligned");
+
+  const MCInstrDesc &Desc = Printer.getInstructionDesc(Inst.getOpcode());
+  const MMIXII::MMIXALSelectionKind Selection =
+      MMIXII::getMMIXALSelection(Desc.TSFlags);
+  const bool IsForward = Selection == MMIXII::MMIXALSelectionForward;
+  const bool IsBackward = Selection == MMIXII::MMIXALSelectionBackward;
+  if (!IsForward && !IsBackward) {
+    for (const MCSymbol *Dependency : Dependencies)
+      if (!DefinedSymbols.contains(Dependency))
+        return createStringError(
+            Twine("MMIXAL instruction references symbol '") +
+            Dependency->getName() + "' before its definition");
+    return Error::success();
+  }
+
+  if (Desc.getNumOperands() == 0 ||
+      Desc.getNumOperands() > Inst.getNumOperands())
+    return createStringError("MMIXAL relative instruction has no target");
+  const MCOperand &TargetOperand = Inst.getOperand(Desc.getNumOperands() - 1);
+  if (!TargetOperand.isExpr())
+    return createStringError(
+        "MMIXAL source relative target requires an expression");
+
+  const MCExpr &TargetExpr = *TargetOperand.getExpr();
+  const MCSymbol *TargetSymbol = getBareSymbol(TargetExpr);
+  uint64_t TargetAddress;
+  int64_t AbsoluteTarget;
+  if (TargetExpr.evaluateAsAbsolute(AbsoluteTarget)) {
+    TargetAddress = static_cast<uint64_t>(AbsoluteTarget);
+  } else if (TargetSymbol) {
+    std::optional<uint64_t> Resolved = Layout.getSymbolAddress(*TargetSymbol);
+    const auto Alias = AliasAddresses.find(TargetSymbol);
+    if (!Resolved && Alias != AliasAddresses.end())
+      Resolved = Alias->second;
+    if (!Resolved)
+      return createStringError(Twine("MMIXAL relative target '") +
+                               TargetSymbol->getName() +
+                               "' has no allocated definition");
+    TargetAddress = *Resolved;
+  } else {
+    return createStringError(
+        "MMIXAL relative target must be an absolute address or bare symbol");
+  }
+
+  for (const MCSymbol *Dependency : Dependencies)
+    if (Dependency != TargetSymbol && !DefinedSymbols.contains(Dependency))
+      return createStringError(
+          Twine("MMIXAL relative instruction references symbol '") +
+          Dependency->getName() + "' before its definition");
+
+  if ((TargetAddress & 3) != 0)
+    return createStringError("MMIXAL relative target is not four-byte aligned");
+  if ((IsForward && TargetAddress < Address) ||
+      (IsBackward && TargetAddress >= Address))
+    return createStringError(
+        "MMIXAL relative target direction does not match instruction");
+
+  const unsigned Width = MMIXII::getPCRelativeWidth(Desc.TSFlags);
+  if (Width != 16 && Width != 24)
+    return createStringError("MMIXAL relative instruction has invalid width");
+  const uint64_t Distance =
+      IsBackward ? Address - TargetAddress : TargetAddress - Address;
+  if ((Distance & 3) != 0)
+    return createStringError("MMIXAL relative target is not four-byte aligned");
+  const uint64_t MaxWords =
+      IsBackward ? uint64_t(1) << Width : (uint64_t(1) << Width) - 1;
+  if (Distance / 4 > MaxWords)
+    return createStringError("MMIXAL relative target is out of range");
+  return Error::success();
+}
+
 } // namespace
 
 MMIXALAsmStreamer::MMIXALAsmStreamer(
     MCContext &Context, std::unique_ptr<formatted_raw_ostream> Output,
-    std::unique_ptr<MCInstPrinter> InstPrinter)
+    std::unique_ptr<MMIXALInstPrinter> InstPrinter)
     : MCStreamer(Context), Output(std::move(Output)),
       InstPrinter(std::move(InstPrinter)) {
   assert(this->Output && "MMIXAL streamer requires an output stream");
@@ -292,6 +396,25 @@ void MMIXALAsmStreamer::emitLabel(MCSymbol *Symbol, SMLoc) {
     CurrentItem->OwningSymbols.push_back(Symbol);
 }
 
+void MMIXALAsmStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
+  assert(Symbol && Value && "cannot emit a null assignment");
+  observeSymbol(*Symbol);
+  SmallVector<const MCSymbol *, 2> Dependencies;
+  DependencySink = &Dependencies;
+  MCStreamer::emitAssignment(Symbol, Value);
+  DependencySink = nullptr;
+
+  BufferedEvent Event{EventKind::Assignment};
+  Event.Symbol = Symbol;
+  Event.Expression = Value;
+  Event.Dependencies = std::move(Dependencies);
+  Event.Section = getCurrentSection().first;
+  if (CurrentItem)
+    appendEventToCurrentItem(std::move(Event), 0, false);
+  else
+    Events.push_back(std::move(Event));
+}
+
 void MMIXALAsmStreamer::visitUsedSymbol(const MCSymbol &Symbol) {
   observeSymbol(Symbol);
   if (DependencySink && !llvm::is_contained(*DependencySink, &Symbol))
@@ -480,7 +603,7 @@ void MMIXALAsmStreamer::emitValueToAlignment(Align Alignment, int64_t Fill,
 }
 
 void MMIXALAsmStreamer::emitCodeAlignment(Align Alignment,
-                                          const MCSubtargetInfo &,
+                                          const MCSubtargetInfo &STI,
                                           unsigned MaxBytesToEmit) {
   if (CurrentItem &&
       (CurrentItem->HasPayload || !CurrentItem->OwningSymbols.empty()))
@@ -497,7 +620,7 @@ void MMIXALAsmStreamer::emitCodeAlignment(Align Alignment,
   appendEventToCurrentItem(std::move(Event), 0, false);
   if (CurrentItem) {
     CurrentItem->Alignments.push_back(
-        {Alignment.value(), 0, 1, MaxBytesToEmit, true});
+        {Alignment.value(), 0, 1, MaxBytesToEmit, true, &STI});
     if (CurrentItem->RequiredAlignment < Alignment.value())
       CurrentItem->RequiredAlignment = Alignment.value();
   }
@@ -627,6 +750,165 @@ size_t MMIXALAsmStreamer::getNumBufferedItems() {
   return Count;
 }
 
+Error MMIXALAsmStreamer::renderTextModule(const MMIXALLayoutPlan &Layout,
+                                          raw_ostream &OS) {
+  DenseSet<size_t> ItemEventIndices;
+  for (const MMIXALPlacedItem &Placed : Layout.getItems())
+    if (Placed.Input->Group != LogicalGroup::Text) {
+      return createStringError(UnsupportedBufferedModule);
+    } else {
+      for (size_t EventIndex : Placed.Input->EventIndices)
+        if (!ItemEventIndices.insert(EventIndex).second)
+          return createStringError(
+              "MMIXAL event belongs to more than one logical item");
+    }
+  for (size_t EventIndex = 0; EventIndex != Events.size(); ++EventIndex)
+    switch (Events[EventIndex].Kind) {
+    case EventKind::SectionSwitch:
+      break;
+    case EventKind::Alignment:
+    case EventKind::Assignment:
+    case EventKind::Instruction:
+    case EventKind::Label:
+      if (!ItemEventIndices.contains(EventIndex))
+        return createStringError(UnsupportedBufferedModule);
+      break;
+    default:
+      return createStringError(UnsupportedBufferedModule);
+    }
+
+  DenseSet<const MCSymbol *> DefinedSymbols;
+  DenseMap<const MCSymbol *, uint64_t> AliasAddresses;
+  auto ResolveSymbol =
+      [this, &DefinedSymbols](const MCSymbol &Symbol) -> MMIXALSymbolPrintInfo {
+    return {cantFail(Symbols.getMappedSymbol(Symbol)),
+            DefinedSymbols.contains(&Symbol)};
+  };
+
+  for (const MMIXALPlacedItem &Placed : Layout.getItems()) {
+    std::optional<uint64_t> CurrentLocation;
+    for (const MMIXALPaddingInterval &Padding : Placed.Padding) {
+      if (!Padding.Request.IsCodeAlignment) {
+        emitAbsoluteLocation(Padding.End, OS);
+        CurrentLocation = Padding.End;
+        continue;
+      }
+      if (!Padding.Request.STI)
+        return createStringError(
+            "MMIXAL executable padding has no subtarget information");
+      if ((Padding.Begin & 3) != 0 || ((Padding.End - Padding.Begin) & 3) != 0)
+        return createStringError(
+            "MMIXAL executable padding is not four-byte aligned");
+
+      emitAbsoluteLocation(Padding.Begin, OS);
+      MCInst Nop;
+      Nop.setOpcode(MMIX::SWYM);
+      Nop.addOperand(MCOperand::createImm(0));
+      Nop.addOperand(MCOperand::createImm(0));
+      Nop.addOperand(MCOperand::createImm(0));
+      for (uint64_t Address = Padding.Begin; Address != Padding.End;
+           Address += 4) {
+        InstPrinter->printInstWithSymbolNames(
+            &Nop, Address, *Padding.Request.STI, ResolveSymbol, OS);
+        OS << '\n';
+      }
+      CurrentLocation = Padding.End;
+    }
+
+    if (!CurrentLocation || *CurrentLocation != Placed.Begin)
+      emitAbsoluteLocation(Placed.Begin, OS);
+    uint64_t Address = Placed.Begin;
+    for (size_t EventIndex : Placed.Input->EventIndices) {
+      if (EventIndex >= Events.size())
+        return createStringError("MMIXAL item contains an invalid event index");
+      const BufferedEvent &Event = Events[EventIndex];
+      switch (Event.Kind) {
+      case EventKind::Alignment:
+        break;
+      case EventKind::Assignment: {
+        const MCSymbol *Target = getBareSymbol(*Event.Expression);
+        if (!Target)
+          return createStringError(
+              "MMIXAL defined-target alias requires a bare symbol");
+        std::optional<uint64_t> TargetAddress =
+            Layout.getSymbolAddress(*Target);
+        const auto TargetAlias = AliasAddresses.find(Target);
+        if (!TargetAddress && TargetAlias != AliasAddresses.end())
+          TargetAddress = TargetAlias->second;
+        if (!TargetAddress)
+          return createStringError(Twine("MMIXAL alias target '") +
+                                   Target->getName() +
+                                   "' has no allocated address");
+        const bool IsCurrentLocation = *TargetAddress == Address;
+        if (!IsCurrentLocation && !DefinedSymbols.contains(Target))
+          return createStringError(Twine("MMIXAL alias target '") +
+                                   Target->getName() +
+                                   "' is not defined before the alias");
+
+        Expected<StringRef> AliasName = Symbols.getMappedSymbol(*Event.Symbol);
+        if (!AliasName)
+          return AliasName.takeError();
+        Expected<StringRef> TargetName = Symbols.getMappedSymbol(*Target);
+        if (!TargetName)
+          return TargetName.takeError();
+        if (!DefinedSymbols.insert(Event.Symbol).second)
+          return createStringError(Twine("duplicate MMIXAL definition for '") +
+                                   *AliasName + "'");
+        AliasAddresses.try_emplace(Event.Symbol, *TargetAddress);
+        OS << *AliasName << "\tIS ";
+        if (IsCurrentLocation)
+          OS << '@';
+        else
+          OS << *TargetName;
+        OS << '\n';
+        break;
+      }
+      case EventKind::Label: {
+        Expected<StringRef> Name = Symbols.getMappedSymbol(*Event.Symbol);
+        if (!Name)
+          return Name.takeError();
+        if (!DefinedSymbols.insert(Event.Symbol).second)
+          return createStringError(Twine("duplicate MMIXAL definition for '") +
+                                   *Name + "'");
+        OS << *Name << "\tIS @\n";
+        if (Symbols.hasSourceBlockAlias(*Event.Symbol)) {
+          Expected<StringRef> Alias =
+              Symbols.getSourceBlockAlias(*Event.Symbol);
+          if (!Alias)
+            return Alias.takeError();
+          OS << *Alias << "\tIS @\n";
+        }
+        break;
+      }
+      case EventKind::Instruction:
+        for (const MCSymbol *Dependency : Event.Dependencies) {
+          Expected<StringRef> Name = Symbols.getMappedSymbol(*Dependency);
+          if (!Name)
+            return Name.takeError();
+        }
+        if (Error Err = validateInstructionAddress(
+                Event.Inst, Address, *InstPrinter, Layout, AliasAddresses,
+                DefinedSymbols, Event.Dependencies))
+          return Err;
+        if (!Event.STI)
+          return createStringError(
+              "MMIXAL instruction has no subtarget information");
+        InstPrinter->printInstWithSymbolNames(&Event.Inst, Address, *Event.STI,
+                                              ResolveSymbol, OS);
+        OS << '\n';
+        Address += 4;
+        break;
+      default:
+        return createStringError(UnsupportedBufferedModule);
+      }
+    }
+    if (Address != Placed.End)
+      return createStringError(
+          "MMIXAL text item size does not match its buffered instructions");
+  }
+  return Error::success();
+}
+
 void MMIXALAsmStreamer::finishImpl() {
   flushCurrentItem();
   if (!ClassificationError.empty()) {
@@ -643,11 +925,14 @@ void MMIXALAsmStreamer::finishImpl() {
     getContext().reportError(SMLoc(), toString(Layout.takeError()));
     return;
   }
-  if (!Events.empty()) {
-    getContext().reportError(
-        SMLoc(), "MMIXAL buffered module emission is not implemented");
+  std::string Source;
+  raw_string_ostream SourceOS(Source);
+  if (Error Err = renderTextModule(*Layout, SourceOS)) {
+    getContext().reportError(SMLoc(), toString(std::move(Err)));
     return;
   }
+  SourceOS.flush();
+  *Output << Source;
 
   Output->flush();
 }

@@ -395,6 +395,29 @@ TEST_F(MMIXALInstPrinterTest, PrintsRelativeTargetBoundaries) {
       "\tJMP " + std::to_string(JumpBackwardLimit));
 }
 
+TEST_F(MMIXALInstPrinterTest, UsesScopedMappedSymbolNames) {
+  MCSymbol *Target = Ctx.getOrCreateSymbol(".Lcanonical_target");
+  MCInst Inst;
+  Inst.setOpcode(MMIX::JMP);
+  Inst.addOperand(MCOperand::createExpr(MCSymbolRefExpr::create(Target, Ctx)));
+
+  std::string Output;
+  raw_string_ostream OS(Output);
+  Printer.printInstWithSymbolNames(
+      &Inst, 0x100, *STI,
+      [](const MCSymbol &) -> MMIXALSymbolPrintInfo {
+        return {"mapped_target", false};
+      },
+      OS);
+  OS.flush();
+
+  EXPECT_EQ(Output, "\tJMP mapped_target");
+  EXPECT_EQ(
+      printAt(0x100, MMIX::JMP,
+              {MCOperand::createExpr(MCSymbolRefExpr::create(Target, Ctx))}),
+      "\tJMP .Lcanonical_target");
+}
+
 TEST_F(MMIXALInstPrinterTest, RejectsInvalidRelativeTargets) {
   constexpr uint64_t Address = 0x100000;
   EXPECT_DEATH(
@@ -423,14 +446,14 @@ TEST_F(MMIXALInstPrinterTest, RejectsInvalidRelativeTargets) {
   EXPECT_EQ(printAt(Address, MMIX::JMP, {MCOperand::createImm(1)}), "\tJMP 1");
   EXPECT_DEATH(printAt(Address, MMIX::JMP, {MCOperand::createImm(-1)}),
                "decoded relative target does not match instruction");
-  EXPECT_DEATH(printAt(Address, MMIX::BNB,
-                       {MCOperand::createReg(MMIX::R1),
-                        MCOperand::createImm(0)}),
-               "decoded relative target does not match instruction");
-  EXPECT_DEATH(printAt(Address, MMIX::BN,
-                       {MCOperand::createReg(MMIX::R1),
-                        MCOperand::createImm(65536)}),
-               "decoded relative target does not match instruction");
+  EXPECT_DEATH(
+      printAt(Address, MMIX::BNB,
+              {MCOperand::createReg(MMIX::R1), MCOperand::createImm(0)}),
+      "decoded relative target does not match instruction");
+  EXPECT_DEATH(
+      printAt(Address, MMIX::BN,
+              {MCOperand::createReg(MMIX::R1), MCOperand::createImm(65536)}),
+      "decoded relative target does not match instruction");
 }
 
 TEST_F(MMIXALInstPrinterTest, PreservesMixedRegisterAndImmediateKinds) {
