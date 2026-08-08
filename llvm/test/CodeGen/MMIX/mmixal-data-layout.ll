@@ -1,0 +1,32 @@
+; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
+; RUN:   --output-asm-variant=1 %s -o - \
+; RUN:   | FileCheck %s --implicit-check-not=.section \
+; RUN:     --implicit-check-not=.zero --implicit-check-not=.8byte
+
+target triple = "mmix-unknown-elf"
+
+@readonly_data = internal constant i64 72623859790382856, align 8
+@writable_data = internal global i32 287454020, align 4
+@data_pointer = internal global ptr @writable_data, align 8
+@zero_data = internal global [16 x i8] zeroinitializer, align 16
+
+define internal i64 @load_readonly() {
+entry:
+  %value = load volatile i64, ptr @readonly_data, align 8
+  ret i64 %value
+}
+
+; Compound address materialization requires the read-only definition before
+; the function body in MMIXAL source, while LOC preserves its planned address.
+; CHECK:      LOC #0000000000000118
+; CHECK:      LOC #2000000000000000
+; CHECK-NEXT: readonly_data	IS @
+; CHECK-NEXT: BYTE #01, #02, #03, #04, #05, #06, #07, #08
+; CHECK:      LOC #0000000000000100
+; CHECK-NEXT: load_readonly	IS @
+; CHECK:      writable_data	IS @
+; CHECK-NEXT: BYTE #11, #22, #33, #44
+; CHECK:      data_pointer	IS @
+; CHECK-NEXT: OCTA writable_data
+; CHECK:      zero_data	IS @
+; CHECK-NEXT: OCTA 0, 0

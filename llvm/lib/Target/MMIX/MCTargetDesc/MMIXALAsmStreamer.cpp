@@ -24,6 +24,7 @@
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Casting.h"
@@ -503,6 +504,7 @@ void MMIXALAsmStreamer::reset() {
   PendingFunctionSymbolSet.clear();
   PendingModuleSymbols.clear();
   PendingModuleSymbolSet.clear();
+  ModuleLocalSymbols.clear();
   HasActiveFunction = false;
 }
 
@@ -635,6 +637,12 @@ bool MMIXALAsmStreamer::emitSymbolAttribute(MCSymbol *Symbol,
                                             MCSymbolAttr Attribute) {
   assert(Symbol && "cannot emit an attribute for a null symbol");
   observeSymbol(*Symbol);
+  if (IsModuleEmission && Attribute == MCSA_Global)
+    return true;
+  if (IsModuleEmission && Attribute == MCSA_Local) {
+    ModuleLocalSymbols.insert(Symbol);
+    return true;
+  }
   if (Attribute == MCSA_ELF_TypeFunction || Attribute == MCSA_ELF_TypeObject ||
       Attribute == MCSA_ELF_TypeNoType)
     return true;
@@ -648,6 +656,8 @@ void MMIXALAsmStreamer::emitEHSymAttributes(const MCSymbol *Symbol,
 }
 
 void MMIXALAsmStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {
+  if (IsModuleEmission)
+    return;
   recordUnsupportedEvent("ELF symbol size");
 }
 
@@ -661,6 +671,11 @@ void MMIXALAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                          Align ByteAlignment) {
   assert(Symbol && "cannot emit a null common symbol");
   observeSymbol(*Symbol);
+  if (IsModuleEmission && ModuleLocalSymbols.erase(Symbol)) {
+    emitZerofill(getContext().getObjectFileInfo()->getBSSSection(), Symbol,
+                 Size, ByteAlignment);
+    return;
+  }
   recordUnsupportedEvent("common-symbol allocation");
 }
 

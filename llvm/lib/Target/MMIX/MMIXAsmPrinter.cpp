@@ -195,9 +195,9 @@ createMMIXAsmPrinter(TargetMachine &TM,
                      std::unique_ptr<MCStreamer> &&Streamer) {
   if (TM.getMCAsmInfo().getOutputAssemblerDialect() ==
       MMIXII::MMIXALAsmVariant) {
-    Streamer->getContext().reportError(
-        SMLoc(), "MMIXAL complete-source emission is not available");
-    return nullptr;
+    auto *MMIXALStreamer = static_cast<MMIXALAsmStreamer *>(Streamer.get());
+    MMIXALStreamer->beginModuleEmission();
+    return new MMIXAsmPrinter(TM, std::move(Streamer), MMIXALStreamer);
   }
   return new MMIXAsmPrinter(TM, std::move(Streamer));
 }

@@ -89,7 +89,9 @@ private:
   SmallPtrSet<const MCSymbol *, 8> PendingFunctionSymbolSet;
   SmallVector<const MCSymbol *, 0> PendingModuleSymbols;
   SmallPtrSet<const MCSymbol *, 8> PendingModuleSymbolSet;
+  SmallPtrSet<const MCSymbol *, 4> ModuleLocalSymbols;
   bool HasActiveFunction = false;
+  bool IsModuleEmission = false;
 
   static size_t getGroupIndex(LogicalGroup Group);
   void recordClassificationError(const Twine &Message);
@@ -127,6 +129,7 @@ public:
                     std::unique_ptr<MCCodeEmitter> CodeEmitter);
   ~MMIXALAsmStreamer() override;
 
+  void beginModuleEmission() { IsModuleEmission = true; }
   void reset() override;
   void emitBytes(StringRef Data) override;
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
