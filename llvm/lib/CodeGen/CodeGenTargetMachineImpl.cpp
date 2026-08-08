@@ -178,8 +178,14 @@ CodeGenTargetMachineImpl::createMCStreamer(raw_pwrite_stream &Out,
 
   switch (FileType) {
   case CodeGenFileType::AssemblyFile: {
+    const unsigned AsmVariant = MAI.getOutputAssemblerDialect();
     std::unique_ptr<MCInstPrinter> InstPrinter(getTarget().createMCInstPrinter(
-        getTargetTriple(), MAI.getOutputAssemblerDialect(), MAI, MII, MRI));
+        getTargetTriple(), AsmVariant, MAI, MII, MRI));
+    if (!InstPrinter)
+      return createStringError(
+          "unable to create instruction printer for target triple '" +
+          getTargetTriple().normalize() + "' with assembly variant " +
+          Twine(AsmVariant));
     for (StringRef Opt : Options.MCOptions.InstPrinterOptions)
       if (!InstPrinter->applyTargetSpecificCLOption(Opt))
         return createStringError("invalid InstPrinter option '" + Opt + "'");
