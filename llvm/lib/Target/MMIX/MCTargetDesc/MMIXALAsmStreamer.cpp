@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXALAsmStreamer.h"
+#include "MMIXALDependencyGraph.h"
+#include "MMIXALExpression.h"
 #include "MMIXALInstPrinter.h"
 #include "MMIXBaseInfo.h"
 #include "MMIXMCTargetDesc.h"
@@ -26,6 +28,7 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/FormattedStream.h"
 #include <cassert>
+#include <functional>
 #include <limits>
 #include <system_error>
 #include <utility>
@@ -167,15 +170,6 @@ bool hasUnsupportedSpecialPurpose(StringRef Name) {
          Name.starts_with(".mmix") || Name.starts_with(".MMIX");
 }
 
-const MCSymbol *getBareSymbol(const MCExpr &Expr) {
-  if (const auto *Symbol = dyn_cast<MCSymbolRefExpr>(&Expr))
-    return Symbol->getKind() == 0 ? &Symbol->getSymbol() : nullptr;
-  if (const auto *Unary = dyn_cast<MCUnaryExpr>(&Expr))
-    if (Unary->getOpcode() == MCUnaryExpr::Plus)
-      return getBareSymbol(*Unary->getSubExpr());
-  return nullptr;
-}
-
 void emitAbsoluteLocation(uint64_t Address, raw_ostream &OS) {
   OS << "\tLOC #" << format_hex_no_prefix(Address, 16, /*Upper=*/true) << '\n';
 }
@@ -213,7 +207,7 @@ Error validateInstructionAddress(
         "MMIXAL source relative target requires an expression");
 
   const MCExpr &TargetExpr = *TargetOperand.getExpr();
-  const MCSymbol *TargetSymbol = getBareSymbol(TargetExpr);
+  const MCSymbol *TargetSymbol = getBareMMIXALSymbol(TargetExpr);
   uint64_t TargetAddress;
   int64_t AbsoluteTarget;
   if (TargetExpr.evaluateAsAbsolute(AbsoluteTarget)) {
@@ -893,6 +887,175 @@ size_t MMIXALAsmStreamer::getNumBufferedItems() {
   return Count;
 }
 
+Expected<SmallVector<const MMIXALPlacedItem *, 0>>
+MMIXALAsmStreamer::scheduleItems(
+    const MMIXALLayoutPlan &Layout,
+    DenseMap<const MCSymbol *, uint64_t> &AliasAddresses) const {
+  struct AliasDefinition {
+    const MCSymbol *Alias;
+    const MCSymbol *Target;
+    size_t Item;
+  };
+
+  const ArrayRef<MMIXALPlacedItem> Items = Layout.getItems();
+  DenseMap<const MCSymbol *, size_t> DefinitionItems;
+  DenseMap<const MCSymbol *, const MCSymbol *> AliasTargets;
+  SmallVector<AliasDefinition, 0> Aliases;
+  SmallVector<MMIXALItemDependencies, 0> Dependencies(Items.size());
+
+  auto RegisterDefinition = [&](const MCSymbol &Symbol, size_t Item) -> Error {
+    if (!DefinitionItems.try_emplace(&Symbol, Item).second)
+      return createStringError(Twine("duplicate MMIXAL definition for '") +
+                               Symbol.getName() + "'");
+    return Error::success();
+  };
+
+  for (size_t Item = 0; Item != Items.size(); ++Item) {
+    for (const MCSymbol *Symbol : Items[Item].Input->OwningSymbols)
+      if (Error Err = RegisterDefinition(*Symbol, Item))
+        return std::move(Err);
+    for (size_t EventIndex : Items[Item].Input->EventIndices) {
+      if (EventIndex >= Events.size())
+        return createStringError("MMIXAL item contains an invalid event index");
+      const BufferedEvent &Event = Events[EventIndex];
+      if (Event.Kind != EventKind::Assignment)
+        continue;
+      if (Error Err = validateMMIXALExpression(*Event.Expression))
+        return std::move(Err);
+      const MCSymbol *Target = getBareMMIXALSymbol(*Event.Expression);
+      if (!Target)
+        return createStringError(
+            "MMIXAL defined-target alias requires a bare symbol");
+      if (Error Err = RegisterDefinition(*Event.Symbol, Item))
+        return std::move(Err);
+      AliasTargets.try_emplace(Event.Symbol, Target);
+      Aliases.push_back({Event.Symbol, Target, Item});
+    }
+  }
+
+  auto RequireDefinitions = [&](size_t Item, ArrayRef<const MCSymbol *> Symbols,
+                                bool AddEdges) -> Error {
+    for (const MCSymbol *Symbol : Symbols) {
+      if (Expected<StringRef> Name = this->Symbols.getMappedSymbol(*Symbol);
+          !Name)
+        return Name.takeError();
+      const auto Definition = DefinitionItems.find(Symbol);
+      if (Definition == DefinitionItems.end())
+        return createStringError(Twine("MMIXAL symbol '") + Symbol->getName() +
+                                 "' has no allocated definition");
+      if (AddEdges && Definition->second != Item &&
+          !llvm::is_contained(Dependencies[Item], Definition->second))
+        Dependencies[Item].push_back(Definition->second);
+    }
+    return Error::success();
+  };
+
+  for (const AliasDefinition &Alias : Aliases) {
+    const MCSymbol *Target[] = {Alias.Target};
+    if (Error Err = RequireDefinitions(Alias.Item, Target, true))
+      return std::move(Err);
+  }
+
+  for (size_t Item = 0; Item != Items.size(); ++Item) {
+    for (size_t EventIndex : Items[Item].Input->EventIndices) {
+      const BufferedEvent &Event = Events[EventIndex];
+      if (Event.Expression && Event.Kind != EventKind::Assignment)
+        if (Error Err = validateMMIXALExpression(*Event.Expression))
+          return std::move(Err);
+
+      if (Event.Kind == EventKind::Value) {
+        int64_t Absolute;
+        if (Event.Expression->evaluateAsAbsolute(Absolute))
+          continue;
+        const MCSymbol *BareOCTATarget =
+            Event.ValueSize == 8 ? getBareMMIXALSymbol(*Event.Expression)
+                                 : nullptr;
+        if (BareOCTATarget && !DefinitionItems.contains(BareOCTATarget))
+          return createStringError(Twine("MMIXAL OCTA target '") +
+                                   BareOCTATarget->getName() +
+                                   "' has no allocated definition");
+        if (Error Err =
+                RequireDefinitions(Item, Event.Dependencies, !BareOCTATarget))
+          return std::move(Err);
+        continue;
+      }
+
+      if (Event.Kind != EventKind::Instruction)
+        continue;
+      for (const MCOperand &Operand : Event.Inst)
+        if (Operand.isExpr())
+          if (Error Err = validateMMIXALExpression(*Operand.getExpr()))
+            return std::move(Err);
+
+      const MCInstrDesc &Desc =
+          InstPrinter->getInstructionDesc(Event.Inst.getOpcode());
+      const MMIXII::MMIXALSelectionKind Selection =
+          MMIXII::getMMIXALSelection(Desc.TSFlags);
+      const bool IsRelative = Selection == MMIXII::MMIXALSelectionForward ||
+                              Selection == MMIXII::MMIXALSelectionBackward;
+      if (!IsRelative) {
+        if (Error Err = RequireDefinitions(Item, Event.Dependencies, true))
+          return std::move(Err);
+        continue;
+      }
+
+      if (Desc.getNumOperands() == 0 ||
+          Desc.getNumOperands() > Event.Inst.getNumOperands())
+        return createStringError("MMIXAL relative instruction has no target");
+      const MCOperand &Target =
+          Event.Inst.getOperand(Desc.getNumOperands() - 1);
+      if (!Target.isExpr())
+        return createStringError(
+            "MMIXAL source relative target requires an expression");
+      int64_t Absolute;
+      if (!Target.getExpr()->evaluateAsAbsolute(Absolute) &&
+          !getBareMMIXALSymbol(*Target.getExpr()))
+        return createStringError(
+            "MMIXAL relative target must be an absolute address or bare "
+            "symbol");
+      if (Error Err = RequireDefinitions(Item, Event.Dependencies, false))
+        return std::move(Err);
+    }
+  }
+
+  Expected<SmallVector<size_t, 0>> Order = scheduleMMIXALItems(Dependencies);
+  if (!Order)
+    return Order.takeError();
+
+  DenseSet<const MCSymbol *> ResolvingAliases;
+  std::function<Expected<uint64_t>(const MCSymbol &)> ResolveAddress =
+      [&](const MCSymbol &Symbol) -> Expected<uint64_t> {
+    if (std::optional<uint64_t> Address = Layout.getSymbolAddress(Symbol))
+      return *Address;
+    if (const auto Address = AliasAddresses.find(&Symbol);
+        Address != AliasAddresses.end())
+      return Address->second;
+    const auto Target = AliasTargets.find(&Symbol);
+    if (Target == AliasTargets.end())
+      return createStringError(Twine("MMIXAL symbol '") + Symbol.getName() +
+                               "' has no allocated definition");
+    if (!ResolvingAliases.insert(&Symbol).second)
+      return createStringError(Twine("MMIXAL alias dependency cycle at '") +
+                               Symbol.getName() + "'");
+    Expected<uint64_t> Address = ResolveAddress(*Target->second);
+    ResolvingAliases.erase(&Symbol);
+    if (!Address)
+      return Address.takeError();
+    AliasAddresses.try_emplace(&Symbol, *Address);
+    return *Address;
+  };
+
+  for (const AliasDefinition &Alias : Aliases)
+    if (Expected<uint64_t> Address = ResolveAddress(*Alias.Alias); !Address)
+      return Address.takeError();
+
+  SmallVector<const MMIXALPlacedItem *, 0> ScheduledItems;
+  ScheduledItems.reserve(Order->size());
+  for (size_t Item : *Order)
+    ScheduledItems.push_back(&Items[Item]);
+  return ScheduledItems;
+}
+
 Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
                                       raw_ostream &OS) {
   DenseSet<size_t> ItemEventIndices;
@@ -921,15 +1084,21 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
       return createStringError(UnsupportedBufferedModule);
     }
 
-  DenseSet<const MCSymbol *> DefinedSymbols;
   DenseMap<const MCSymbol *, uint64_t> AliasAddresses;
+  Expected<SmallVector<const MMIXALPlacedItem *, 0>> ScheduledItems =
+      scheduleItems(Layout, AliasAddresses);
+  if (!ScheduledItems)
+    return ScheduledItems.takeError();
+
+  DenseSet<const MCSymbol *> DefinedSymbols;
   auto ResolveSymbol =
       [this, &DefinedSymbols](const MCSymbol &Symbol) -> MMIXALSymbolPrintInfo {
     return {cantFail(Symbols.getMappedSymbol(Symbol)),
             DefinedSymbols.contains(&Symbol)};
   };
 
-  for (const MMIXALPlacedItem &Placed : Layout.getItems()) {
+  for (const MMIXALPlacedItem *Scheduled : *ScheduledItems) {
+    const MMIXALPlacedItem &Placed = *Scheduled;
     std::optional<uint64_t> CurrentLocation;
     for (const MMIXALPaddingInterval &Padding : Placed.Padding) {
       if (!Padding.Request.IsCodeAlignment) {
@@ -970,7 +1139,7 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
       case EventKind::Alignment:
         break;
       case EventKind::Assignment: {
-        const MCSymbol *Target = getBareSymbol(*Event.Expression);
+        const MCSymbol *Target = getBareMMIXALSymbol(*Event.Expression);
         if (!Target)
           return createStringError(
               "MMIXAL defined-target alias requires a bare symbol");
@@ -1070,26 +1239,24 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
           else
             emitBigEndianBytes(OS, Value, Event.ValueSize);
         } else {
-          if (Event.ValueSize != 8)
+          if (Address % Event.ValueSize != 0)
             return createStringError(
-                "MMIXAL symbolic data value must use OCTA");
-          const MCSymbol *Target = getBareSymbol(*Event.Expression);
-          if (!Target)
-            return createStringError(
-                "MMIXAL OCTA value requires a bare symbol");
-          Expected<StringRef> Name = Symbols.getMappedSymbol(*Target);
-          if (!Name)
-            return Name.takeError();
-          std::optional<uint64_t> TargetAddress =
-              Layout.getSymbolAddress(*Target);
-          const auto TargetAlias = AliasAddresses.find(Target);
-          if (!TargetAddress && TargetAlias != AliasAddresses.end())
-            TargetAddress = TargetAlias->second;
-          if (!TargetAddress)
-            return createStringError(Twine("MMIXAL OCTA target '") +
-                                     Target->getName() +
-                                     "' has no allocated definition");
-          OS << "\tOCTA " << *Name << '\n';
+                "MMIXAL symbolic data value is not naturally aligned");
+          const bool AllowsBareFutureSymbol =
+              Event.ValueSize == 8 &&
+              getBareMMIXALSymbol(*Event.Expression) != nullptr;
+          if (!AllowsBareFutureSymbol)
+            for (const MCSymbol *Dependency : Event.Dependencies)
+              if (!DefinedSymbols.contains(Dependency))
+                return createStringError(
+                    Twine("MMIXAL data expression references symbol '") +
+                    Dependency->getName() + "' before its definition");
+          OS << '\t' << getDataDirective(Event.ValueSize) << ' ';
+          if (Error Err = printMMIXALExpression(*Event.Expression,
+                                                getContext().getAsmInfo(),
+                                                ResolveSymbol, OS))
+            return Err;
+          OS << '\n';
         }
         if (Error Err =
                 advanceDataAddress(Address, Event.ValueSize, Placed.End))

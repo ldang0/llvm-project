@@ -12,6 +12,7 @@
 #include "MMIXALLayout.h"
 #include "MMIXALSymbolTable.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInst.h"
@@ -105,6 +106,9 @@ private:
   void updateCurrentItemGroupForDependencies(
       ArrayRef<const MCSymbol *> Dependencies);
   void observeSymbol(const MCSymbol &Symbol);
+  Expected<SmallVector<const MMIXALPlacedItem *, 0>>
+  scheduleItems(const MMIXALLayoutPlan &Layout,
+                DenseMap<const MCSymbol *, uint64_t> &AliasAddresses) const;
   Error renderModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
 
 public:

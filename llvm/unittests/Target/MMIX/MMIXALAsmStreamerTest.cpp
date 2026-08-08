@@ -970,10 +970,8 @@ TEST_F(MMIXALAsmStreamerTest, UsesLocationForNonFallthroughTextAlignment) {
                     "\tADD $1, $2, $3\n");
 }
 
-TEST_F(MMIXALAsmStreamerTest, RejectsAliasToLaterDifferentAddress) {
+TEST_F(MMIXALAsmStreamerTest, SchedulesAliasAfterLaterTargetDefinition) {
   MCContext Context(TT, MAI, *MRI, *STI);
-  std::string Diagnostic;
-  captureDiagnostic(Context, Diagnostic);
   std::string Output;
   raw_string_ostream OutputOS(Output);
   auto Streamer = createStreamer(Context, OutputOS);
@@ -988,19 +986,241 @@ TEST_F(MMIXALAsmStreamerTest, RejectsAliasToLaterDifferentAddress) {
                                      ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
   Streamer->emitLabel(Anchor);
   Streamer->emitAssignment(Alias, MCSymbolRefExpr::create(Target, Context));
-  MCInst Add;
-  Add.setOpcode(MMIX::ADD);
-  Add.addOperand(MCOperand::createReg(MMIX::R1));
-  Add.addOperand(MCOperand::createReg(MMIX::R2));
-  Add.addOperand(MCOperand::createReg(MMIX::R3));
-  Streamer->emitInstruction(Add, *STI);
+  MCInst Jump;
+  Jump.setOpcode(MMIX::JMP);
+  Jump.addOperand(
+      MCOperand::createExpr(MCSymbolRefExpr::create(Alias, Context)));
+  Streamer->emitInstruction(Jump, *STI);
   Streamer->emitLabel(Target);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #0000000000000104\n"
+                    "target\tIS @\n"
+                    "\tLOC #0000000000000100\n"
+                    "anchor\tIS @\n"
+                    "alias\tIS target\n"
+                    "\tJMP alias\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, SchedulesCompoundDataExpressionAfterDefinition) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Use = Context.getOrCreateSymbol("canonical_use");
+  MCSymbol *Target = Context.getOrCreateSymbol("canonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Use, "use"));
+  expectSuccess(Streamer->registerUserSymbol(*Target, "target"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Use);
+  Streamer->emitValue(
+      MCBinaryExpr::createAdd(MCSymbolRefExpr::create(Target, Context),
+                              MCConstantExpr::create(8, Context), Context),
+      8);
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Target);
+  Streamer->emitValue(MCConstantExpr::create(42, Context), 8);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000008\n"
+                    "target\tIS @\n"
+                    "\tOCTA #000000000000002A\n"
+                    "\tLOC #2000000000000000\n"
+                    "use\tIS @\n"
+                    "\tOCTA target+8\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       SchedulesCompoundInstructionExpressionAfterDefinition) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Function = Context.getOrCreateSymbol("canonical_function");
+  MCSymbol *Target = Context.getOrCreateSymbol("canonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Function, "function"));
+  expectSuccess(Streamer->registerUserSymbol(*Target, "target"));
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Function);
+  const MCExpr *HighWyde = MCBinaryExpr::createAnd(
+      MCBinaryExpr::createLShr(MCSymbolRefExpr::create(Target, Context),
+                               MCConstantExpr::create(48, Context), Context),
+      MCConstantExpr::create(0xffff, Context), Context);
+  MCInst SetHigh;
+  SetHigh.setOpcode(MMIX::SETH);
+  SetHigh.addOperand(MCOperand::createReg(MMIX::R1));
+  SetHigh.addOperand(MCOperand::createExpr(HighWyde));
+  Streamer->emitInstruction(SetHigh, *STI);
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Target);
+  Streamer->emitValue(MCConstantExpr::create(42, Context), 8);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "target\tIS @\n"
+                    "\tOCTA #000000000000002A\n"
+                    "\tLOC #0000000000000100\n"
+                    "function\tIS @\n"
+                    "\tSETH $1, target>>48&65535\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, KeepsBareFutureOCTAInSourceOrder) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Use = Context.getOrCreateSymbol("canonical_use");
+  MCSymbol *Target = Context.getOrCreateSymbol("canonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Use, "use"));
+  expectSuccess(Streamer->registerUserSymbol(*Target, "target"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Use);
+  Streamer->emitValue(MCSymbolRefExpr::create(Target, Context), 8);
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Target);
+  Streamer->emitValue(MCConstantExpr::create(42, Context), 8);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "use\tIS @\n"
+                    "\tOCTA target\n"
+                    "\tLOC #2000000000000008\n"
+                    "target\tIS @\n"
+                    "\tOCTA #000000000000002A\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       RejectsCompoundDependencyCycleWithoutPartialOutput) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *A = Context.getOrCreateSymbol("canonical_a");
+  MCSymbol *B = Context.getOrCreateSymbol("canonical_b");
+  expectSuccess(Streamer->registerUserSymbol(*A, "a"));
+  expectSuccess(Streamer->registerUserSymbol(*B, "b"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(A);
+  Streamer->emitValue(
+      MCBinaryExpr::createAdd(MCSymbolRefExpr::create(B, Context),
+                              MCConstantExpr::create(0, Context), Context),
+      8);
+  Streamer->emitLabel(B);
+  Streamer->emitValue(
+      MCBinaryExpr::createAdd(MCSymbolRefExpr::create(A, Context),
+                              MCConstantExpr::create(0, Context), Context),
+      8);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic, "MMIXAL definition dependency cycle");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       RejectsUndefinedCompoundExpressionWithoutPartialOutput) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Data = Context.getOrCreateSymbol("canonical_data");
+  MCSymbol *Missing = Context.getOrCreateSymbol("canonical_missing");
+  expectSuccess(Streamer->registerUserSymbol(*Data, "data"));
+  expectSuccess(Streamer->registerUserSymbol(*Missing, "missing"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(Data);
+  Streamer->emitValue(
+      MCBinaryExpr::createAdd(MCSymbolRefExpr::create(Missing, Context),
+                              MCConstantExpr::create(8, Context), Context),
+      8);
   Streamer->finish();
 
   EXPECT_TRUE(Context.hadError());
   EXPECT_EQ(Diagnostic,
-            "MMIXAL alias target 'canonical_target' is not defined before "
-            "the alias");
+            "MMIXAL symbol 'canonical_missing' has no allocated definition");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       RejectsSameItemFutureCompoundExpressionWithoutPartialOutput) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Data = Context.getOrCreateSymbol("canonical_data");
+  MCSymbol *Alias = Context.getOrCreateSymbol("canonical_alias");
+  expectSuccess(Streamer->registerUserSymbol(*Data, "data"));
+  expectSuccess(Streamer->registerUserSymbol(*Alias, "alias"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(Data);
+  Streamer->emitValue(
+      MCBinaryExpr::createAdd(MCSymbolRefExpr::create(Alias, Context),
+                              MCConstantExpr::create(8, Context), Context),
+      8);
+  Streamer->emitAssignment(Alias, MCSymbolRefExpr::create(Data, Context));
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL data expression references symbol 'canonical_alias' "
+            "before its definition");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       RejectsUnsupportedRelocationVariantWithoutPartialOutput) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Data = Context.getOrCreateSymbol("canonical_data");
+  MCSymbol *Target = Context.getOrCreateSymbol("canonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Data, "data"));
+  expectSuccess(Streamer->registerUserSymbol(*Target, "target"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(Data);
+  Streamer->emitValue(MCSymbolRefExpr::create(
+                          Target, MCSymbolRefExpr::VK_COFF_IMGREL32, Context),
+                      8);
+  Streamer->emitLabel(Target);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic, "unsupported MMIXAL symbol reference variant");
   EXPECT_TRUE(Output.empty());
 }
 

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXALInstPrinter.h"
+#include "MMIXALExpression.h"
 #include "MMIXBaseInfo.h"
 #include "MMIXMCTargetDesc.h"
 #include "llvm/ADT/Twine.h"
@@ -21,6 +22,8 @@
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 #include <iterator>
+#include <string>
+#include <utility>
 
 using namespace llvm;
 
@@ -29,196 +32,18 @@ using namespace llvm;
 #include "MMIXGenMMIXALAsmWriter.inc"
 
 namespace {
-
-enum MMIXALExprPrecedence : unsigned {
-  WeakPrecedence = 1,
-  StrongPrecedence,
-  UnaryPrecedence,
-  PrimaryPrecedence,
-};
-
-static unsigned getMMIXALPrecedence(const MCExpr &Expr) {
-  if (isa<MCConstantExpr, MCSymbolRefExpr>(Expr))
-    return PrimaryPrecedence;
-  if (isa<MCUnaryExpr>(Expr))
-    return UnaryPrecedence;
-
-  const auto *Binary = dyn_cast<MCBinaryExpr>(&Expr);
-  if (!Binary)
-    report_fatal_error("unsupported MMIXAL expression kind");
-
-  switch (Binary->getOpcode()) {
-  case MCBinaryExpr::Add:
-  case MCBinaryExpr::Sub:
-  case MCBinaryExpr::Or:
-  case MCBinaryExpr::Xor:
-    return WeakPrecedence;
-  case MCBinaryExpr::And:
-  case MCBinaryExpr::LShr:
-  case MCBinaryExpr::Mul:
-  case MCBinaryExpr::Shl:
-    return StrongPrecedence;
-  default:
-    report_fatal_error("unsupported MMIXAL binary expression operator");
-  }
-}
-
-static StringRef getMMIXALBinaryOperator(MCBinaryExpr::Opcode Opcode) {
-  switch (Opcode) {
-  case MCBinaryExpr::Add:
-    return "+";
-  case MCBinaryExpr::Sub:
-    return "-";
-  case MCBinaryExpr::Mul:
-    return "*";
-  case MCBinaryExpr::And:
-    return "&";
-  case MCBinaryExpr::Or:
-    return "|";
-  case MCBinaryExpr::Xor:
-    return "^";
-  case MCBinaryExpr::Shl:
-    return "<<";
-  case MCBinaryExpr::LShr:
-    return ">>";
-  default:
-    report_fatal_error("unsupported MMIXAL binary expression operator");
-  }
-}
-
-static char getMMIXALUnaryOperator(MCUnaryExpr::Opcode Opcode) {
-  switch (Opcode) {
-  case MCUnaryExpr::Minus:
-    return '-';
-  case MCUnaryExpr::Not:
-    return '~';
-  case MCUnaryExpr::Plus:
-    return '+';
-  case MCUnaryExpr::LNot:
-    report_fatal_error("unsupported MMIXAL unary expression operator");
-  }
-  llvm_unreachable("invalid MC unary expression operator");
-}
-
-static void validateMMIXALExpression(const MCExpr &Expr) {
-  switch (Expr.getKind()) {
-  case MCExpr::Constant:
-    return;
-  case MCExpr::SymbolRef:
-    if (cast<MCSymbolRefExpr>(Expr).getKind() != 0)
-      report_fatal_error("unsupported MMIXAL symbol reference variant");
-    return;
-  case MCExpr::Unary: {
-    const auto &Unary = cast<MCUnaryExpr>(Expr);
-    (void)getMMIXALUnaryOperator(Unary.getOpcode());
-    validateMMIXALExpression(*Unary.getSubExpr());
-    return;
-  }
-  case MCExpr::Binary: {
-    const auto &Binary = cast<MCBinaryExpr>(Expr);
-    (void)getMMIXALBinaryOperator(Binary.getOpcode());
-    validateMMIXALExpression(*Binary.getLHS());
-    validateMMIXALExpression(*Binary.getRHS());
-    return;
-  }
-  case MCExpr::Specifier:
-    report_fatal_error("unsupported MMIXAL relocation specifier");
-  case MCExpr::Target:
-    report_fatal_error("unsupported MMIXAL target expression");
-  }
-  llvm_unreachable("invalid MC expression kind");
-}
-
-static bool referencesFutureSymbol(
-    const MCExpr &Expr,
-    function_ref<MMIXALSymbolPrintInfo(const MCSymbol &)> SymbolResolver) {
-  switch (Expr.getKind()) {
-  case MCExpr::Constant:
-    return false;
-  case MCExpr::SymbolRef:
-    return SymbolResolver
-               ? !SymbolResolver(cast<MCSymbolRefExpr>(Expr).getSymbol())
-                      .IsDefined
-               : cast<MCSymbolRefExpr>(Expr).getSymbol().isUndefined();
-  case MCExpr::Unary:
-    return referencesFutureSymbol(*cast<MCUnaryExpr>(Expr).getSubExpr(),
-                                  SymbolResolver);
-  case MCExpr::Binary: {
-    const auto &Binary = cast<MCBinaryExpr>(Expr);
-    return referencesFutureSymbol(*Binary.getLHS(), SymbolResolver) ||
-           referencesFutureSymbol(*Binary.getRHS(), SymbolResolver);
-  }
-  case MCExpr::Specifier:
-  case MCExpr::Target:
-    llvm_unreachable("unsupported expressions must be validated first");
-  }
-  llvm_unreachable("invalid MC expression kind");
-}
-
-static bool isBareFutureSymbol(const MCExpr &Expr) {
-  if (const auto *Symbol = dyn_cast<MCSymbolRefExpr>(&Expr))
-    return Symbol->getSymbol().isUndefined();
-  if (const auto *Unary = dyn_cast<MCUnaryExpr>(&Expr))
-    return Unary->getOpcode() == MCUnaryExpr::Plus &&
-           isBareFutureSymbol(*Unary->getSubExpr());
-  return false;
-}
-
-static void printMMIXALExpressionImpl(
-    const MCExpr &Expr, const MCAsmInfo &MAI, unsigned ParentPrecedence,
-    bool IsRightOperand,
-    function_ref<MMIXALSymbolPrintInfo(const MCSymbol &)> SymbolResolver,
-    raw_ostream &O) {
-  const unsigned Precedence = getMMIXALPrecedence(Expr);
-  const bool Parenthesize = Precedence < ParentPrecedence ||
-                            (IsRightOperand && Precedence == ParentPrecedence);
-  if (Parenthesize)
-    O << '(';
-
-  switch (Expr.getKind()) {
-  case MCExpr::Constant:
-    O << static_cast<uint64_t>(cast<MCConstantExpr>(Expr).getValue());
-    break;
-  case MCExpr::SymbolRef:
-    if (SymbolResolver)
-      O << SymbolResolver(cast<MCSymbolRefExpr>(Expr).getSymbol()).Name;
-    else
-      cast<MCSymbolRefExpr>(Expr).getSymbol().print(O, &MAI);
-    break;
-  case MCExpr::Unary: {
-    const auto &Unary = cast<MCUnaryExpr>(Expr);
-    O << getMMIXALUnaryOperator(Unary.getOpcode());
-    printMMIXALExpressionImpl(*Unary.getSubExpr(), MAI, UnaryPrecedence, true,
-                              SymbolResolver, O);
-    break;
-  }
-  case MCExpr::Binary: {
-    const auto &Binary = cast<MCBinaryExpr>(Expr);
-    printMMIXALExpressionImpl(*Binary.getLHS(), MAI, Precedence, false,
-                              SymbolResolver, O);
-    O << getMMIXALBinaryOperator(Binary.getOpcode());
-    printMMIXALExpressionImpl(*Binary.getRHS(), MAI, Precedence, true,
-                              SymbolResolver, O);
-    break;
-  }
-  case MCExpr::Specifier:
-  case MCExpr::Target:
-    llvm_unreachable("unsupported expressions must be validated first");
-  }
-
-  if (Parenthesize)
-    O << ')';
-}
-
-static void printMMIXALExpression(
+static void printMMIXALInstructionExpression(
     const MCExpr &Expr, const MCAsmInfo &MAI, bool AllowBareFutureSymbol,
     function_ref<MMIXALSymbolPrintInfo(const MCSymbol &)> SymbolResolver,
     raw_ostream &O) {
-  validateMMIXALExpression(Expr);
-  if (referencesFutureSymbol(Expr, SymbolResolver) &&
-      (!AllowBareFutureSymbol || !isBareFutureSymbol(Expr)))
+  if (Error Err = validateMMIXALExpression(Expr)) {
+    const std::string Message = toString(std::move(Err));
+    report_fatal_error(StringRef(Message));
+  }
+  if (referencesFutureMMIXALSymbol(Expr, SymbolResolver) &&
+      (!AllowBareFutureSymbol || !getBareMMIXALSymbol(Expr)))
     report_fatal_error("unsupported MMIXAL future instruction expression");
-  printMMIXALExpressionImpl(Expr, MAI, 0, false, SymbolResolver, O);
+  cantFail(llvm::printMMIXALExpression(Expr, MAI, SymbolResolver, O));
 }
 
 } // namespace
@@ -277,7 +102,8 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
           (Value < 0 || static_cast<uint64_t>(Value) > Max))
         report_fatal_error(Twine("MMIXAL expression is not representable as ") +
                            Kind);
-      printMMIXALExpression(*Op.getExpr(), MAI, false, SymbolResolver, O);
+      printMMIXALInstructionExpression(*Op.getExpr(), MAI, false,
+                                       SymbolResolver, O);
       return;
     }
     if (!Op.isImm() || Op.getImm() < 0 ||
@@ -356,7 +182,8 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   if (Op.isImm()) {
     O << formatImm(Op.getImm());
   } else if (Op.isExpr()) {
-    printMMIXALExpression(*Op.getExpr(), MAI, false, SymbolResolver, O);
+    printMMIXALInstructionExpression(*Op.getExpr(), MAI, false, SymbolResolver,
+                                     O);
   } else {
     report_fatal_error("invalid MMIXAL operand");
   }
@@ -418,7 +245,8 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
         report_fatal_error("MMIXAL relative target is out of range");
     }
 
-    printMMIXALExpression(*Op.getExpr(), MAI, true, SymbolResolver, O);
+    printMMIXALInstructionExpression(*Op.getExpr(), MAI, true, SymbolResolver,
+                                     O);
     return;
   }
 

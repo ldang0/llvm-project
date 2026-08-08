@@ -9,6 +9,7 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALINSTPRINTER_H
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALINSTPRINTER_H
 
+#include "MMIXALExpression.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/MC/MCInstPrinter.h"
 
@@ -16,11 +17,6 @@ namespace llvm {
 
 class MCInstrDesc;
 class MCSymbol;
-
-struct MMIXALSymbolPrintInfo {
-  StringRef Name;
-  bool IsDefined;
-};
 
 class MMIXALInstPrinter : public MCInstPrinter {
   function_ref<MMIXALSymbolPrintInfo(const MCSymbol &)> SymbolResolver =

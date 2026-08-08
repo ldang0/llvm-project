@@ -1,5 +1,7 @@
 add_llvm_component_library(LLVMMMIXDesc
   MMIXALAsmStreamer.cpp
+  MMIXALDependencyGraph.cpp
+  MMIXALExpression.cpp
   MMIXALLayout.cpp
   MMIXALSymbolMapper.cpp
   MMIXALSymbolTable.cpp
