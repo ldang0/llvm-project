@@ -229,6 +229,8 @@ void MMIXAsmParser::onBeginOfFile() {
   if (AsmVariant == MMIXII::CanonicalAsmVariant)
     return;
   if (AsmVariant == MMIXII::MMIXALAsmVariant) {
+    if (!Parser.getStreamer().isObj())
+      return;
     Error(getLexer().getLoc(),
           "MMIXAL complete-source emission is not available");
     return;

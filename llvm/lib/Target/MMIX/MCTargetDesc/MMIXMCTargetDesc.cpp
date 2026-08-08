@@ -7,11 +7,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXMCTargetDesc.h"
+#include "MMIXALAsmStreamer.h"
 #include "MMIXALInstPrinter.h"
 #include "MMIXBaseInfo.h"
 #include "MMIXInstPrinter.h"
 #include "MMIXMCAsmInfo.h"
 #include "TargetInfo/MMIXTargetInfo.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -20,6 +24,8 @@
 #include "llvm/Support/Compiler.h"
 #include <array>
 #include <cstdint>
+#include <memory>
+#include <utility>
 
 using namespace llvm;
 
@@ -67,6 +73,21 @@ static MCInstPrinter *createMMIXMCInstPrinter(const Triple &,
   }
 }
 
+static MCStreamer *
+createMMIXAsmStreamer(MCContext &Ctx, std::unique_ptr<formatted_raw_ostream> OS,
+                      std::unique_ptr<MCInstPrinter> IP,
+                      std::unique_ptr<MCCodeEmitter> CE,
+                      std::unique_ptr<MCAsmBackend> MAB) {
+  if (Ctx.getAsmInfo().getOutputAssemblerDialect() != MMIXII::MMIXALAsmVariant)
+    return llvm::createAsmStreamer(Ctx, std::move(OS), std::move(IP),
+                                   std::move(CE), std::move(MAB));
+
+  auto MMIXALPrinter = std::unique_ptr<MMIXALInstPrinter>(
+      static_cast<MMIXALInstPrinter *>(IP.release()));
+  return new MMIXALAsmStreamer(Ctx, std::move(OS), std::move(MMIXALPrinter),
+                               std::move(CE));
+}
+
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
   Target &T = getTheMMIXTarget();
   RegisterMCAsmInfo<MMIXMCAsmInfo> X(T);
@@ -74,6 +95,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
   TargetRegistry::RegisterMCRegInfo(T, createMMIXMCRegisterInfo);
   TargetRegistry::RegisterMCSubtargetInfo(T, createMMIXMCSubtargetInfo);
   TargetRegistry::RegisterMCInstPrinter(T, createMMIXMCInstPrinter);
+  TargetRegistry::RegisterAsmStreamer(T, createMMIXAsmStreamer);
   TargetRegistry::RegisterMCCodeEmitter(T, createMMIXMCCodeEmitter);
   TargetRegistry::RegisterMCAsmBackend(T, createMMIXAsmBackend);
 }

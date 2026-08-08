@@ -1,8 +1,12 @@
 # RUN: llvm-mc -triple=mmix --disassemble --show-encoding \
 # RUN:   --output-asm-variant=1 < %s | FileCheck %s
+# RUN: llvm-mc -triple=mmix --disassemble --output-asm-variant=1 < %s \
+# RUN:   | FileCheck %s --check-prefix=PLAIN
 
 0x20 0x01 0x02 0x03
 # CHECK: ADD $1, $2, $3{{.*}}[0x20,0x01,0x02,0x03]
+# PLAIN: ADD $1, $2, $3
+# PLAIN-NOT: encoding:
 
 0x40 0x01 0x00 0x02
 # CHECK: BN $1, 2{{.*}}[0x40,0x01,0x00,0x02]

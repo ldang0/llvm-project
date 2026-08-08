@@ -17,8 +17,11 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCSectionELF.h"
@@ -259,8 +262,15 @@ Error validateInstructionAddress(
 MMIXALAsmStreamer::MMIXALAsmStreamer(
     MCContext &Context, std::unique_ptr<formatted_raw_ostream> Output,
     std::unique_ptr<MMIXALInstPrinter> InstPrinter)
+    : MMIXALAsmStreamer(Context, std::move(Output), std::move(InstPrinter),
+                        nullptr) {}
+
+MMIXALAsmStreamer::MMIXALAsmStreamer(
+    MCContext &Context, std::unique_ptr<formatted_raw_ostream> Output,
+    std::unique_ptr<MMIXALInstPrinter> InstPrinter,
+    std::unique_ptr<MCCodeEmitter> CodeEmitter)
     : MCStreamer(Context), Output(std::move(Output)),
-      InstPrinter(std::move(InstPrinter)) {
+      InstPrinter(std::move(InstPrinter)), CodeEmitter(std::move(CodeEmitter)) {
   assert(this->Output && "MMIXAL streamer requires an output stream");
   assert(this->InstPrinter &&
          "MMIXAL streamer requires an instruction printer");
@@ -478,6 +488,8 @@ void MMIXALAsmStreamer::emitRawTextImpl(StringRef Text) {
 
 void MMIXALAsmStreamer::reset() {
   MCStreamer::reset();
+  if (CodeEmitter)
+    CodeEmitter->reset();
   Events.clear();
   for (auto &Group : ItemGroups)
     Group.clear();
@@ -533,6 +545,28 @@ void MMIXALAsmStreamer::emitBytes(StringRef Data) {
 
 void MMIXALAsmStreamer::emitInstruction(const MCInst &Inst,
                                         const MCSubtargetInfo &STI) {
+  if (!getCurrentSection().first) {
+    InstPrinter->printInst(&Inst, 0, "", STI, *Output);
+    if (CodeEmitter) {
+      SmallString<16> Code;
+      SmallVector<MCFixup, 4> Fixups;
+      CodeEmitter->encodeInstruction(Inst, Code, Fixups, STI);
+      assert(Fixups.empty() &&
+             "disassembled MMIX instruction unexpectedly requires a fixup");
+      Output->PadToColumn(getContext().getAsmInfo().getCommentColumn());
+      *Output << getContext().getAsmInfo().getCommentString()
+              << " encoding: [";
+      for (size_t I = 0; I != Code.size(); ++I) {
+        if (I != 0)
+          *Output << ',';
+        *Output << format("0x%02x", static_cast<uint8_t>(Code[I]));
+      }
+      *Output << ']';
+    }
+    *Output << '\n';
+    return;
+  }
+
   SmallVector<const MCSymbol *, 2> Dependencies;
   DependencySink = &Dependencies;
   MCStreamer::emitInstruction(Inst, STI);
@@ -925,6 +959,11 @@ Error MMIXALAsmStreamer::beginFunctionSymbols(StringRef FunctionName) {
 void MMIXALAsmStreamer::observeSymbol(const MCSymbol &Symbol) {
   if (Symbols.isRegistered(Symbol))
     return;
+  if (!Symbol.isTemporary()) {
+    if (Error Err = Symbols.registerUserSymbol(Symbol, Symbol.getName()))
+      recordClassificationError(toString(std::move(Err)));
+    return;
+  }
   if (HasActiveFunction) {
     if (PendingFunctionSymbolSet.insert(&Symbol).second)
       PendingFunctionSymbols.push_back(&Symbol);

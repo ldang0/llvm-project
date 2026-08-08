@@ -26,6 +26,7 @@
 namespace llvm {
 
 class formatted_raw_ostream;
+class MCCodeEmitter;
 class MCExpr;
 class MCSection;
 class MCSymbol;
@@ -75,6 +76,7 @@ private:
 
   std::unique_ptr<formatted_raw_ostream> Output;
   std::unique_ptr<MMIXALInstPrinter> InstPrinter;
+  std::unique_ptr<MCCodeEmitter> CodeEmitter;
   SmallVector<BufferedEvent, 0> Events;
   MMIXALItemGroups ItemGroups;
   std::optional<BufferedItem> CurrentItem;
@@ -119,6 +121,10 @@ public:
   MMIXALAsmStreamer(MCContext &Context,
                     std::unique_ptr<formatted_raw_ostream> Output,
                     std::unique_ptr<MMIXALInstPrinter> InstPrinter);
+  MMIXALAsmStreamer(MCContext &Context,
+                    std::unique_ptr<formatted_raw_ostream> Output,
+                    std::unique_ptr<MMIXALInstPrinter> InstPrinter,
+                    std::unique_ptr<MCCodeEmitter> CodeEmitter);
   ~MMIXALAsmStreamer() override;
 
   void reset() override;
