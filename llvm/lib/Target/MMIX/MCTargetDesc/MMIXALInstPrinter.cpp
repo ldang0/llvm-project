@@ -347,6 +347,26 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
       report_fatal_error("invalid MMIXAL relative target index");
 
     const MCOperand &Op = MI->getOperand(OpNo);
+    const bool IsBackward = Selection == MMIXII::MMIXALSelectionBackward;
+    const unsigned Width = MMIXII::getPCRelativeWidth(Desc.TSFlags);
+    if (Width != 16 && Width != 24)
+      report_fatal_error("invalid MMIXAL relative target width");
+
+    if (Op.isImm()) {
+      const int64_t Displacement = Op.getImm();
+      const int64_t MinWords = -(int64_t(1) << Width);
+      const int64_t MaxWords = (int64_t(1) << Width) - 1;
+      if ((!IsBackward && (Displacement < 0 || Displacement > MaxWords)) ||
+          (IsBackward && (Displacement < MinWords || Displacement >= 0)))
+        report_fatal_error(
+            "MMIXAL decoded relative target does not match instruction");
+
+      // MC disassembly does not provide an instruction address here. Preserve
+      // the decoded word displacement in the instruction-listing form.
+      O << Displacement;
+      return;
+    }
+
     if (!Op.isExpr())
       report_fatal_error("MMIXAL relative target requires an expression");
 
@@ -356,7 +376,6 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
       if ((Target & 3) != 0)
         report_fatal_error("MMIXAL relative target is not four-byte aligned");
 
-      const bool IsBackward = Selection == MMIXII::MMIXALSelectionBackward;
       if ((!IsBackward && Target < Address) ||
           (IsBackward && Target >= Address))
         report_fatal_error(
@@ -367,9 +386,6 @@ void MMIXALInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
       if ((Distance & 3) != 0)
         report_fatal_error("MMIXAL relative target is not four-byte aligned");
 
-      const unsigned Width = MMIXII::getPCRelativeWidth(Desc.TSFlags);
-      if (Width != 16 && Width != 24)
-        report_fatal_error("invalid MMIXAL relative target width");
       const uint64_t MaxWords =
           IsBackward ? uint64_t(1) << Width : (uint64_t(1) << Width) - 1;
       if (Distance / 4 > MaxWords)

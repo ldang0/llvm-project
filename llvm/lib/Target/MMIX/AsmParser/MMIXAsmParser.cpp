@@ -6,11 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/MC/MCContext.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
@@ -209,6 +211,7 @@ class MMIXAsmParser : public MCTargetAsmParser {
                                OperandVector &Operands, MCStreamer &Out,
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
+  void onBeginOfFile() override;
 
 public:
   MMIXAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
@@ -219,6 +222,23 @@ public:
 };
 
 } // namespace
+
+void MMIXAsmParser::onBeginOfFile() {
+  const unsigned AsmVariant =
+      getContext().getAsmInfo().getOutputAssemblerDialect();
+  if (AsmVariant == MMIXII::CanonicalAsmVariant)
+    return;
+  if (AsmVariant == MMIXII::MMIXALAsmVariant) {
+    Error(getLexer().getLoc(),
+          "MMIXAL complete-source emission is not available");
+    return;
+  }
+  Error(
+      getLexer().getLoc(),
+      Twine(
+          "MMIX complete-source emission does not support assembly variant ") +
+          Twine(AsmVariant));
+}
 
 bool MMIXAsmParser::parseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                   SMLoc &EndLoc) {

@@ -420,8 +420,17 @@ TEST_F(MMIXALInstPrinterTest, RejectsInvalidRelativeTargets) {
   EXPECT_DEATH(
       printAt(Address, MMIX::JMP, {constantTarget(Address + 16777216 * 4)}),
       "relative target is out of range");
-  EXPECT_DEATH(printAt(Address, MMIX::JMP, {MCOperand::createImm(1)}),
-               "relative target requires an expression");
+  EXPECT_EQ(printAt(Address, MMIX::JMP, {MCOperand::createImm(1)}), "\tJMP 1");
+  EXPECT_DEATH(printAt(Address, MMIX::JMP, {MCOperand::createImm(-1)}),
+               "decoded relative target does not match instruction");
+  EXPECT_DEATH(printAt(Address, MMIX::BNB,
+                       {MCOperand::createReg(MMIX::R1),
+                        MCOperand::createImm(0)}),
+               "decoded relative target does not match instruction");
+  EXPECT_DEATH(printAt(Address, MMIX::BN,
+                       {MCOperand::createReg(MMIX::R1),
+                        MCOperand::createImm(65536)}),
+               "decoded relative target does not match instruction");
 }
 
 TEST_F(MMIXALInstPrinterTest, PreservesMixedRegisterAndImmediateKinds) {
@@ -593,7 +602,7 @@ TEST_F(MMIXALInstPrinterTest, PrintsEveryArchitecturalOpcodeRecord) {
   }
 }
 
-TEST(MMIXALInstPrinterFactoryTest, PublicFactoryRejectsMMIXALVariant) {
+TEST(MMIXALInstPrinterFactoryTest, PublicFactorySelectsIndependentPrinters) {
   LLVMInitializeMMIXTargetInfo();
   LLVMInitializeMMIXTargetMC();
 
@@ -602,13 +611,35 @@ TEST(MMIXALInstPrinterFactoryTest, PublicFactoryRejectsMMIXALVariant) {
   const MMIXMCAsmInfo MAI(TT, Options);
   const std::unique_ptr<MCInstrInfo> MII(createMMIXMCInstrInfo());
   const std::unique_ptr<MCRegisterInfo> MRI(createMMIXMCRegisterInfo(TT));
+  const std::unique_ptr<MCSubtargetInfo> STI(
+      createMMIXMCSubtargetInfo(TT, "generic", ""));
   const Target &T = getTheMMIXTarget();
 
   std::unique_ptr<MCInstPrinter> Canonical(
       T.createMCInstPrinter(TT, MMIXII::CanonicalAsmVariant, MAI, *MII, *MRI));
   std::unique_ptr<MCInstPrinter> MMIXAL(
       T.createMCInstPrinter(TT, MMIXII::MMIXALAsmVariant, MAI, *MII, *MRI));
+  std::unique_ptr<MCInstPrinter> Unknown(
+      T.createMCInstPrinter(TT, 42, MAI, *MII, *MRI));
 
   EXPECT_NE(Canonical, nullptr);
-  EXPECT_EQ(MMIXAL, nullptr);
+  EXPECT_NE(MMIXAL, nullptr);
+  EXPECT_EQ(Unknown, nullptr);
+
+  MCInst Inst;
+  Inst.setOpcode(MMIX::ADD);
+  Inst.addOperand(MCOperand::createReg(MMIX::R1));
+  Inst.addOperand(MCOperand::createReg(MMIX::R2));
+  Inst.addOperand(MCOperand::createReg(MMIX::R3));
+  auto Print = [&](MCInstPrinter &Printer) {
+    std::string Output;
+    raw_string_ostream OS(Output);
+    Printer.printInst(&Inst, 0, "", *STI, OS);
+    OS.flush();
+    return Output;
+  };
+
+  EXPECT_EQ(Print(*Canonical), "\tADD r1, r2, r3");
+  EXPECT_EQ(Print(*MMIXAL), "\tADD $1, $2, $3");
+  EXPECT_EQ(Print(*Canonical), "\tADD r1, r2, r3");
 }

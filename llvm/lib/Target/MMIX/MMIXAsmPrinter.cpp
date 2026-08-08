@@ -6,12 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXInstPrinter.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXMCInstLower.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCStreamer.h"
@@ -93,7 +96,19 @@ public:
 
 } // namespace
 
+static AsmPrinter *
+createMMIXAsmPrinter(TargetMachine &TM,
+                     std::unique_ptr<MCStreamer> &&Streamer) {
+  if (TM.getMCAsmInfo().getOutputAssemblerDialect() ==
+      MMIXII::MMIXALAsmVariant) {
+    Streamer->getContext().reportError(
+        SMLoc(), "MMIXAL complete-source emission is not available");
+    return nullptr;
+  }
+  return new MMIXAsmPrinter(TM, std::move(Streamer));
+}
+
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
 LLVMInitializeMMIXAsmPrinter() {
-  RegisterAsmPrinter<MMIXAsmPrinter> X(getTheMMIXTarget());
+  TargetRegistry::RegisterAsmPrinter(getTheMMIXTarget(), createMMIXAsmPrinter);
 }
