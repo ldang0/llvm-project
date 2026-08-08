@@ -270,6 +270,15 @@ private:
       return;
     }
 
+    if (Node->getOpcode() == ISD::FrameIndex) {
+      SDLoc DL(Node);
+      SDValue FrameIndex = CurDAG->getTargetFrameIndex(
+          cast<FrameIndexSDNode>(Node)->getIndex(), MVT::i64);
+      SDValue Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+      CurDAG->SelectNodeTo(Node, MMIX::ADDUI, MVT::i64, FrameIndex, Offset);
+      return;
+    }
+
     if (Node->getOpcode() == MMIXISD::CALL) {
       SmallVector<SDValue, 20> Ops;
       bool HasGlue =

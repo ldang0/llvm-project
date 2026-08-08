@@ -81,6 +81,14 @@ class MMIXAsmPrinter final : public AsmPrinter {
     reportSymbolRegistrationError(
         MMIXALStreamer->beginFunctionSymbols(FunctionName));
 
+    uint64_t BlockAddressOrdinal = 0;
+    for (const BasicBlock &BB : F)
+      if (BB.hasAddressTaken())
+        reportSymbolRegistrationError(
+            MMIXALStreamer->registerFunctionPrivateSymbol(
+                *GetBlockAddressSymbol(&BB), FunctionName, Kind::BlockAddress,
+                BlockAddressOrdinal++));
+
     SmallPtrSet<const BasicBlock *, 8> RegisteredSourceBlocks;
     uint64_t BasicBlockOrdinal = 0;
     for (MachineBasicBlock &MBB : MF) {
@@ -95,8 +103,9 @@ class MMIXAsmPrinter final : public AsmPrinter {
       const bool IsRawEntryBlock = &F == MMIXALRawEntry && MBB.isEntryBlock();
       if (IsRawEntryBlock)
         MBB.setLabelMustBeEmitted();
-      const MCSymbol *AddressSymbol = MBB.getSymbol();
-      if (!IsRawEntryBlock && MBB.isEntryBlock())
+      const MCSymbol *AddressSymbol =
+          BB->hasAddressTaken() ? GetBlockAddressSymbol(BB) : MBB.getSymbol();
+      if (!BB->hasAddressTaken() && !IsRawEntryBlock && MBB.isEntryBlock())
         AddressSymbol = CurrentFnSym;
       reportSymbolRegistrationError(MMIXALStreamer->registerSourceBlock(
           *AddressSymbol, FunctionName, BB->getName()));
@@ -113,14 +122,6 @@ class MMIXAsmPrinter final : public AsmPrinter {
         reportSymbolRegistrationError(
             MMIXALStreamer->registerFunctionPrivateSymbol(
                 *GetJTISymbol(I), FunctionName, Kind::JumpTable, I));
-
-    uint64_t BlockAddressOrdinal = 0;
-    for (const BasicBlock &BB : F)
-      if (BB.hasAddressTaken())
-        reportSymbolRegistrationError(
-            MMIXALStreamer->registerFunctionPrivateSymbol(
-                *GetBlockAddressSymbol(&BB), FunctionName, Kind::BlockAddress,
-                BlockAddressOrdinal++));
   }
 
   void emitCheckedMCInstruction(const MCInst &Inst) {

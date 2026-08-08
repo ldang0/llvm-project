@@ -587,9 +587,10 @@ void MMIXALAsmStreamer::emitInstruction(const MCInst &Inst,
   appendEventToCurrentItem(std::move(Event), 4);
 }
 
-void MMIXALAsmStreamer::emitLabel(MCSymbol *Symbol, SMLoc) {
+void MMIXALAsmStreamer::emitLabel(MCSymbol *Symbol, SMLoc Loc) {
   assert(Symbol && "cannot emit a null symbol");
   observeSymbol(*Symbol);
+  MCStreamer::emitLabel(Symbol, Loc);
   if (CurrentItem && CurrentItem->HasPayload)
     flushCurrentItem();
   updateCurrentItemGroupForSymbol(*Symbol);
