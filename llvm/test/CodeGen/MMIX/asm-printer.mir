@@ -6,7 +6,7 @@
 # CHECK-NEXT: ADDU r2, r1, 7
 # CHECK-NEXT: BN r2, [[TARGET:.LBB[0-9]+_1]]
 # CHECK: [[TARGET]]:
-# CHECK-NEXT: JMPB [[TARGET]]
+# CHECK-NEXT: JMP [[TARGET]]
 
 # CHECK-LABEL: global_symbol:
 # CHECK: JMP external_function

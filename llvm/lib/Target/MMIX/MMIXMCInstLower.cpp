@@ -25,8 +25,15 @@ static bool branchesBackward(const MachineInstr &MI) {
   const MachineBasicBlock *Source = MI.getParent();
   const MachineBasicBlock *Target =
       MI.getOperand(MI.getOpcode() == MMIX::PseudoB ? 1 : 0).getMBB();
-  if (Source == Target)
-    return true;
+  if (Source == Target) {
+    for (const MachineInstr &Prior : *Source) {
+      if (&Prior == &MI)
+        return false;
+      if (!Prior.isMetaInstruction())
+        return true;
+    }
+    llvm_unreachable("branch is not in its parent MachineBasicBlock");
+  }
 
   for (const MachineBasicBlock &MBB : *Source->getParent()) {
     if (&MBB == Target)

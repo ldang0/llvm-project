@@ -4,14 +4,8 @@
 
 target triple = "mmix-unknown-elf"
 
-@common_data = common global i64 0, align 8
-
 define void @Main() {
-entry:
-  br label %loop
-
-loop:
-  br label %loop
+  ret void
 }
 
-; CHECK: error: MMIXAL does not support common-symbol allocation events
+; CHECK: error: MMIXAL bare-metal entry 'Main' must not have a reachable return

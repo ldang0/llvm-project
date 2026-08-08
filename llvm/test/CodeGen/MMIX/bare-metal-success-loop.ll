@@ -8,7 +8,7 @@
 ; CHECK: .globl Main
 ; CHECK-LABEL: Main:
 ; CHECK-NEXT: [[LOOP:\.[A-Za-z0-9_.$]+]]:
-; CHECK-NEXT: JMPB [[LOOP]]
+; CHECK-NEXT: JMP [[LOOP]]
 
 target triple = "mmix-unknown-elf"
 

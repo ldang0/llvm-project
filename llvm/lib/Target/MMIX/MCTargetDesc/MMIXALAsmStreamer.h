@@ -141,6 +141,9 @@ public:
   ~MMIXALAsmStreamer() override;
 
   void beginModuleEmission() { IsModuleEmission = true; }
+  void recordModuleError(const Twine &Message) {
+    recordClassificationError(Message);
+  }
   void reset() override;
   void emitBytes(StringRef Data) override;
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;

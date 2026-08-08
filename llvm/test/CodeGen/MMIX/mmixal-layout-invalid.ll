@@ -7,4 +7,12 @@ target triple = "mmix-unknown-elf"
 @prefix = internal global i8 1, align 1
 @too_aligned = internal global i8 2, align 134217728
 
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
 ; CHECK: error: MMIXAL layout item 'too_aligned': alignment crosses its allocation window

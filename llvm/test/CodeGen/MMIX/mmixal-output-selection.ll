@@ -9,10 +9,21 @@
 
 ; OBJECT: error: target does not support generation of this file type
 ; OUTPUT: LOC #0000000000000100
-; OUTPUT-NEXT: complete_source_guard	IS @
+; OUTPUT-NEXT: Main	IS @
+; OUTPUT-NEXT: PUT rA, 0
+; OUTPUT-NEXT: PUT rL, 0
+; OUTPUT: complete_source_guard	IS @
 ; OUTPUT: ADDU $
 
 target triple = "mmix-unknown-elf"
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
 
 define i64 @complete_source_guard(i64 %lhs, i64 %rhs) {
   %sum = add i64 %lhs, %rhs

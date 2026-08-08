@@ -10,6 +10,14 @@ target triple = "mmix-unknown-elf"
 @data_alias_two = internal alias i64, ptr @named_data
 @"escaped.data" = internal global i8 1, align 1
 
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
 define i64 @shared(i1 %condition) noinline optnone {
 shared:
   br i1 %condition, label %success, label %failure

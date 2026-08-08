@@ -7,9 +7,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/MMIXALAsmStreamer.h"
+#include "MCTargetDesc/MMIXALStartup.h"
 #include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXInstPrinter.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIXALModuleValidator.h"
 #include "MMIXMCInstLower.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -40,20 +42,27 @@ namespace {
 
 class MMIXAsmPrinter final : public AsmPrinter {
   MMIXALAsmStreamer *MMIXALStreamer;
+  const Function *MMIXALRawEntry = nullptr;
 
   void reportSymbolRegistrationError(Error Err) {
     if (Err)
-      OutContext.reportError(SMLoc(), toString(std::move(Err)));
+      MMIXALStreamer->recordModuleError(toString(std::move(Err)));
   }
 
-  void registerModuleSymbols(Module &M) {
+  void registerModuleSymbols(Module &M, const Function &RawEntry) {
     if (!MMIXALStreamer)
       return;
 
-    for (Function &F : M)
-      if (!F.isIntrinsic())
-        reportSymbolRegistrationError(
-            MMIXALStreamer->registerUserSymbol(*getSymbol(&F), F.getName()));
+    for (Function &F : M) {
+      if (!F.isIntrinsic()) {
+        if (&F == &RawEntry)
+          reportSymbolRegistrationError(
+              MMIXALStreamer->registerEntrySymbol(*getSymbol(&F), F.getName()));
+        else
+          reportSymbolRegistrationError(
+              MMIXALStreamer->registerUserSymbol(*getSymbol(&F), F.getName()));
+      }
+    }
     for (GlobalVariable &Global : M.globals())
       reportSymbolRegistrationError(MMIXALStreamer->registerUserSymbol(
           *getSymbol(&Global), Global.getName()));
@@ -83,8 +92,12 @@ class MMIXAsmPrinter final : public AsmPrinter {
       const BasicBlock *BB = MBB.getBasicBlock();
       if (!BB || !BB->hasName() || !RegisteredSourceBlocks.insert(BB).second)
         continue;
-      const MCSymbol *AddressSymbol =
-          MBB.isEntryBlock() ? CurrentFnSym : MBB.getSymbol();
+      const bool IsRawEntryBlock = &F == MMIXALRawEntry && MBB.isEntryBlock();
+      if (IsRawEntryBlock)
+        MBB.setLabelMustBeEmitted();
+      const MCSymbol *AddressSymbol = MBB.getSymbol();
+      if (!IsRawEntryBlock && MBB.isEntryBlock())
+        AddressSymbol = CurrentFnSym;
       reportSymbolRegistrationError(MMIXALStreamer->registerSourceBlock(
           *AddressSymbol, FunctionName, BB->getName()));
     }
@@ -110,6 +123,17 @@ class MMIXAsmPrinter final : public AsmPrinter {
                 BlockAddressOrdinal++));
   }
 
+  void emitCheckedMCInstruction(const MCInst &Inst) {
+    if (!MMIX_MC::isOpcodeAvailable(Inst.getOpcode(),
+                                    getSubtargetInfo().getFeatureBits()))
+      report_fatal_error(Twine("cannot emit ") +
+                         TM.getMCInstrInfo()->getName(Inst.getOpcode()) +
+                         ": required target feature is disabled");
+    MMIX_MC::verifyInstructionPredicates(Inst.getOpcode(),
+                                         getSubtargetInfo().getFeatureBits());
+    EmitToStreamer(*OutStreamer, Inst);
+  }
+
 public:
   explicit MMIXAsmPrinter(TargetMachine &TM,
                           std::unique_ptr<MCStreamer> Streamer,
@@ -118,7 +142,26 @@ public:
 
   StringRef getPassName() const override { return "MMIX Assembly Printer"; }
 
-  void emitStartOfAsmFile(Module &M) override { registerModuleSymbols(M); }
+  void emitStartOfAsmFile(Module &M) override {
+    if (!MMIXALStreamer)
+      return;
+
+    Expected<const Function *> Entry = validateMMIXALRawEntry(M);
+    if (!Entry) {
+      MMIXALStreamer->recordModuleError(toString(Entry.takeError()));
+      return;
+    }
+    MMIXALRawEntry = *Entry;
+    registerModuleSymbols(M, **Entry);
+    addMMIXALBareMetalGlobalRegisterPrelude(*MMIXALStreamer);
+  }
+
+  void emitFunctionBodyStart() override {
+    if (!MMIXALStreamer || &MF->getFunction() != MMIXALRawEntry)
+      return;
+    for (const MCInst &Inst : createMMIXALRawEntryPrefix())
+      emitCheckedMCInstruction(Inst);
+  }
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     SetupMachineFunction(MF);
@@ -177,14 +220,7 @@ public:
 
     MCInst OutMI;
     MMIXMCInstLower(OutContext, *this).lower(*MI, OutMI);
-    if (!MMIX_MC::isOpcodeAvailable(OutMI.getOpcode(),
-                                    getSubtargetInfo().getFeatureBits()))
-      report_fatal_error(Twine("cannot emit ") +
-                         TM.getMCInstrInfo()->getName(OutMI.getOpcode()) +
-                         ": required target feature is disabled");
-    MMIX_MC::verifyInstructionPredicates(OutMI.getOpcode(),
-                                         getSubtargetInfo().getFeatureBits());
-    EmitToStreamer(*OutStreamer, OutMI);
+    emitCheckedMCInstruction(OutMI);
   }
 };
 

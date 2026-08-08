@@ -10,6 +10,14 @@ target triple = "mmix-unknown-elf"
 @data_pointer = internal global ptr @writable_data, align 8
 @zero_data = internal global [16 x i8] zeroinitializer, align 16
 
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
 define internal i64 @load_readonly() {
 entry:
   %value = load volatile i64, ptr @readonly_data, align 8
@@ -18,11 +26,11 @@ entry:
 
 ; Compound address materialization requires the read-only definition before
 ; the function body in MMIXAL source, while LOC preserves its planned address.
-; CHECK:      LOC #0000000000000118
+; CHECK:      __LLVM_L_F_6C6F61645F726561646F6E6C79_END_0	IS @
 ; CHECK:      LOC #2000000000000000
 ; CHECK-NEXT: readonly_data	IS @
 ; CHECK-NEXT: BYTE #01, #02, #03, #04, #05, #06, #07, #08
-; CHECK:      LOC #0000000000000100
+; CHECK:      LOC #000000000000010C
 ; CHECK-NEXT: load_readonly	IS @
 ; Natural alignment leaves address gaps without emitting synthetic data.
 ; CHECK:      LOC #2000000000000008
