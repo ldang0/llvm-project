@@ -504,4 +504,182 @@ TEST_F(MMIXALModuleValidatorTest, RejectsRuntimeRegistration) {
       "'versioned'");
 }
 
+TEST_F(MMIXALModuleValidatorTest, AcceptsAddressSpaceZeroStorageAndPointers) {
+  EXPECT_NE(expectModule(R"(
+    @data = global ptr null
+    @alias = alias ptr, ptr @data
+
+    define void @Main() {
+    entry:
+      %slot = alloca ptr
+      store ptr @data, ptr %slot
+      %value = load ptr, ptr %slot
+      br label %loop
+    loop:
+      br label %loop
+    }
+
+    define ptr @identity(ptr %value) {
+      ret ptr %value
+    }
+  )"),
+            nullptr);
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsNonzeroGlobalAddressSpaces) {
+  for (auto [Definition, Symbol] : {
+           std::pair{R"(@nonzero_global = addrspace(1) global i64 0)",
+                     "nonzero_global"},
+           std::pair{R"(@pointer_value = global ptr addrspace(1) null)",
+                     "pointer_value"},
+           std::pair{
+               R"(@aggregate = global { ptr addrspace(1) } zeroinitializer)",
+               "aggregate"},
+           std::pair{R"(
+             @target = global i64 0
+             @alias = alias i64, ptr addrspace(1) addrspacecast
+                 (ptr @target to ptr addrspace(1))
+           )",
+                     "alias"},
+       }) {
+    SCOPED_TRACE(Symbol);
+    std::string IR = (Twine(R"(
+      define void @Main() {
+        br label %loop
+      loop:
+        br label %loop
+      }
+    )") + Definition)
+                         .str();
+    expectModuleError(
+        IR,
+        (Twine("MMIXAL output variant 1 does not support nonzero address ") +
+         "space in symbol '" + Symbol + "'")
+            .str());
+  }
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsNonzeroFunctionAddressSpaces) {
+  expectModuleError(
+      R"(
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+        define ptr addrspace(1) @pointer_result() {
+          ret ptr addrspace(1) null
+        }
+      )",
+      "MMIXAL output variant 1 does not support nonzero address space in "
+      "symbol 'pointer_result'");
+
+  expectModuleError(
+      R"(
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+        define void @pointer_argument(ptr addrspace(1) %value) {
+          ret void
+        }
+      )",
+      "MMIXAL output variant 1 does not support nonzero address space in "
+      "symbol 'pointer_argument'");
+
+  expectModuleError(
+      R"(
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+        define void @nonzero_function() addrspace(1) {
+          ret void
+        }
+      )",
+      "MMIXAL output variant 1 does not support nonzero address space in "
+      "symbol 'nonzero_function'");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsNonzeroInstructionAddressSpaces) {
+  for (auto [Instruction, Opcode] : {
+           std::pair{R"(%value = inttoptr i64 1 to ptr addrspace(1))",
+                     "inttoptr"},
+           std::pair{R"(%value = addrspacecast ptr null to ptr addrspace(1))",
+                     "addrspacecast"},
+           std::pair{R"(%slot = alloca ptr addrspace(1))", "alloca"},
+           std::pair{R"(%value = load i64, ptr addrspace(1) null)", "load"},
+           std::pair{R"(
+             call void @llvm.memcpy.p1.p0.i64(
+                 ptr addrspace(1) null, ptr null, i64 0, i1 false)
+           )",
+                     "call"},
+       }) {
+    SCOPED_TRACE(Opcode);
+    std::string IR = (Twine(R"(
+      define void @Main() {
+        br label %loop
+      loop:
+        br label %loop
+      }
+      declare void @llvm.memcpy.p1.p0.i64(
+          ptr addrspace(1), ptr, i64, i1 immarg)
+      define void @owner() {
+    )") + Instruction +
+                      R"(
+        ret void
+      }
+    )")
+                         .str();
+    expectModuleError(
+        IR,
+        (Twine("MMIXAL output variant 1 does not support nonzero address ") +
+         "space in instruction '" + Opcode + "' in function 'owner'")
+            .str());
+  }
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsTLSState) {
+  expectModuleError(
+      R"(
+        @tls = thread_local(localexec) global i64 0
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support thread-local symbol 'tls'");
+
+  expectModuleError(
+      R"(
+        declare ptr @llvm.thread.pointer()
+        define void @Main() {
+        entry:
+          %pointer = call ptr @llvm.thread.pointer()
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support TLS intrinsic "
+      "'llvm.thread.pointer' in function 'Main'");
+
+  expectModuleError(
+      R"(
+        declare ptr @llvm.threadlocal.address.p0(ptr)
+        define void @Main() {
+        entry:
+          %pointer = call ptr @llvm.threadlocal.address.p0(ptr null)
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support TLS intrinsic "
+      "'llvm.threadlocal.address' in function 'Main'");
+}
+
 } // namespace

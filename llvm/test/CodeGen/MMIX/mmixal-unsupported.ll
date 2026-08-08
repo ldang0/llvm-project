@@ -51,6 +51,26 @@
 ; RUN:   --output-asm-variant=1 %t/symvers.ll -o %t/symvers.mms 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=SYMVERS
 ; RUN: test ! -s %t/symvers.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/nonzero-global.ll \
+; RUN:   -o %t/nonzero-global.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=NONZERO-GLOBAL
+; RUN: test ! -s %t/nonzero-global.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/nonzero-instruction.ll \
+; RUN:   -o %t/nonzero-instruction.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=NONZERO-INSTRUCTION
+; RUN: test ! -s %t/nonzero-instruction.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/tls-global.ll \
+; RUN:   -o %t/tls-global.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=TLS-GLOBAL
+; RUN: test ! -s %t/tls-global.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/thread-pointer.ll \
+; RUN:   -o %t/thread-pointer.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=THREAD-POINTER
+; RUN: test ! -s %t/thread-pointer.mms
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
 ; RUN:   %t/canonical-linkage.ll -o - \
 ; RUN:   | FileCheck %s --check-prefix=CANONICAL
@@ -72,6 +92,10 @@
 ; GLOBAL-CTORS: LLVM ERROR: MMIXAL output variant 1 does not support runtime registration symbol 'llvm.global_ctors'
 ; INIT-ARRAY: LLVM ERROR: MMIXAL output variant 1 does not support runtime registration section '.init_array.100' for symbol 'registration'
 ; SYMVERS: LLVM ERROR: MMIXAL output variant 1 does not support ELF symbol version for 'versioned'
+; NONZERO-GLOBAL: LLVM ERROR: MMIXAL output variant 1 does not support nonzero address space in symbol 'nonzero_global'
+; NONZERO-INSTRUCTION: LLVM ERROR: MMIXAL output variant 1 does not support nonzero address space in instruction 'inttoptr' in function 'owner'
+; TLS-GLOBAL: LLVM ERROR: MMIXAL output variant 1 does not support thread-local symbol 'tls'
+; THREAD-POINTER: LLVM ERROR: MMIXAL output variant 1 does not support TLS intrinsic 'llvm.thread.pointer' in function 'Main'
 ; CANONICAL: .weak selected
 ; CANONICAL: selected:
 
@@ -270,6 +294,63 @@ define void @versioned() {
 
 define void @Main() {
 entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- nonzero-global.ll
+target triple = "mmix-unknown-elf"
+
+@nonzero_global = addrspace(1) global i64 0
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- nonzero-instruction.ll
+target triple = "mmix-unknown-elf"
+
+define void @owner() {
+entry:
+  %pointer = inttoptr i64 1 to ptr addrspace(1)
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- tls-global.ll
+target triple = "mmix-unknown-elf"
+
+@tls = thread_local(localexec) global i64 0
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- thread-pointer.ll
+target triple = "mmix-unknown-elf"
+
+declare ptr @llvm.thread.pointer()
+
+define void @Main() {
+entry:
+  %pointer = call ptr @llvm.thread.pointer()
   br label %loop
 
 loop:

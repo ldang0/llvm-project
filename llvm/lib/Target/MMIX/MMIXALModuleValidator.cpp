@@ -8,13 +8,17 @@
 
 #include "MMIXALModuleValidator.h"
 #include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/GlobalObject.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
@@ -58,6 +62,88 @@ bool isMMIXALRuntimeRegistrationSection(StringRef Section) {
        {".init_array", ".fini_array", ".preinit_array", ".ctors", ".dtors"})
     if (Section.starts_with(Prefix))
       return true;
+  return false;
+}
+
+bool containsNonzeroAddressSpace(const Type *Ty,
+                                 SmallPtrSetImpl<const Type *> &Visited) {
+  if (const auto *Pointer = dyn_cast<PointerType>(Ty))
+    return Pointer->getAddressSpace() != 0;
+  if (!Visited.insert(Ty).second)
+    return false;
+
+  if (const auto *Function = dyn_cast<FunctionType>(Ty)) {
+    if (containsNonzeroAddressSpace(Function->getReturnType(), Visited))
+      return true;
+    for (const Type *Param : Function->params())
+      if (containsNonzeroAddressSpace(Param, Visited))
+        return true;
+    return false;
+  }
+  if (const auto *Struct = dyn_cast<StructType>(Ty)) {
+    for (const Type *Element : Struct->elements())
+      if (containsNonzeroAddressSpace(Element, Visited))
+        return true;
+    return false;
+  }
+  if (const auto *Array = dyn_cast<ArrayType>(Ty))
+    return containsNonzeroAddressSpace(Array->getElementType(), Visited);
+  if (const auto *Vector = dyn_cast<VectorType>(Ty))
+    return containsNonzeroAddressSpace(Vector->getElementType(), Visited);
+  return false;
+}
+
+bool containsNonzeroAddressSpace(const Type *Ty) {
+  SmallPtrSet<const Type *, 8> Visited;
+  return containsNonzeroAddressSpace(Ty, Visited);
+}
+
+bool constantUsesNonzeroAddressSpace(
+    const Constant &C, SmallPtrSetImpl<const Constant *> &Visited) {
+  if (containsNonzeroAddressSpace(C.getType()))
+    return true;
+  if (!Visited.insert(&C).second || isa<GlobalValue>(C))
+    return false;
+  for (const Value *Operand : C.operands())
+    if (const auto *Nested = dyn_cast<Constant>(Operand);
+        Nested && constantUsesNonzeroAddressSpace(*Nested, Visited))
+      return true;
+  return false;
+}
+
+bool constantUsesNonzeroAddressSpace(const Constant &C) {
+  SmallPtrSet<const Constant *, 8> Visited;
+  return constantUsesNonzeroAddressSpace(C, Visited);
+}
+
+bool globalValueUsesNonzeroAddressSpace(const GlobalValue &GV) {
+  if (containsNonzeroAddressSpace(GV.getType()) ||
+      containsNonzeroAddressSpace(GV.getValueType()))
+    return true;
+  if (const auto *Global = dyn_cast<GlobalVariable>(&GV))
+    return Global->hasInitializer() &&
+           constantUsesNonzeroAddressSpace(*Global->getInitializer());
+  if (const auto *Alias = dyn_cast<GlobalAlias>(&GV))
+    return constantUsesNonzeroAddressSpace(*Alias->getAliasee());
+  return false;
+}
+
+bool instructionUsesNonzeroAddressSpace(const Instruction &I) {
+  if (containsNonzeroAddressSpace(I.getType()))
+    return true;
+  if (const auto *Alloca = dyn_cast<AllocaInst>(&I);
+      Alloca && containsNonzeroAddressSpace(Alloca->getAllocatedType()))
+    return true;
+  if (const auto *GEP = dyn_cast<GetElementPtrInst>(&I);
+      GEP && containsNonzeroAddressSpace(GEP->getSourceElementType()))
+    return true;
+  for (const Value *Operand : I.operands()) {
+    if (containsNonzeroAddressSpace(Operand->getType()))
+      return true;
+    if (const auto *C = dyn_cast<Constant>(Operand);
+        C && constantUsesNonzeroAddressSpace(*C))
+      return true;
+  }
   return false;
 }
 
@@ -225,6 +311,16 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
   for (const GlobalValue &GV : M.global_values()) {
     if (const auto *F = dyn_cast<Function>(&GV); F && F->isIntrinsic())
       continue;
+    if (const auto *Global = dyn_cast<GlobalVariable>(&GV);
+        Global && Global->isThreadLocal())
+      return createStringError(
+          Twine(
+              "MMIXAL output variant 1 does not support thread-local symbol ") +
+          "'" + GV.getName() + "'");
+    if (globalValueUsesNonzeroAddressSpace(GV))
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support nonzero address ") +
+          "space in symbol '" + GV.getName() + "'");
     if (Error Err = validateMMIXALSymbolSemantics(GV))
       return std::move(Err);
     if (!GV.isDeclaration() || GV.use_empty())
@@ -233,6 +329,30 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
         Twine("MMIXAL output variant 1 cannot resolve referenced symbol '") +
         GV.getName() + "'");
   }
+
+  for (const Function &F : M)
+    for (const BasicBlock &BB : F)
+      for (const Instruction &I : BB) {
+        if (const auto *Call = dyn_cast<CallBase>(&I))
+          if (const Function *Callee = Call->getCalledFunction()) {
+            Intrinsic::ID ID = Callee->getIntrinsicID();
+            if (ID == Intrinsic::thread_pointer ||
+                ID == Intrinsic::threadlocal_address) {
+              StringRef Name = ID == Intrinsic::thread_pointer
+                                   ? "llvm.thread.pointer"
+                                   : "llvm.threadlocal.address";
+              return createStringError(
+                  Twine("MMIXAL output variant 1 does not support TLS ") +
+                  "intrinsic '" + Name + "' in function '" + F.getName() + "'");
+            }
+          }
+        if (instructionUsesNonzeroAddressSpace(I))
+          return createStringError(
+              Twine(
+                  "MMIXAL output variant 1 does not support nonzero address ") +
+              "space in instruction '" + I.getOpcodeName() + "' in function '" +
+              F.getName() + "'");
+      }
 
   return *Entry;
 }
