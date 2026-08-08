@@ -3,6 +3,7 @@ add_llvm_component_library(LLVMMMIXDesc
   MMIXALDependencyGraph.cpp
   MMIXALExpression.cpp
   MMIXALLayout.cpp
+  MMIXALStartup.cpp
   MMIXALSymbolMapper.cpp
   MMIXALSymbolTable.cpp
   MMIXAsmBackend.cpp

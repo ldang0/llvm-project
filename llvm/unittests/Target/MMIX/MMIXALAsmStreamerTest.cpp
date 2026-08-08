@@ -8,6 +8,7 @@
 
 #include "MCTargetDesc/MMIXALAsmStreamer.h"
 #include "MCTargetDesc/MMIXALInstPrinter.h"
+#include "MCTargetDesc/MMIXALStartup.h"
 #include "MCTargetDesc/MMIXMCAsmInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -254,6 +255,81 @@ TEST_F(MMIXALAsmStreamerTest, LateModuleFailureDiscardsPrelude) {
 
   EXPECT_TRUE(Context.hadError());
   EXPECT_EQ(Diagnostic, "MMIXAL data value width must be 1, 2, 4, or 8 bytes");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, EmitsFixedBareMetalGlobalRegisterPrelude) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *ReservedName = Context.getOrCreateSymbol("canonical_reserved");
+  expectSuccess(Streamer->registerUserSymbol(*ReservedName, "__LLVM_G_SP"));
+  addMMIXALBareMetalGlobalRegisterPrelude(*Streamer);
+  EXPECT_EQ(Streamer->getNumPreludeGlobalRegisters(), 24u);
+
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(ReservedName);
+  MCInst Add;
+  Add.setOpcode(MMIX::ADD);
+  Add.addOperand(MCOperand::createReg(MMIX::R231));
+  Add.addOperand(MCOperand::createReg(MMIX::R254));
+  Add.addOperand(MCOperand::createReg(MMIX::R255));
+  Streamer->emitInstruction(Add, *STI);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(lookup(*Streamer, *ReservedName),
+            "__LLVM_U_11_5F5F4C4C564D5F475F5350");
+  EXPECT_EQ(Output, "__LLVM_G_SP\tGREG #2000000004000000\n"
+                    "__LLVM_G_FP\tGREG 0\n"
+                    "__LLVM_G_R252\tGREG 0\n"
+                    "__LLVM_G_R251\tGREG 0\n"
+                    "__LLVM_G_R250\tGREG 0\n"
+                    "__LLVM_G_R249\tGREG 0\n"
+                    "__LLVM_G_R248\tGREG 0\n"
+                    "__LLVM_G_R247\tGREG 0\n"
+                    "__LLVM_G_R246\tGREG 0\n"
+                    "__LLVM_G_R245\tGREG 0\n"
+                    "__LLVM_G_R244\tGREG 0\n"
+                    "__LLVM_G_R243\tGREG 0\n"
+                    "__LLVM_G_R242\tGREG 0\n"
+                    "__LLVM_G_R241\tGREG 0\n"
+                    "__LLVM_G_R240\tGREG 0\n"
+                    "__LLVM_G_R239\tGREG 0\n"
+                    "__LLVM_G_R238\tGREG 0\n"
+                    "__LLVM_G_R237\tGREG 0\n"
+                    "__LLVM_G_R236\tGREG 0\n"
+                    "__LLVM_G_R235\tGREG 0\n"
+                    "__LLVM_G_R234\tGREG 0\n"
+                    "__LLVM_G_R233\tGREG 0\n"
+                    "__LLVM_G_R232\tGREG 0\n"
+                    "__LLVM_G_R231\tGREG 0\n"
+                    "\tLOC #0000000000000100\n"
+                    "__LLVM_U_11_5F5F4C4C564D5F475F5350\tIS @\n"
+                    "\tADD $231, $254, $255\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsFixedPreludeCollisionAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->addPreludeGlobalRegister("__LLVM_G_SP", 254, 0);
+  addMMIXALBareMetalGlobalRegisterPrelude(*Streamer);
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitIntValue(1, 1);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "duplicate target-owned MMIXAL prelude name: __LLVM_G_SP");
   EXPECT_TRUE(Output.empty());
 }
 
