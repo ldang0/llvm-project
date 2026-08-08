@@ -71,6 +71,27 @@
 ; RUN:   -o %t/thread-pointer.mms 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=THREAD-POINTER
 ; RUN: test ! -s %t/thread-pointer.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/personality.ll \
+; RUN:   -o %t/personality.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=PERSONALITY
+; RUN: test ! -s %t/personality.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/uwtable.ll -o %t/uwtable.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=UWTABLE
+; RUN: test ! -s %t/uwtable.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/stackmap.ll -o %t/stackmap.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=STACKMAP
+; RUN: test ! -s %t/stackmap.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/sanitizer.ll \
+; RUN:   -o %t/sanitizer.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=SANITIZER
+; RUN: test ! -s %t/sanitizer.mms
+; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/debug-info.ll -o - \
+; RUN:   | FileCheck %s --check-prefix=DEBUG-INFO
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
 ; RUN:   %t/canonical-linkage.ll -o - \
 ; RUN:   | FileCheck %s --check-prefix=CANONICAL
@@ -96,6 +117,14 @@
 ; NONZERO-INSTRUCTION: LLVM ERROR: MMIXAL output variant 1 does not support nonzero address space in instruction 'inttoptr' in function 'owner'
 ; TLS-GLOBAL: LLVM ERROR: MMIXAL output variant 1 does not support thread-local symbol 'tls'
 ; THREAD-POINTER: LLVM ERROR: MMIXAL output variant 1 does not support TLS intrinsic 'llvm.thread.pointer' in function 'Main'
+; PERSONALITY: LLVM ERROR: MMIXAL output variant 1 does not support an exception personality in function 'exceptional'
+; UWTABLE: LLVM ERROR: MMIXAL output variant 1 does not support unwind-table generation in function 'Main'
+; STACKMAP: LLVM ERROR: MMIXAL output variant 1 does not support runtime metadata intrinsic 'llvm.experimental.stackmap' in function 'Main'
+; SANITIZER: LLVM ERROR: MMIXAL output variant 1 does not support runtime instrumentation attribute 'sanitize_address' in function 'Main'
+; DEBUG-INFO: Main IS @
+; DEBUG-INFO-NOT: .file
+; DEBUG-INFO-NOT: .loc
+; DEBUG-INFO-NOT: compiler identification
 ; CANONICAL: .weak selected
 ; CANONICAL: selected:
 
@@ -356,6 +385,86 @@ entry:
 loop:
   br label %loop
 }
+
+;--- personality.ll
+target triple = "mmix-unknown-elf"
+
+declare i32 @personality(...)
+
+define void @exceptional() personality ptr @personality {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- uwtable.ll
+target triple = "mmix-unknown-elf"
+
+define void @Main() uwtable {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- stackmap.ll
+target triple = "mmix-unknown-elf"
+
+declare void @llvm.experimental.stackmap(i64, i32, ...)
+
+define void @Main() {
+entry:
+  call void (i64, i32, ...) @llvm.experimental.stackmap(i64 1, i32 0)
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- sanitizer.ll
+target triple = "mmix-unknown-elf"
+
+define void @Main() sanitize_address {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- debug-info.ll
+target triple = "mmix-unknown-elf"
+
+define void @Main() !dbg !4 {
+entry:
+  br label %loop, !dbg !7
+
+loop:
+  br label %loop, !dbg !8
+}
+
+!llvm.dbg.cu = !{!0}
+!llvm.module.flags = !{!2}
+!llvm.ident = !{!3}
+!0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1,
+    producer: "compiler", isOptimized: false, runtimeVersion: 0,
+    emissionKind: FullDebug)
+!1 = !DIFile(filename: "input.c", directory: "/source")
+!2 = !{i32 2, !"Debug Info Version", i32 3}
+!3 = !{!"compiler identification"}
+!4 = distinct !DISubprogram(name: "Main", scope: !1, file: !1, line: 1,
+    type: !5, scopeLine: 1, spFlags: DISPFlagDefinition, unit: !0)
+!5 = !DISubroutineType(types: !6)
+!6 = !{null}
+!7 = !DILocation(line: 2, column: 1, scope: !4)
+!8 = !DILocation(line: 3, column: 1, scope: !4)
 
 ;--- canonical-linkage.ll
 target triple = "mmix-unknown-elf"

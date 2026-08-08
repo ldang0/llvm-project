@@ -204,6 +204,12 @@ public:
                              unsigned Discriminator, StringRef FileName,
                              StringRef Comment = {}) override;
   void emitDwarfLocLabelDirective(SMLoc Loc, StringRef Name) override;
+  void emitDwarfLineStartLabel(MCSymbol *StartSym) override;
+  void emitDwarfLineEndEntry(MCSection *Section, MCSymbol *LastLabel,
+                             MCSymbol *EndLabel = nullptr) override;
+  void emitDwarfAdvanceLineAddr(int64_t LineDelta, const MCSymbol *LastLabel,
+                                const MCSymbol *Label,
+                                unsigned PointerSize) override;
   void emitCFISections(bool EH, bool Debug, bool SFrame) override;
   void emitSyntaxDirective(StringRef Syntax, StringRef Options) override;
   void emitRelocDirective(const MCExpr &Offset, StringRef Name,

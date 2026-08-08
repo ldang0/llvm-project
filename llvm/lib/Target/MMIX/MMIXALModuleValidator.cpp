@@ -147,6 +147,62 @@ bool instructionUsesNonzeroAddressSpace(const Instruction &I) {
   return false;
 }
 
+StringRef getMMIXALRuntimeInstrumentationAttribute(const Function &F) {
+  struct RuntimeAttribute {
+    Attribute::AttrKind Kind;
+    const char *Name;
+  };
+  static constexpr RuntimeAttribute Attributes[] = {
+      {Attribute::SanitizeAddress, "sanitize_address"},
+      {Attribute::SanitizeThread, "sanitize_thread"},
+      {Attribute::SanitizeType, "sanitize_type"},
+      {Attribute::SanitizeMemory, "sanitize_memory"},
+      {Attribute::SanitizeHWAddress, "sanitize_hwaddress"},
+      {Attribute::SanitizeMemTag, "sanitize_memtag"},
+      {Attribute::SanitizeNumericalStability, "sanitize_numerical_stability"},
+      {Attribute::SanitizeRealtime, "sanitize_realtime"},
+      {Attribute::SanitizeRealtimeBlocking, "sanitize_realtime_blocking"},
+      {Attribute::SanitizeAllocToken, "sanitize_alloc_token"},
+  };
+  for (const RuntimeAttribute &Attribute : Attributes)
+    if (F.hasFnAttribute(Attribute.Kind))
+      return Attribute.Name;
+  return {};
+}
+
+bool isMMIXALRuntimeMetadataIntrinsic(Intrinsic::ID ID) {
+  switch (ID) {
+  case Intrinsic::experimental_stackmap:
+  case Intrinsic::experimental_patchpoint_void:
+  case Intrinsic::experimental_patchpoint:
+  case Intrinsic::experimental_gc_statepoint:
+  case Intrinsic::experimental_gc_result:
+  case Intrinsic::experimental_gc_relocate:
+  case Intrinsic::gcroot:
+  case Intrinsic::gcread:
+  case Intrinsic::gcwrite:
+  case Intrinsic::instrprof_cover:
+  case Intrinsic::instrprof_increment:
+  case Intrinsic::instrprof_increment_step:
+  case Intrinsic::instrprof_callsite:
+  case Intrinsic::instrprof_timestamp:
+  case Intrinsic::instrprof_value_profile:
+  case Intrinsic::instrprof_mcdc_parameters:
+  case Intrinsic::instrprof_mcdc_tvbitmap_update:
+  case Intrinsic::pseudoprobe:
+  case Intrinsic::xray_customevent:
+  case Intrinsic::xray_typedevent:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool isMMIXALExceptionInstruction(const Instruction &I) {
+  return isa<InvokeInst, ResumeInst, CatchReturnInst, CleanupReturnInst>(I) ||
+         I.isEHPad();
+}
+
 Error validateMMIXALSymbolSemantics(const GlobalValue &GV) {
   if (isa<GlobalIFunc>(GV))
     return createStringError(
@@ -308,6 +364,30 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
                                "' for symbol '" + Global.getName() + "'");
   }
 
+  for (const Function &F : M) {
+    if (F.isIntrinsic())
+      continue;
+    if (F.hasPersonalityFn())
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support an exception ") +
+          "personality in function '" + F.getName() + "'");
+    if (F.hasUWTable())
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support unwind-table ") +
+          "generation in function '" + F.getName() + "'");
+    if (F.hasGC())
+      return createStringError(
+          Twine(
+              "MMIXAL output variant 1 does not support garbage-collection ") +
+          "strategy '" + F.getGC() + "' in function '" + F.getName() + "'");
+    if (StringRef Attribute = getMMIXALRuntimeInstrumentationAttribute(F);
+        !Attribute.empty())
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support runtime ") +
+          "instrumentation attribute '" + Attribute + "' in function '" +
+          F.getName() + "'");
+  }
+
   for (const GlobalValue &GV : M.global_values()) {
     if (const auto *F = dyn_cast<Function>(&GV); F && F->isIntrinsic())
       continue;
@@ -321,6 +401,10 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
       return createStringError(
           Twine("MMIXAL output variant 1 does not support nonzero address ") +
           "space in symbol '" + GV.getName() + "'");
+    if (GV.isTagged())
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support sanitizer ") +
+          "allocation metadata for symbol '" + GV.getName() + "'");
     if (Error Err = validateMMIXALSymbolSemantics(GV))
       return std::move(Err);
     if (!GV.isDeclaration() || GV.use_empty())
@@ -333,6 +417,11 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
   for (const Function &F : M)
     for (const BasicBlock &BB : F)
       for (const Instruction &I : BB) {
+        if (isMMIXALExceptionInstruction(I))
+          return createStringError(
+              Twine("MMIXAL output variant 1 does not support exception ") +
+              "instruction '" + I.getOpcodeName() + "' in function '" +
+              F.getName() + "'");
         if (const auto *Call = dyn_cast<CallBase>(&I))
           if (const Function *Callee = Call->getCalledFunction()) {
             Intrinsic::ID ID = Callee->getIntrinsicID();
@@ -345,6 +434,11 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
                   Twine("MMIXAL output variant 1 does not support TLS ") +
                   "intrinsic '" + Name + "' in function '" + F.getName() + "'");
             }
+            if (isMMIXALRuntimeMetadataIntrinsic(ID))
+              return createStringError(
+                  Twine("MMIXAL output variant 1 does not support runtime ") +
+                  "metadata intrinsic '" + Intrinsic::getBaseName(ID) +
+                  "' in function '" + F.getName() + "'");
           }
         if (instructionUsesNonzeroAddressSpace(I))
           return createStringError(

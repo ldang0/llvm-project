@@ -682,4 +682,160 @@ TEST_F(MMIXALModuleValidatorTest, RejectsTLSState) {
       "'llvm.threadlocal.address' in function 'Main'");
 }
 
+TEST_F(MMIXALModuleValidatorTest, AcceptsAddressNeutralDebugInformation) {
+  EXPECT_NE(expectModule(R"(
+    define void @Main() !dbg !4 {
+    entry:
+      br label %loop, !dbg !7
+    loop:
+      br label %loop, !dbg !8
+    }
+
+    !llvm.dbg.cu = !{!0}
+    !llvm.module.flags = !{!2}
+    !llvm.ident = !{!3}
+    !0 = distinct !DICompileUnit(language: DW_LANG_C, file: !1,
+        producer: "compiler", isOptimized: false, runtimeVersion: 0,
+        emissionKind: FullDebug)
+    !1 = !DIFile(filename: "input.c", directory: "/source")
+    !2 = !{i32 2, !"Debug Info Version", i32 3}
+    !3 = !{!"compiler identification"}
+    !4 = distinct !DISubprogram(name: "Main", scope: !1, file: !1, line: 1,
+        type: !5, scopeLine: 1, spFlags: DISPFlagDefinition, unit: !0)
+    !5 = !DISubroutineType(types: !6)
+    !6 = !{null}
+    !7 = !DILocation(line: 2, column: 1, scope: !4)
+    !8 = !DILocation(line: 3, column: 1, scope: !4)
+  )"),
+            nullptr);
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsExceptionAndUnwindState) {
+  expectModuleError(
+      R"(
+        declare i32 @personality(...)
+        define void @exceptional() personality ptr @personality {
+          ret void
+        }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support an exception personality in "
+      "function 'exceptional'");
+
+  expectModuleError(
+      R"(
+        define void @unwindable() uwtable {
+          ret void
+        }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support unwind-table generation in "
+      "function 'unwindable'");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsRuntimeFunctionState) {
+  expectModuleError(
+      R"(
+        define void @managed() gc "statepoint-example" {
+          ret void
+        }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support garbage-collection strategy "
+      "'statepoint-example' in function 'managed'");
+
+  for (StringRef Attribute : {
+           "sanitize_address",
+           "sanitize_thread",
+           "sanitize_type",
+           "sanitize_memory",
+           "sanitize_hwaddress",
+           "sanitize_memtag",
+           "sanitize_numerical_stability",
+           "sanitize_realtime",
+           "sanitize_realtime_blocking",
+           "sanitize_alloc_token",
+       }) {
+    SCOPED_TRACE(Attribute);
+    std::string IR = (Twine("define void @instrumented() ") + Attribute + R"( {
+           ret void
+         }
+         define void @Main() {
+           br label %loop
+         loop:
+           br label %loop
+         }
+       )")
+                         .str();
+    expectModuleError(
+        IR, (Twine("MMIXAL output variant 1 does not support runtime ") +
+             "instrumentation attribute '" + Attribute +
+             "' in function 'instrumented'")
+                .str());
+  }
+
+  expectModuleError(
+      R"(
+        @tagged = global i64 0, sanitize_memtag
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support sanitizer allocation metadata "
+      "for symbol 'tagged'");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsRuntimeMetadataIntrinsics) {
+  for (
+      auto [Declaration, Call, Name] : {
+          std::tuple{
+              R"(declare void @llvm.experimental.stackmap(i64, i32, ...))",
+              R"(call void (i64, i32, ...) @llvm.experimental.stackmap(i64 1, i32 0))",
+              "llvm.experimental.stackmap"},
+          std::tuple{
+              R"(declare void @llvm.experimental.patchpoint.void(i64, i32, ptr, i32, ...))",
+              R"(call void (i64, i32, ptr, i32, ...) @llvm.experimental.patchpoint.void(i64 2, i32 4, ptr null, i32 0))",
+              "llvm.experimental.patchpoint.void"},
+          std::tuple{
+              R"(declare void @llvm.instrprof.increment(ptr, i64, i32, i32))",
+              R"(call void @llvm.instrprof.increment(ptr null, i64 3, i32 1, i32 0))",
+              "llvm.instrprof.increment"},
+          std::tuple{
+              R"(declare void @llvm.pseudoprobe(i64, i64, i32, i64))",
+              R"(call void @llvm.pseudoprobe(i64 4, i64 1, i32 0, i64 -1))",
+              "llvm.pseudoprobe"},
+      }) {
+    SCOPED_TRACE(Name);
+    std::string IR = (Twine(Declaration) + R"(
+      define void @Main() {
+      entry:
+    )" + Call + R"(
+        br label %loop
+      loop:
+        br label %loop
+      }
+    )")
+                         .str();
+    expectModuleError(
+        IR,
+        (Twine("MMIXAL output variant 1 does not support runtime metadata ") +
+         "intrinsic '" + Name + "' in function 'Main'")
+            .str());
+  }
+}
+
 } // namespace

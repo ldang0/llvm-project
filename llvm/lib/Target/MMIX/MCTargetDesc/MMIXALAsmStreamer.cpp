@@ -559,8 +559,7 @@ void MMIXALAsmStreamer::emitInstruction(const MCInst &Inst,
       assert(Fixups.empty() &&
              "disassembled MMIX instruction unexpectedly requires a fixup");
       Output->PadToColumn(getContext().getAsmInfo().getCommentColumn());
-      *Output << getContext().getAsmInfo().getCommentString()
-              << " encoding: [";
+      *Output << getContext().getAsmInfo().getCommentString() << " encoding: [";
       for (size_t I = 0; I != Code.size(); ++I) {
         if (I != 0)
           *Output << ',';
@@ -910,6 +909,23 @@ void MMIXALAsmStreamer::emitDwarfLocDirective(unsigned FileNo, unsigned Line,
 
 void MMIXALAsmStreamer::emitDwarfLocLabelDirective(SMLoc Loc, StringRef Name) {
   recordUnsupportedEvent("DWARF location label");
+}
+
+void MMIXALAsmStreamer::emitDwarfLineStartLabel(MCSymbol *StartSym) {
+  recordUnsupportedEvent("address-bearing DWARF line table");
+}
+
+void MMIXALAsmStreamer::emitDwarfLineEndEntry(MCSection *Section,
+                                              MCSymbol *LastLabel,
+                                              MCSymbol *EndLabel) {
+  recordUnsupportedEvent("address-bearing DWARF line table");
+}
+
+void MMIXALAsmStreamer::emitDwarfAdvanceLineAddr(int64_t LineDelta,
+                                                 const MCSymbol *LastLabel,
+                                                 const MCSymbol *Label,
+                                                 unsigned PointerSize) {
+  recordUnsupportedEvent("address-bearing DWARF line table");
 }
 
 void MMIXALAsmStreamer::emitCFISections(bool EH, bool Debug, bool SFrame) {

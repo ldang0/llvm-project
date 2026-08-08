@@ -918,6 +918,27 @@ TEST_F(MMIXALAsmStreamerTest, RejectsCFIUnwindEventsAtomically) {
   EXPECT_TRUE(Output.empty());
 }
 
+TEST_F(MMIXALAsmStreamerTest, RejectsAddressBearingDebugEventsAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitIntValue(42, 8);
+  MCSymbol *LineStart = Context.createTempSymbol("line_start");
+  Streamer->emitDwarfLineStartLabel(LineStart);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL does not support address-bearing DWARF line table events");
+  EXPECT_TRUE(Output.empty());
+}
+
 TEST_F(MMIXALAsmStreamerTest, RejectsUnsupportedScalarWidthAtomically) {
   MCContext Context(TT, MAI, *MRI, *STI);
   std::string Diagnostic;
