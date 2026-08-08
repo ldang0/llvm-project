@@ -103,8 +103,8 @@
 ; RUNTIME-HELPER: LLVM ERROR: MMIXAL output variant 1 cannot resolve referenced symbol 'memcpy'
 ; RUNTIME-HELPER-NOT: __LLVM_
 ; RESOLVED-HELPER: memcpy IS @
-; RESOLVED-HELPER: SETH ${{[0-9]+}}, memcpy>>48&65535
-; RESOLVED-HELPER: PUSHGO $31, ${{[0-9]+}}, 0
+; RESOLVED-HELPER: SETH ${{[0-9]+}},memcpy>>48&65535
+; RESOLVED-HELPER: PUSHGO $31,${{[0-9]+}},0
 ; WEAK-LINKAGE: LLVM ERROR: MMIXAL output variant 1 does not support linkage 'weak' for symbol 'selected'
 ; COMDAT: LLVM ERROR: MMIXAL output variant 1 does not support COMDAT membership for symbol 'selected'
 ; IFUNC: LLVM ERROR: MMIXAL output variant 1 does not support GlobalIFunc 'selected'

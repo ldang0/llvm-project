@@ -15,6 +15,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/STLFunctionalExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -66,7 +67,7 @@ public:
 
   void emit(uint64_t Value) {
     const std::string Text = formatValue(Value);
-    const size_t SeparatorLength = LineLength == 0 ? 0 : 2;
+    const size_t SeparatorLength = LineLength == 0 ? 0 : 1;
     const size_t PrefixLength = Directive.size() + 2;
     if (LineLength != 0 &&
         LineLength + SeparatorLength + Text.size() > MMIXALInputLineLimit) {
@@ -77,7 +78,7 @@ public:
       OS << '\t' << Directive << ' ';
       LineLength = PrefixLength;
     } else {
-      OS << ", ";
+      OS << ',';
       LineLength += SeparatorLength;
     }
     OS << Text;
@@ -176,6 +177,23 @@ bool hasUnsupportedSpecialPurpose(StringRef Name) {
 
 void emitAbsoluteLocation(uint64_t Address, raw_ostream &OS) {
   OS << "\tLOC #" << format_hex_no_prefix(Address, 16, /*Upper=*/true) << '\n';
+}
+
+void printMMIXALSourceInstruction(function_ref<void(raw_ostream &)> Print,
+                                  raw_ostream &OS) {
+  SmallString<128> Buffer;
+  raw_svector_ostream BufferOS(Buffer);
+  Print(BufferOS);
+
+  StringRef Remaining = Buffer;
+  while (true) {
+    const size_t Separator = Remaining.find(", ");
+    if (Separator == StringRef::npos)
+      break;
+    OS << Remaining.take_front(Separator + 1);
+    Remaining = Remaining.drop_front(Separator + 2);
+  }
+  OS << Remaining;
 }
 
 Error validateInstructionAddress(
@@ -542,16 +560,19 @@ void MMIXALAsmStreamer::emitBytes(StringRef Data) {
   Event.Bytes = Data.str();
   Event.Section = getCurrentSection().first;
   BufferedItem *Item = getOrCreateCurrentItem();
-  if (Item && Item->Group == LogicalGroup::ZeroStorage)
+  if (Item && Item->Group == LogicalGroup::ZeroStorage &&
+      llvm::any_of(Data.bytes(), [](unsigned char Byte) { return Byte != 0; }))
     recordClassificationError(
-        "MMIXAL zero-storage section contains initialized bytes");
+        "MMIXAL zero-storage section contains nonzero bytes");
   appendEventToCurrentItem(std::move(Event), Data.size());
 }
 
 void MMIXALAsmStreamer::emitInstruction(const MCInst &Inst,
                                         const MCSubtargetInfo &STI) {
   if (!getCurrentSection().first) {
-    InstPrinter->printInst(&Inst, 0, "", STI, *Output);
+    printMMIXALSourceInstruction(
+        [&](raw_ostream &OS) { InstPrinter->printInst(&Inst, 0, "", STI, OS); },
+        *Output);
     if (CodeEmitter) {
       SmallString<16> Code;
       SmallVector<MCFixup, 4> Fixups;
@@ -1365,8 +1386,13 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
       Nop.addOperand(MCOperand::createImm(0));
       for (uint64_t Address = Padding.Begin; Address != Padding.End;
            Address += 4) {
-        InstPrinter->printInstWithSymbolNames(
-            &Nop, Address, *Padding.Request.STI, ResolveSymbol, OS);
+        printMMIXALSourceInstruction(
+            [&](raw_ostream &InstructionOS) {
+              InstPrinter->printInstWithSymbolNames(
+                  &Nop, Address, *Padding.Request.STI, ResolveSymbol,
+                  InstructionOS);
+            },
+            OS);
         OS << '\n';
       }
       CurrentLocation = Padding.End;
@@ -1453,8 +1479,13 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
         if (!Event.STI)
           return createStringError(
               "MMIXAL instruction has no subtarget information");
-        InstPrinter->printInstWithSymbolNames(&Event.Inst, Address, *Event.STI,
-                                              ResolveSymbol, OS);
+        printMMIXALSourceInstruction(
+            [&](raw_ostream &InstructionOS) {
+              InstPrinter->printInstWithSymbolNames(&Event.Inst, Address,
+                                                    *Event.STI, ResolveSymbol,
+                                                    InstructionOS);
+            },
+            OS);
         OS << '\n';
         Address += 4;
         break;

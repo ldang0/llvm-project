@@ -29,16 +29,16 @@ entry:
 ; CHECK:      __LLVM_L_F_6C6F61645F726561646F6E6C79_END_0	IS @
 ; CHECK:      LOC #2000000000000000
 ; CHECK-NEXT: readonly_data	IS @
-; CHECK-NEXT: BYTE #01, #02, #03, #04, #05, #06, #07, #08
+; CHECK-NEXT: BYTE #01,#02,#03,#04,#05,#06,#07,#08
 ; CHECK:      LOC #000000000000010C
 ; CHECK-NEXT: load_readonly	IS @
 ; Natural alignment leaves address gaps without emitting synthetic data.
 ; CHECK:      LOC #2000000000000008
 ; CHECK:      writable_data	IS @
-; CHECK-NEXT: BYTE #11, #22, #33, #44
+; CHECK-NEXT: BYTE #11,#22,#33,#44
 ; CHECK:      LOC #2000000000000010
 ; CHECK:      data_pointer	IS @
 ; CHECK-NEXT: OCTA writable_data
 ; CHECK:      LOC #2000000000000020
 ; CHECK:      zero_data	IS @
-; CHECK-NEXT: OCTA 0, 0
+; CHECK-NEXT: OCTA 0,0

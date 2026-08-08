@@ -28,11 +28,11 @@ loop:
 
 define void @cache_and_range_sync(ptr %base, i64 %offset) noinline {
 ; CHECK-LABEL: cache_and_range_sync IS @
-; CHECK:       PRELD 0, ${{[0-9]+}}, 0
-; CHECK:       PREGO 255, ${{[0-9]+}}, 255
-; CHECK:       PREST 1, ${{[0-9]+}}, ${{[0-9]+}}
-; CHECK:       SYNCD 2, ${{[0-9]+}}, ${{[0-9]+}}
-; CHECK:       SYNCID 3, ${{[0-9]+}}, 0
+; CHECK:       PRELD 0,${{[0-9]+}},0
+; CHECK:       PREGO 255,${{[0-9]+}},255
+; CHECK:       PREST 1,${{[0-9]+}},${{[0-9]+}}
+; CHECK:       SYNCD 2,${{[0-9]+}},${{[0-9]+}}
+; CHECK:       SYNCID 3,${{[0-9]+}},0
   call void @llvm.mmix.preld(ptr %base, i32 0)
   %small = getelementptr i8, ptr %base, i64 255
   call void @llvm.mmix.prego(ptr %small, i32 255)
@@ -57,8 +57,8 @@ define void @raw_sync() noinline {
 
 define i64 @uncached_memory(ptr %base, i64 %offset, i64 %value) noinline {
 ; CHECK-LABEL: uncached_memory IS @
-; CHECK:       LDUNC ${{[0-9]+}}, ${{[0-9]+}}, 0
-; CHECK:       STUNC ${{[0-9]+}}, ${{[0-9]+}}, ${{[0-9]+}}
+; CHECK:       LDUNC ${{[0-9]+}},${{[0-9]+}},0
+; CHECK:       STUNC ${{[0-9]+}},${{[0-9]+}},${{[0-9]+}}
   %loaded = call i64 @llvm.mmix.ldunc(ptr %base)
   %dynamic = getelementptr i8, ptr %base, i64 %offset
   call void @llvm.mmix.stunc(ptr %dynamic, i64 %value)
@@ -69,7 +69,7 @@ define i64 @uncached_memory(ptr %base, i64 %offset, i64 %value) noinline {
 ; that the eventual execution environment grants the required privilege.
 define i64 @virtual_translation(i64 %base, i64 %offset) noinline {
 ; CHECK-LABEL: virtual_translation IS @
-; CHECK:       LDVTS ${{[0-9]+}}, ${{[0-9]+}}, ${{[0-9]+}}
+; CHECK:       LDVTS ${{[0-9]+}},${{[0-9]+}},${{[0-9]+}}
   %key = add i64 %base, %offset
   %result = call i64 @llvm.mmix.ldvts(i64 %key)
   ret i64 %result
@@ -77,12 +77,12 @@ define i64 @virtual_translation(i64 %base, i64 %offset) noinline {
 
 define i64 @special_registers(i64 %value) noinline {
 ; CHECK-LABEL: special_registers IS @
-; CHECK:       GET ${{[0-9]+}}, rB
-; CHECK-NEXT:  GET ${{[0-9]+}}, rZZ
-; CHECK:       PUT rH, 255
-; CHECK-NEXT:  PUT rH, ${{[0-9]+}}
-; CHECK:       PUT rC, 1
-; CHECK-NEXT:  PUT rV, 2
+; CHECK:       GET ${{[0-9]+}},rB
+; CHECK-NEXT:  GET ${{[0-9]+}},rZZ
+; CHECK:       PUT rH,255
+; CHECK-NEXT:  PUT rH,${{[0-9]+}}
+; CHECK:       PUT rC,1
+; CHECK-NEXT:  PUT rV,2
   %b = call i64 @llvm.mmix.get(i32 0)
   %zz = call i64 @llvm.mmix.get(i32 31)
   call void @llvm.mmix.put(i32 3, i64 255)

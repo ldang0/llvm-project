@@ -309,7 +309,7 @@ TEST_F(MMIXALAsmStreamerTest, EmitsFixedBareMetalGlobalRegisterPrelude) {
                     "__LLVM_G_R231\tGREG 0\n"
                     "\tLOC #0000000000000100\n"
                     "__LLVM_U_11_5F5F4C4C564D5F475F5350\tIS @\n"
-                    "\tADD $231, $254, $255\n");
+                    "\tADD $231,$254,$255\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest, RejectsFixedPreludeCollisionAtomically) {
@@ -375,8 +375,8 @@ TEST_F(MMIXALAsmStreamerTest, BuildsAndPlacesRawEntryPrefix) {
   EXPECT_FALSE(Context.hadError());
   EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
                     "Main\tIS @\n"
-                    "\tPUT rA, 0\n"
-                    "\tPUT rL, 0\n"
+                    "\tPUT rA,0\n"
+                    "\tPUT rL,0\n"
                     "\tLOC #0000000000000108\n"
                     "__LLVM_L_F_4D61696E_BB_0\tIS @\n"
                     "\tJMP Main\n");
@@ -486,8 +486,7 @@ TEST_F(MMIXALAsmStreamerTest, InstancesKeepIndependentBuffers) {
   EXPECT_FALSE(FirstContext.hadError());
   EXPECT_TRUE(FirstDiagnostic.empty());
   EXPECT_EQ(FirstOutput, "\tLOC #2000000000000000\n"
-                         "\tBYTE #66, #69, #72, #73, #74, #2D, #6F, #6E, "
-                         "#6C, #79\n");
+                         "\tBYTE #66,#69,#72,#73,#74,#2D,#6F,#6E,#6C,#79\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest, RegistersSemanticAndPrivateSymbolIdentities) {
@@ -1018,6 +1017,43 @@ TEST_F(MMIXALAsmStreamerTest, RejectsInitializedContentInZeroStorage) {
   EXPECT_TRUE(Output.empty());
 }
 
+TEST_F(MMIXALAsmStreamerTest, AcceptsOnlyZeroBytesInZeroStorage) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  MCSectionELF *BSS = getSection(Context, ".bss", ELF::SHT_NOBITS,
+                                 ELF::SHF_ALLOC | ELF::SHF_WRITE);
+
+  std::string ZeroOutput;
+  raw_string_ostream ZeroOutputOS(ZeroOutput);
+  auto ZeroStreamer = createStreamer(Context, ZeroOutputOS);
+  MCSymbol *Zero = Context.getOrCreateSymbol("canonical_zero_bytes");
+  expectSuccess(ZeroStreamer->registerUserSymbol(*Zero, "zero_bytes"));
+  ZeroStreamer->switchSection(BSS);
+  ZeroStreamer->emitLabel(Zero);
+  ZeroStreamer->emitBytes(StringRef("\0\0", 2));
+  ZeroStreamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(ZeroOutput, "\tLOC #2000000000000000\n"
+                        "zero_bytes\tIS @\n"
+                        "\tBYTE 0,0\n");
+
+  MCContext NonzeroContext(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(NonzeroContext, Diagnostic);
+  std::string NonzeroOutput;
+  raw_string_ostream NonzeroOutputOS(NonzeroOutput);
+  auto NonzeroStreamer = createStreamer(NonzeroContext, NonzeroOutputOS);
+  NonzeroStreamer->switchSection(getSection(NonzeroContext, ".bss",
+                                            ELF::SHT_NOBITS,
+                                            ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  NonzeroStreamer->emitBytes(StringRef("\0\1", 2));
+  NonzeroStreamer->finish();
+
+  EXPECT_TRUE(NonzeroContext.hadError());
+  EXPECT_EQ(Diagnostic, "MMIXAL zero-storage section contains nonzero bytes");
+  EXPECT_TRUE(NonzeroOutput.empty());
+}
+
 TEST_F(MMIXALAsmStreamerTest,
        EmitsPlannedLocationsAliasesInstructionsAndExecutablePadding) {
   using Kind = MMIXALSymbolTable::PrivateSymbolKind;
@@ -1073,18 +1109,18 @@ TEST_F(MMIXALAsmStreamerTest,
   EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
                     "entry_function\tIS @\n"
                     "entry_alias\tIS @\n"
-                    "\tADD $1, $2, $3\n"
+                    "\tADD $1,$2,$3\n"
                     "function_alias\tIS entry_function\n"
                     "\tLOC #0000000000000104\n"
-                    "\tSWYM 0, 0, 0\n"
-                    "\tSWYM 0, 0, 0\n"
-                    "\tSWYM 0, 0, 0\n"
+                    "\tSWYM 0,0,0\n"
+                    "\tSWYM 0,0,0\n"
+                    "\tSWYM 0,0,0\n"
                     "__LLVM_L_F_66756E6374696F6E_BB_0\tIS @\n"
                     "success\tIS @\n"
                     "\tJMP __LLVM_L_F_66756E6374696F6E_BB_1\n"
                     "\tLOC #0000000000000114\n"
                     "__LLVM_L_F_66756E6374696F6E_BB_1\tIS @\n"
-                    "\tADD $1, $2, $3\n");
+                    "\tADD $1,$2,$3\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest, EmitsInitializedScalarsAndByteArrays) {
@@ -1114,7 +1150,7 @@ TEST_F(MMIXALAsmStreamerTest, EmitsInitializedScalarsAndByteArrays) {
                     "\tTETRA #99AABBCC\n"
                     "\tWYDE #DDEE\n"
                     "\tBYTE #FF\n"
-                    "\tBYTE 0, #01, #7F, #80, #FF\n");
+                    "\tBYTE 0,#01,#7F,#80,#FF\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest,
@@ -1140,9 +1176,9 @@ TEST_F(MMIXALAsmStreamerTest,
   EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
                     "patterns\tIS @\n"
                     "\tBYTE #A1\n"
-                    "\tBYTE #B2, #C3\n"
-                    "\tBYTE #AB, #AB, #AB\n"
-                    "\tBYTE #D4, #E5, #F6, #D4, #E5, #F6\n"
+                    "\tBYTE #B2,#C3\n"
+                    "\tBYTE #AB,#AB,#AB\n"
+                    "\tBYTE #D4,#E5,#F6,#D4,#E5,#F6\n"
                     "\tWYDE #FFFF\n");
 }
 
@@ -1163,9 +1199,9 @@ TEST_F(MMIXALAsmStreamerTest, BoundsNumericByteArraySourceLines) {
   EXPECT_FALSE(Context.hadError());
   EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
                     "bytes\tIS @\n"
-                    "\tBYTE #FF, #FF, #FF, #FF, #FF, #FF, #FF, #FF, #FF, "
-                    "#FF, #FF, #FF, #FF\n"
-                    "\tBYTE #FF, #FF, #FF, #FF, #FF, #FF, #FF\n");
+                    "\tBYTE #FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,#FF,"
+                    "#FF,#FF,#FF,#FF,#FF\n"
+                    "\tBYTE #FF,#FF,#FF,#FF\n");
   SmallVector<StringRef, 8> Lines;
   StringRef(Output).split(Lines, '\n');
   for (StringRef Line : Lines)
@@ -1195,12 +1231,12 @@ TEST_F(MMIXALAsmStreamerTest, EmitsInitializedAndZeroStorageZerosExplicitly) {
   EXPECT_FALSE(Context.hadError());
   EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
                     "initialized\tIS @\n"
-                    "\tOCTA 0, 0\n"
+                    "\tOCTA 0,0\n"
                     "\tWYDE 0\n"
                     "\tBYTE 0\n"
                     "\tLOC #2000000000000018\n"
                     "zero_storage\tIS @\n"
-                    "\tOCTA 0, 0, 0\n");
+                    "\tOCTA 0,0,0\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest,
@@ -1276,10 +1312,10 @@ TEST_F(MMIXALAsmStreamerTest,
   EXPECT_FALSE(Context.hadError());
   EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
                     "__LLVM_L_F_66_BA_0\tIS @\n"
-                    "\tADD $1, $2, $3\n"
+                    "\tADD $1,$2,$3\n"
                     "\tLOC #0000000000000104\n"
                     "__LLVM_L_F_66_BB_0\tIS @\n"
-                    "\tADD $1, $2, $3\n"
+                    "\tADD $1,$2,$3\n"
                     "\tLOC #2000000000000000\n"
                     "ordinary\tIS @\n"
                     "\tOCTA #0102030405060708\n"
@@ -1430,7 +1466,7 @@ TEST_F(MMIXALAsmStreamerTest, UsesLocationForNonFallthroughTextAlignment) {
                     "\tJMP __LLVM_L_F_66756E6374696F6E_BB_1\n"
                     "\tLOC #0000000000000108\n"
                     "__LLVM_L_F_66756E6374696F6E_BB_1\tIS @\n"
-                    "\tADD $1, $2, $3\n");
+                    "\tADD $1,$2,$3\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest, SchedulesAliasAfterLaterTargetDefinition) {
@@ -1536,7 +1572,7 @@ TEST_F(MMIXALAsmStreamerTest,
                     "\tOCTA #000000000000002A\n"
                     "\tLOC #0000000000000100\n"
                     "function\tIS @\n"
-                    "\tSETH $1, target>>48&65535\n");
+                    "\tSETH $1,target>>48&65535\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest, KeepsBareFutureOCTAInSourceOrder) {

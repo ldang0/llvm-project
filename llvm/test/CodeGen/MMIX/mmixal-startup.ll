@@ -99,36 +99,36 @@ entry:
 ; The ordinary non-leaf callee owns an eight-byte frame, preserves its incoming
 ; rJ in the local-register window, restores SP and rJ, and returns with POP.
 ; CHECK:      worker IS @
-; CHECK:      GET $30, rJ
-; CHECK-NEXT: SUBU $254, $254, 8
-; CHECK:      PUSHJ $31, leaf
-; CHECK:      ADDU $254, $254, 8
-; CHECK-NEXT: PUT rJ, $30
-; CHECK-NEXT: POP 0, 0
+; CHECK:      GET $30,rJ
+; CHECK-NEXT: SUBU $254,$254,8
+; CHECK:      PUSHJ $31,leaf
+; CHECK:      ADDU $254,$254,8
+; CHECK-NEXT: PUT rJ,$30
+; CHECK-NEXT: POP 0,0
 ; CHECK:      leaf IS @
-; CHECK:      POP 0, 0
+; CHECK:      POP 0,0
 ; CHECK:      alternate IS @
-; CHECK:      POP 0, 0
+; CHECK:      POP 0,0
 
 ; Main starts at the profile entry, defines the reserved expansion register
 ; before using it to allocate 512 bytes, and accesses the top slot at SP+504.
 ; Together with worker's frame, the tested low-water mark is stack-top-520.
 ; CHECK:      LOC #0000000000000100
 ; CHECK-NEXT: Main IS @
-; CHECK-NEXT: PUT rA, 0
-; CHECK-NEXT: PUT rL, 0
-; CHECK-NEXT: GET $30, rJ
+; CHECK-NEXT: PUT rA,0
+; CHECK-NEXT: PUT rL,0
+; CHECK-NEXT: GET $30,rJ
 ; $255 arrives from the MMO loader carrying the entry address. It is neither
 ; consumed as an LLVM argument nor preserved: CodeGen defines it before its
 ; first use as an expansion register.
-; CHECK-NEXT: SETL $255, 512
-; CHECK-NEXT: SUBU $254, $254, $255
-; CHECK-NEXT: SETL [[FRAME_OFFSET:\$[0-9]+]], 504
-; CHECK-NEXT: ADDU [[FRAME_BASE:\$[0-9]+]], $254, 0
-; CHECK:      STOU ${{[0-9]+}}, [[FRAME_BASE]], [[FRAME_OFFSET]]
-; CHECK:      ADDU $231, [[FRAME_BASE]], [[FRAME_OFFSET]]
-; CHECK-NEXT: PUSHJ $31, worker
-; CHECK:      PUSHGO $31, ${{[0-9]+}}, 0
+; CHECK-NEXT: SETL $255,512
+; CHECK-NEXT: SUBU $254,$254,$255
+; CHECK-NEXT: SETL [[FRAME_OFFSET:\$[0-9]+]],504
+; CHECK-NEXT: ADDU [[FRAME_BASE:\$[0-9]+]],$254,0
+; CHECK:      STOU ${{[0-9]+}},[[FRAME_BASE]],[[FRAME_OFFSET]]
+; CHECK:      ADDU $231,[[FRAME_BASE]],[[FRAME_OFFSET]]
+; CHECK-NEXT: PUSHJ $31,worker
+; CHECK:      PUSHGO $31,${{[0-9]+}},0
 ; CHECK-NOT:  POP
 ; CHECK:      entry_paths IS @
 ; CHECK-NEXT: OCTA [[SUCCESS]]
