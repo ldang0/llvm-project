@@ -42,6 +42,29 @@ std::string expectLayoutError(Expected<MMIXALLayoutPlan> Result) {
   return toString(Result.takeError());
 }
 
+TEST(MMIXALLayoutTest, DefinesDisjointBareMetalProfileRanges) {
+  EXPECT_EQ(MMIXALBareMetalProfile::TextStart, UINT64_C(0x100));
+  EXPECT_EQ(MMIXALBareMetalProfile::TextEnd, UINT64_C(0x10000));
+  EXPECT_EQ(MMIXALBareMetalProfile::RegisterStackStart,
+            MMIXALBareMetalProfile::TextEnd);
+  EXPECT_EQ(MMIXALBareMetalProfile::RegisterStackEnd, UINT64_C(0x4000000));
+  EXPECT_LE(MMIXALBareMetalProfile::RegisterStackEnd,
+            MMIXALBareMetalProfile::DataStart);
+  EXPECT_EQ(MMIXALBareMetalProfile::DataStart, UINT64_C(0x2000000000000000));
+  EXPECT_EQ(MMIXALBareMetalProfile::DataEnd, UINT64_C(0x2000000003FF0000));
+  EXPECT_EQ(MMIXALBareMetalProfile::MemoryStackStart,
+            MMIXALBareMetalProfile::DataEnd);
+  EXPECT_EQ(MMIXALBareMetalProfile::MemoryStackEnd,
+            UINT64_C(0x2000000004000000));
+
+  EXPECT_LT(MMIXALBareMetalProfile::TextStart, MMIXALBareMetalProfile::TextEnd);
+  EXPECT_LT(MMIXALBareMetalProfile::RegisterStackStart,
+            MMIXALBareMetalProfile::RegisterStackEnd);
+  EXPECT_LT(MMIXALBareMetalProfile::DataStart, MMIXALBareMetalProfile::DataEnd);
+  EXPECT_LT(MMIXALBareMetalProfile::MemoryStackStart,
+            MMIXALBareMetalProfile::MemoryStackEnd);
+}
+
 TEST(MMIXALLayoutTest, PlacesGroupsBySourceOrderAndAccountsForPadding) {
   MMIXALItemGroups Groups;
   addItem(Groups, makeItem(MMIXALLogicalGroup::Text, 3, 4, 16));

@@ -1,5 +1,9 @@
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
-; RUN:   --output-asm-variant=1 %s -o - | FileCheck %s
+; RUN:   --output-asm-variant=1 %s -o %t
+; RUN: FileCheck %s --implicit-check-not=GREG \
+; RUN:   --implicit-check-not='Main{{[[:space:]]+}}IS' \
+; RUN:   --implicit-check-not=: \
+; RUN:   --implicit-check-not='{{^[[:space:]]*\.}}' < %t
 
 target triple = "mmix-unknown-elf"
 
@@ -55,10 +59,33 @@ entry:
   ret i64 %result
 }
 
+; These 24 ordered allocations establish rG = 231. The memory stack starts at
+; its exclusive upper bound, while every other LLVM global register starts at
+; zero.
 ; CHECK:      __LLVM_G_SP GREG #2000000004000000
 ; CHECK-NEXT: __LLVM_G_FP GREG 0
 ; CHECK-NEXT: __LLVM_G_R252 GREG 0
-; CHECK:      __LLVM_G_R231 GREG 0
+; CHECK-NEXT: __LLVM_G_R251 GREG 0
+; CHECK-NEXT: __LLVM_G_R250 GREG 0
+; CHECK-NEXT: __LLVM_G_R249 GREG 0
+; CHECK-NEXT: __LLVM_G_R248 GREG 0
+; CHECK-NEXT: __LLVM_G_R247 GREG 0
+; CHECK-NEXT: __LLVM_G_R246 GREG 0
+; CHECK-NEXT: __LLVM_G_R245 GREG 0
+; CHECK-NEXT: __LLVM_G_R244 GREG 0
+; CHECK-NEXT: __LLVM_G_R243 GREG 0
+; CHECK-NEXT: __LLVM_G_R242 GREG 0
+; CHECK-NEXT: __LLVM_G_R241 GREG 0
+; CHECK-NEXT: __LLVM_G_R240 GREG 0
+; CHECK-NEXT: __LLVM_G_R239 GREG 0
+; CHECK-NEXT: __LLVM_G_R238 GREG 0
+; CHECK-NEXT: __LLVM_G_R237 GREG 0
+; CHECK-NEXT: __LLVM_G_R236 GREG 0
+; CHECK-NEXT: __LLVM_G_R235 GREG 0
+; CHECK-NEXT: __LLVM_G_R234 GREG 0
+; CHECK-NEXT: __LLVM_G_R233 GREG 0
+; CHECK-NEXT: __LLVM_G_R232 GREG 0
+; CHECK-NEXT: __LLVM_G_R231 GREG 0
 
 ; Address-taken source blocks retain semantic aliases independent of layout
 ; and machine-basic-block numbering.
@@ -91,6 +118,9 @@ entry:
 ; CHECK-NEXT: PUT rA, 0
 ; CHECK-NEXT: PUT rL, 0
 ; CHECK-NEXT: GET $30, rJ
+; $255 arrives from the MMO loader carrying the entry address. It is neither
+; consumed as an LLVM argument nor preserved: CodeGen defines it before its
+; first use as an expansion register.
 ; CHECK-NEXT: SETL $255, 512
 ; CHECK-NEXT: SUBU $254, $254, $255
 ; CHECK-NEXT: SETL [[FRAME_OFFSET:\$[0-9]+]], 504
