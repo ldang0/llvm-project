@@ -1,6 +1,8 @@
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
 ; RUN:   -verify-machineinstrs --output-asm-variant=1 %s -o - \
-; RUN:   | FileCheck %s
+; RUN:   | FileCheck %s --implicit-check-not=: \
+; RUN:     --implicit-check-not='{{^[[:space:]]*\.}}' \
+; RUN:     --implicit-check-not=llvm.mmix
 
 target triple = "mmix-unknown-elf"
 

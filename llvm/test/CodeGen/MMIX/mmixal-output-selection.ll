@@ -1,7 +1,7 @@
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   --output-asm-variant=1 %s -o %t.s
-; RUN: FileCheck %s --check-prefix=OUTPUT --implicit-check-not=.globl \
-; RUN:   --implicit-check-not=.type --implicit-check-not=.size < %t.s
+; RUN: FileCheck %s --check-prefix=OUTPUT --implicit-check-not=: \
+; RUN:   --implicit-check-not='{{^[[:space:]]*\.}}' < %t.s
 ; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
 ; RUN:   --output-asm-variant=1 %s -o %t.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=OBJECT

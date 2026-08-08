@@ -1,5 +1,6 @@
 # RUN: llvm-mc -triple=mmix -filetype=asm --output-asm-variant=1 %s \
-# RUN:   -o - | FileCheck %s --check-prefix=SOURCE
+# RUN:   -o - | FileCheck %s --check-prefix=SOURCE --implicit-check-not=: \
+# RUN:     --implicit-check-not='{{^[[:space:]]*\.}}'
 # RUN: not llvm-mc -triple=mmix -filetype=obj --output-asm-variant=1 %s \
 # RUN:   -o %t.o 2>&1 | FileCheck %s --check-prefix=OBJECT
 # RUN: test ! -s %t.o
