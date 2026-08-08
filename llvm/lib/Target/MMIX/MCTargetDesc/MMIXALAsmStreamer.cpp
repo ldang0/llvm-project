@@ -325,7 +325,7 @@ void MMIXALAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
   BufferedItem Item{LogicalGroup::ZeroStorage, nullptr, NextItemOrder++};
   Item.EventIndices.push_back(EventIndex);
   Item.OwningSymbols.push_back(Symbol);
-  Item.RequiredAlignment = ByteAlignment;
+  Item.RequiredAlignment = ByteAlignment.value();
   Item.KnownSize = Size;
   Item.HasPayload = true;
   ItemGroups[getGroupIndex(Item.Group)].push_back(std::move(Item));
@@ -367,7 +367,7 @@ void MMIXALAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
     observeSymbol(*Symbol);
     Item.OwningSymbols.push_back(Symbol);
   }
-  Item.RequiredAlignment = ByteAlignment;
+  Item.RequiredAlignment = ByteAlignment.value();
   Item.KnownSize = Size;
   Item.HasPayload = true;
   ItemGroups[getGroupIndex(Item.Group)].push_back(std::move(Item));
@@ -473,9 +473,9 @@ void MMIXALAsmStreamer::emitValueToAlignment(Align Alignment, int64_t Fill,
   appendEventToCurrentItem(std::move(Event), 0, false);
   if (CurrentItem) {
     CurrentItem->Alignments.push_back(
-        {Alignment, Fill, FillLength, MaxBytesToEmit, false});
-    if (CurrentItem->RequiredAlignment < Alignment)
-      CurrentItem->RequiredAlignment = Alignment;
+        {Alignment.value(), Fill, FillLength, MaxBytesToEmit, false});
+    if (CurrentItem->RequiredAlignment < Alignment.value())
+      CurrentItem->RequiredAlignment = Alignment.value();
   }
 }
 
@@ -496,9 +496,10 @@ void MMIXALAsmStreamer::emitCodeAlignment(Align Alignment,
         "MMIXAL code alignment is not in executable text");
   appendEventToCurrentItem(std::move(Event), 0, false);
   if (CurrentItem) {
-    CurrentItem->Alignments.push_back({Alignment, 0, 1, MaxBytesToEmit, true});
-    if (CurrentItem->RequiredAlignment < Alignment)
-      CurrentItem->RequiredAlignment = Alignment;
+    CurrentItem->Alignments.push_back(
+        {Alignment.value(), 0, 1, MaxBytesToEmit, true});
+    if (CurrentItem->RequiredAlignment < Alignment.value())
+      CurrentItem->RequiredAlignment = Alignment.value();
   }
 }
 
@@ -637,6 +638,11 @@ void MMIXALAsmStreamer::finishImpl() {
       getContext().reportError(SMLoc(), toString(std::move(Err)));
       return;
     }
+  Expected<MMIXALLayoutPlan> Layout = planMMIXALBareMetalLayout(ItemGroups);
+  if (!Layout) {
+    getContext().reportError(SMLoc(), toString(Layout.takeError()));
+    return;
+  }
   if (!Events.empty()) {
     getContext().reportError(
         SMLoc(), "MMIXAL buffered module emission is not implemented");

@@ -410,7 +410,7 @@ TEST_F(MMIXALAsmStreamerTest, ClassifiesAllocatedItemsIntoLogicalGroups) {
   EXPECT_EQ(TextItem.SourceOrder, 0u);
   EXPECT_EQ(TextItem.OwningSymbols, ArrayRef<const MCSymbol *>({TextOwner}));
   ASSERT_EQ(TextItem.Alignments.size(), 1u);
-  EXPECT_EQ(TextItem.Alignments.front().Alignment, Align(16));
+  EXPECT_EQ(TextItem.Alignments.front().Alignment, 16u);
   EXPECT_EQ(TextItem.Alignments.front().MaxBytesToEmit, 12u);
   EXPECT_TRUE(TextItem.Alignments.front().IsCodeAlignment);
   EXPECT_EQ(TextItem.KnownSize, 4u);
@@ -428,7 +428,7 @@ TEST_F(MMIXALAsmStreamerTest, ClassifiesAllocatedItemsIntoLogicalGroups) {
   EXPECT_EQ(ConstantPoolItem.SourceOrder, 2u);
   EXPECT_EQ(ConstantPoolItem.KnownSize, 8u);
   ASSERT_EQ(ConstantPoolItem.Alignments.size(), 1u);
-  EXPECT_EQ(ConstantPoolItem.Alignments.front().Alignment, Align(8));
+  EXPECT_EQ(ConstantPoolItem.Alignments.front().Alignment, 8u);
   EXPECT_EQ(ConstantPoolItem.Alignments.front().MaxBytesToEmit, 7u);
 
   const auto &JumpTableItem =
@@ -551,6 +551,31 @@ TEST_F(MMIXALAsmStreamerTest, RejectsInitializedContentInZeroStorage) {
 
   EXPECT_TRUE(Context.hadError());
   EXPECT_EQ(Diagnostic, "MMIXAL zero-storage section contains a nonzero fill");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, ReportsLayoutFailureBeforeEmission) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+
+  MCInst Inst;
+  Inst.setOpcode(MMIX::ADD);
+  Streamer->emitInstruction(Inst, *STI);
+  Streamer->emitCodeAlignment(Align(8), *STI, 3);
+  Streamer->emitInstruction(Inst, *STI);
+
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL layout item at source order 1: alignment requires 4 "
+            "bytes of padding, exceeding the maximum of 3");
   EXPECT_TRUE(Output.empty());
 }
 

@@ -9,13 +9,13 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALASMSTREAMER_H
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALASMSTREAMER_H
 
+#include "MMIXALLayout.h"
 #include "MMIXALSymbolTable.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -33,36 +33,9 @@ class Twine;
 
 class MMIXALAsmStreamer final : public MCStreamer {
 public:
-  enum class LogicalGroup : uint8_t {
-    Text,
-    ReadOnly,
-    ConstantPool,
-    JumpTable,
-    WritableData,
-    ZeroStorage,
-  };
-
-  struct AlignmentRequest {
-    Align Alignment{1};
-    int64_t Fill = 0;
-    uint8_t FillLength = 1;
-    unsigned MaxBytesToEmit = 0;
-    bool IsCodeAlignment = false;
-  };
-
-  struct BufferedItem {
-    LogicalGroup Group;
-    const MCSection *Section = nullptr;
-    uint64_t SourceOrder = 0;
-    SmallVector<size_t, 4> EventIndices;
-    SmallVector<const MCSymbol *, 2> OwningSymbols;
-    SmallVector<const MCSymbol *, 2> Dependencies;
-    SmallVector<AlignmentRequest, 1> Alignments;
-    Align RequiredAlignment{1};
-    uint64_t KnownSize = 0;
-    bool SizeIsKnown = true;
-    bool HasPayload = false;
-  };
+  using LogicalGroup = MMIXALLogicalGroup;
+  using AlignmentRequest = MMIXALAlignmentRequest;
+  using BufferedItem = MMIXALBufferedItem;
 
 private:
   enum class EventKind {
@@ -102,7 +75,7 @@ private:
   std::unique_ptr<formatted_raw_ostream> Output;
   std::unique_ptr<MCInstPrinter> InstPrinter;
   SmallVector<BufferedEvent, 0> Events;
-  std::array<SmallVector<BufferedItem, 0>, 6> ItemGroups;
+  MMIXALItemGroups ItemGroups;
   std::optional<BufferedItem> CurrentItem;
   SmallVector<const MCSymbol *, 2> *DependencySink = nullptr;
   std::string ClassificationError;
