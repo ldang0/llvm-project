@@ -740,7 +740,100 @@ TEST_F(MMIXALAsmStreamerTest, EmitsInitializedAndZeroStorageZerosExplicitly) {
                     "\tOCTA 0, 0, 0\n");
 }
 
-TEST_F(MMIXALAsmStreamerTest, RejectsSymbolicDataWithoutPartialOutput) {
+TEST_F(MMIXALAsmStreamerTest,
+       EmitsConstantPoolsJumpTablesAndBlockAddressObjects) {
+  using Group = MMIXALAsmStreamer::LogicalGroup;
+  using Kind = MMIXALSymbolTable::PrivateSymbolKind;
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *BlockAddress = Context.getOrCreateSymbol("canonical_block_address");
+  MCSymbol *BasicBlock = Context.getOrCreateSymbol("canonical_basic_block");
+  MCSymbol *ConstantPool = Context.getOrCreateSymbol("canonical_cpi");
+  MCSymbol *ConstantAlias = Context.getOrCreateSymbol("canonical_cpi_alias");
+  MCSymbol *JumpTable = Context.getOrCreateSymbol("canonical_jti");
+  MCSymbol *BlockAddressObject =
+      Context.getOrCreateSymbol("canonical_block_address_object");
+  MCSymbol *Ordinary = Context.getOrCreateSymbol("canonical_ordinary");
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*BlockAddress, "f",
+                                                        Kind::BlockAddress, 0));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*BasicBlock, "f",
+                                                        Kind::BasicBlock, 0));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*ConstantPool, "f",
+                                                        Kind::ConstantPool, 0));
+  expectSuccess(
+      Streamer->registerUserSymbol(*ConstantAlias, "shared_constant"));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*JumpTable, "f",
+                                                        Kind::JumpTable, 0));
+  expectSuccess(Streamer->registerUserSymbol(*BlockAddressObject,
+                                             "block_address_object"));
+  expectSuccess(Streamer->registerUserSymbol(*Ordinary, "ordinary"));
+
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  MCInst Add;
+  Add.setOpcode(MMIX::ADD);
+  Add.addOperand(MCOperand::createReg(MMIX::R1));
+  Add.addOperand(MCOperand::createReg(MMIX::R2));
+  Add.addOperand(MCOperand::createReg(MMIX::R3));
+  Streamer->emitLabel(BlockAddress);
+  Streamer->emitInstruction(Add, *STI);
+  Streamer->emitLabel(BasicBlock);
+  Streamer->emitInstruction(Add, *STI);
+
+  MCSectionELF *ReadOnly =
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+  Streamer->switchSection(ReadOnly);
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(Ordinary);
+  Streamer->emitValue(MCConstantExpr::create(0x0102030405060708, Context), 8);
+
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(ConstantAlias);
+  Streamer->emitLabel(ConstantPool);
+  Streamer->emitValue(MCConstantExpr::create(0x400921fb54442d18, Context), 8);
+
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(JumpTable);
+  Streamer->emitValue(MCSymbolRefExpr::create(BlockAddress, Context), 8);
+  Streamer->emitValue(MCSymbolRefExpr::create(BasicBlock, Context), 8);
+
+  Streamer->emitValueToAlignment(Align(8));
+  Streamer->emitLabel(BlockAddressObject);
+  Streamer->emitValue(MCSymbolRefExpr::create(BlockAddress, Context), 8);
+
+  EXPECT_EQ(Streamer->getBufferedItems(Group::Text).size(), 2u);
+  EXPECT_EQ(Streamer->getBufferedItems(Group::ReadOnly).size(), 1u);
+  EXPECT_EQ(Streamer->getBufferedItems(Group::ConstantPool).size(), 1u);
+  EXPECT_EQ(Streamer->getBufferedItems(Group::JumpTable).size(), 2u);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
+                    "__LLVM_L_F_66_BA_0\tIS @\n"
+                    "\tADD $1, $2, $3\n"
+                    "\tLOC #0000000000000104\n"
+                    "__LLVM_L_F_66_BB_0\tIS @\n"
+                    "\tADD $1, $2, $3\n"
+                    "\tLOC #2000000000000000\n"
+                    "ordinary\tIS @\n"
+                    "\tOCTA #0102030405060708\n"
+                    "\tLOC #2000000000000008\n"
+                    "shared_constant\tIS @\n"
+                    "__LLVM_L_F_66_CP_0\tIS @\n"
+                    "\tOCTA #400921FB54442D18\n"
+                    "\tLOC #2000000000000010\n"
+                    "__LLVM_L_F_66_JT_0\tIS @\n"
+                    "\tOCTA __LLVM_L_F_66_BA_0\n"
+                    "\tOCTA __LLVM_L_F_66_BB_0\n"
+                    "\tLOC #2000000000000020\n"
+                    "block_address_object\tIS @\n"
+                    "\tOCTA __LLVM_L_F_66_BA_0\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsUndefinedOCTATargetWithoutPartialOutput) {
   MCContext Context(TT, MAI, *MRI, *STI);
   std::string Diagnostic;
   captureDiagnostic(Context, Diagnostic);
@@ -760,7 +853,8 @@ TEST_F(MMIXALAsmStreamerTest, RejectsSymbolicDataWithoutPartialOutput) {
 
   EXPECT_TRUE(Context.hadError());
   EXPECT_EQ(Diagnostic,
-            "MMIXAL symbolic data value emission is not implemented");
+            "MMIXAL OCTA target 'canonical_target' has no allocated "
+            "definition");
   EXPECT_TRUE(Output.empty());
 }
 

@@ -102,6 +102,8 @@ private:
                                 std::optional<uint64_t> Size,
                                 bool IsPayload = true);
   void updateCurrentItemGroupForSymbol(const MCSymbol &Symbol);
+  void updateCurrentItemGroupForDependencies(
+      ArrayRef<const MCSymbol *> Dependencies);
   void observeSymbol(const MCSymbol &Symbol);
   Error renderModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
 

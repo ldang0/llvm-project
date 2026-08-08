@@ -387,6 +387,7 @@ void MMIXALAsmStreamer::appendEventToCurrentItem(BufferedEvent Event,
     return;
 
   const BufferedEvent &StoredEvent = Events.back();
+  updateCurrentItemGroupForDependencies(StoredEvent.Dependencies);
   Item->EventIndices.push_back(EventIndex);
   for (const MCSymbol *Dependency : StoredEvent.Dependencies)
     if (!llvm::is_contained(Item->Dependencies, Dependency))
@@ -439,6 +440,28 @@ void MMIXALAsmStreamer::updateCurrentItemGroupForSymbol(
     return;
   }
   Item->Group = *RequiredGroup;
+}
+
+void MMIXALAsmStreamer::updateCurrentItemGroupForDependencies(
+    ArrayRef<const MCSymbol *> Dependencies) {
+  if (!CurrentItem || CurrentItem->Group == LogicalGroup::Text ||
+      CurrentItem->Group == LogicalGroup::ConstantPool ||
+      CurrentItem->Group == LogicalGroup::JumpTable)
+    return;
+
+  for (const MCSymbol *Dependency : Dependencies) {
+    std::optional<MMIXALSymbolTable::PrivateSymbolKind> Kind =
+        Symbols.getPrivateSymbolKind(*Dependency);
+    if (Kind != MMIXALSymbolTable::PrivateSymbolKind::BlockAddress)
+      continue;
+    if (CurrentItem->Group == LogicalGroup::ZeroStorage) {
+      recordClassificationError(
+          "MMIXAL zero-storage item references a block address");
+      return;
+    }
+    CurrentItem->Group = LogicalGroup::JumpTable;
+    return;
+  }
 }
 
 void MMIXALAsmStreamer::reset() {
@@ -1040,14 +1063,34 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
           return createStringError(
               "MMIXAL data value width must be 1, 2, 4, or 8 bytes");
         int64_t SignedValue;
-        if (!Event.Expression->evaluateAsAbsolute(SignedValue))
-          return createStringError(
-              "MMIXAL symbolic data value emission is not implemented");
-        const uint64_t Value = static_cast<uint64_t>(SignedValue);
-        if (Address % Event.ValueSize == 0)
-          emitRepeatedScalar(OS, Event.ValueSize, Value, 1);
-        else
-          emitBigEndianBytes(OS, Value, Event.ValueSize);
+        if (Event.Expression->evaluateAsAbsolute(SignedValue)) {
+          const uint64_t Value = static_cast<uint64_t>(SignedValue);
+          if (Address % Event.ValueSize == 0)
+            emitRepeatedScalar(OS, Event.ValueSize, Value, 1);
+          else
+            emitBigEndianBytes(OS, Value, Event.ValueSize);
+        } else {
+          if (Event.ValueSize != 8)
+            return createStringError(
+                "MMIXAL symbolic data value must use OCTA");
+          const MCSymbol *Target = getBareSymbol(*Event.Expression);
+          if (!Target)
+            return createStringError(
+                "MMIXAL OCTA value requires a bare symbol");
+          Expected<StringRef> Name = Symbols.getMappedSymbol(*Target);
+          if (!Name)
+            return Name.takeError();
+          std::optional<uint64_t> TargetAddress =
+              Layout.getSymbolAddress(*Target);
+          const auto TargetAlias = AliasAddresses.find(Target);
+          if (!TargetAddress && TargetAlias != AliasAddresses.end())
+            TargetAddress = TargetAlias->second;
+          if (!TargetAddress)
+            return createStringError(Twine("MMIXAL OCTA target '") +
+                                     Target->getName() +
+                                     "' has no allocated definition");
+          OS << "\tOCTA " << *Name << '\n';
+        }
         if (Error Err =
                 advanceDataAddress(Address, Event.ValueSize, Placed.End))
           return Err;
