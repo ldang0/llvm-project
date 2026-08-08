@@ -1,4 +1,4 @@
-; RUN: not --crash llc -mtriple=mmix -stop-after=mmix-isel \
+; RUN: not llc -mtriple=mmix -stop-after=mmix-isel \
 ; RUN:   -o /dev/null %s 2>&1 | FileCheck %s
 
 ; CHECK: MMIX does not support variadic calls

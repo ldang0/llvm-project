@@ -60,13 +60,20 @@ static void validateFrame(const MachineFunction &MF,
                           const MMIXFrameLowering &TFI) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   if (MFI.hasVarSizedObjects())
-    report_fatal_error("MMIX does not support dynamic stack allocation");
+    reportFatalUsageError(
+        Twine("MMIX does not support dynamic stack allocation ") +
+        "in function '" + MF.getName() + "'");
   if (MFI.getMaxAlign() > TFI.getStackAlign())
-    report_fatal_error("MMIX does not support stack realignment");
+    reportFatalUsageError(Twine("MMIX does not support stack realignment in ") +
+                          "function '" + MF.getName() + "'");
   if (MF.shouldSplitStack())
-    report_fatal_error("MMIX does not support split stacks");
+    reportFatalUsageError(
+        Twine("MMIX does not support split stacks in function '") +
+        MF.getName() + "'");
   if (MF.getFunction().hasFnAttribute("probe-stack"))
-    report_fatal_error("MMIX does not support stack probing");
+    reportFatalUsageError(
+        Twine("MMIX does not support stack probing in function '") +
+        MF.getName() + "'");
 }
 
 void MMIXFrameLowering::emitPrologue(MachineFunction &MF,

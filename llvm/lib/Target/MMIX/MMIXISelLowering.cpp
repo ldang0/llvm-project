@@ -18,6 +18,8 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicsMMIX.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -58,6 +60,20 @@ static bool isMMIXInlineAsmImmediate(char Constraint, int64_t Value) {
     return Value == 0;
   case 'O':
     return Value == 3 || Value == 5 || Value == 9 || Value == 17;
+  default:
+    return false;
+  }
+}
+
+static bool isMMIXNonlocalControlIntrinsic(Intrinsic::ID ID) {
+  switch (ID) {
+  case Intrinsic::eh_sjlj_lsda:
+  case Intrinsic::eh_sjlj_callsite:
+  case Intrinsic::eh_sjlj_functioncontext:
+  case Intrinsic::eh_sjlj_setjmp:
+  case Intrinsic::eh_sjlj_longjmp:
+  case Intrinsic::eh_sjlj_setup_dispatch:
+    return true;
   default:
     return false;
   }
@@ -760,8 +776,15 @@ SDValue MMIXTargetLowering::PerformDAGCombine(SDNode *N,
 
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
+  const Function &F = DAG.getMachineFunction().getFunction();
   if (Op.getOpcode() == ISD::DYNAMIC_STACKALLOC)
-    report_fatal_error("MMIX does not support dynamic stack allocation");
+    reportFatalUsageError(
+        Twine("MMIX does not support dynamic stack allocation ") +
+        "in function '" + F.getName() + "'");
+  if (Op.getOpcode() == ISD::STACKSAVE || Op.getOpcode() == ISD::STACKRESTORE)
+    reportFatalUsageError(
+        Twine("MMIX does not support nonlocal stack state in ") + "function '" +
+        F.getName() + "'");
   if (Op.getOpcode() == ISD::ADDRSPACECAST)
     report_fatal_error("MMIX does not support nonzero address spaces");
   if (Op.getOpcode() == ISD::GlobalTLSAddress)
@@ -815,6 +838,10 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   if (Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
       Op.getOpcode() == ISD::INTRINSIC_VOID) {
     unsigned IntrinsicID = Op.getConstantOperandVal(1);
+    if (isMMIXNonlocalControlIntrinsic(static_cast<Intrinsic::ID>(IntrinsicID)))
+      reportFatalUsageError(
+          Twine("MMIX does not support nonlocal control transfer in ") +
+          "function '" + F.getName() + "'");
     switch (IntrinsicID) {
     case Intrinsic::mmix_get:
     case Intrinsic::mmix_put:
@@ -1039,31 +1066,45 @@ static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
 
 SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                       SmallVectorImpl<SDValue> &InVals) const {
+  MachineFunction &MF = CLI.DAG.getMachineFunction();
+  if (CLI.CB && CLI.CB->isMustTailCall())
+    reportFatalUsageError(
+        Twine("MMIX does not support required tail calls in ") + "function '" +
+        MF.getName() + "'");
   if (CLI.CallConv != CallingConv::C)
-    report_fatal_error("MMIX supports only the C calling convention");
+    reportFatalUsageError(
+        Twine("MMIX supports only the C calling convention in ") +
+        "function '" + MF.getName() + "'");
   if (CLI.IsVarArg)
-    report_fatal_error("MMIX does not support variadic calls");
+    reportFatalUsageError(Twine("MMIX does not support variadic calls in ") +
+                          "function '" + MF.getName() + "'");
   if (CLI.OrigRetTy && CLI.OrigRetTy->isAggregateType())
-    report_fatal_error("MMIX does not support aggregate call results");
+    reportFatalUsageError(
+        Twine("MMIX does not support aggregate call results in ") +
+        "function '" + MF.getName() + "'");
   if (CLI.Outs.size() != CLI.OutVals.size())
     report_fatal_error("MMIX call operand lowering received mismatched values");
 
   for (const ISD::OutputArg &Arg : CLI.Outs) {
     if (!isSupportedCallValueType(Arg.VT) ||
         hasUnsupportedArgumentFlags(Arg.Flags))
-      report_fatal_error("MMIX does not support aggregate or special call "
-                         "arguments");
+      reportFatalUsageError(
+          Twine("MMIX does not support aggregate or special call arguments ") +
+          "in function '" + MF.getName() + "'");
     if (Arg.Flags.isPointer() && Arg.Flags.getPointerAddrSpace() != 0)
       report_fatal_error(
           "MMIX does not support nonzero-address-space call arguments");
   }
   if (CLI.Ins.size() > 1)
-    report_fatal_error("MMIX supports at most one scalar call result");
+    reportFatalUsageError(
+        Twine("MMIX supports at most one scalar call result in ") +
+        "function '" + MF.getName() + "'");
   for (const ISD::InputArg &Result : CLI.Ins) {
     if (!isSupportedCallValueType(Result.VT) ||
         hasUnsupportedArgumentFlags(Result.Flags))
-      report_fatal_error("MMIX does not support aggregate or special call "
-                         "results");
+      reportFatalUsageError("MMIX does not support aggregate or special call "
+                            "results in function '" +
+                            MF.getName() + "'");
     if (Result.Flags.isPointer() && Result.Flags.getPointerAddrSpace() != 0)
       report_fatal_error(
           "MMIX does not support nonzero-address-space call results");
@@ -1071,7 +1112,6 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   CLI.IsTailCall = false;
   SelectionDAG &DAG = CLI.DAG;
-  MachineFunction &MF = DAG.getMachineFunction();
   SDValue Chain = CLI.Chain;
 
   SmallVector<CCValAssign, 16> ArgLocs;
@@ -1196,16 +1236,42 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
-  if (DAG.getMachineFunction().getFunction().hasPersonalityFn())
-    report_fatal_error("MMIX does not support exception handling");
+  const Function &F = DAG.getMachineFunction().getFunction();
+  if (F.isPresplitCoroutine())
+    reportFatalUsageError(
+        Twine("MMIX does not support coroutines in function '") + F.getName() +
+        "'");
+  for (const Instruction &I : instructions(F)) {
+    if (const auto *Call = dyn_cast<CallBase>(&I)) {
+      if (Call->getCallingConv() != CallingConv::C)
+        reportFatalUsageError(
+            Twine("MMIX supports only the C calling convention in function '") +
+            F.getName() + "'");
+      if (const Function *Callee = Call->getCalledFunction();
+          Callee && isMMIXNonlocalControlIntrinsic(Callee->getIntrinsicID()))
+        reportFatalUsageError(
+            Twine("MMIX does not support nonlocal control transfer in ") +
+            "function '" + F.getName() + "'");
+    }
+  }
+  if (F.hasPersonalityFn())
+    reportFatalUsageError(
+        Twine("MMIX does not support exception handling in function '") +
+        F.getName() + "'");
   if (CallConv != CallingConv::C)
-    report_fatal_error("MMIX supports only the C calling convention");
+    reportFatalUsageError(
+        Twine("MMIX supports only the C calling convention in function '") +
+        F.getName() + "'");
   if (IsVarArg)
-    report_fatal_error("MMIX does not support variadic functions");
+    reportFatalUsageError(
+        Twine("MMIX does not support variadic functions in function '") +
+        F.getName() + "'");
   for (const ISD::InputArg &Arg : Ins) {
     if (hasUnsupportedArgumentFlags(Arg.Flags))
-      report_fatal_error(
-          "MMIX does not support aggregate or special formal arguments");
+      reportFatalUsageError(
+          Twine(
+              "MMIX does not support aggregate or special formal arguments ") +
+          "in function '" + F.getName() + "'");
     if (Arg.Flags.isPointer() && Arg.Flags.getPointerAddrSpace() != 0)
       report_fatal_error(
           "MMIX does not support nonzero-address-space formal arguments");
@@ -1284,10 +1350,15 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                 const SmallVectorImpl<ISD::OutputArg> &Outs,
                                 const SmallVectorImpl<SDValue> &OutVals,
                                 const SDLoc &DL, SelectionDAG &DAG) const {
+  const Function &F = DAG.getMachineFunction().getFunction();
   if (CallConv != CallingConv::C)
-    report_fatal_error("MMIX supports only the C calling convention");
+    reportFatalUsageError(
+        Twine("MMIX supports only the C calling convention in function '") +
+        F.getName() + "'");
   if (IsVarArg)
-    report_fatal_error("MMIX does not support variadic functions");
+    reportFatalUsageError(
+        Twine("MMIX does not support variadic functions in function '") +
+        F.getName() + "'");
 
   SmallVector<CCValAssign, 1> RetLocs;
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), RetLocs,
