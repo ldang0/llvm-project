@@ -252,6 +252,54 @@ TEST(MMIXALSymbolMapperTest, SemanticNameClaimPreventsUserPreservation) {
   EXPECT_TRUE(*UniqueBlock);
 }
 
+TEST(MMIXALSymbolMapperTest, PreservesEntryAgainstSemanticNameClaims) {
+  MMIXALSymbolMapper EntryFirst;
+  expectSuccess(EntryFirst.registerEntrySymbol("Main"));
+  expectSuccess(EntryFirst.registerSemanticName("Main"));
+  expectSuccess(EntryFirst.finalize());
+
+  MMIXALSymbolMapper SemanticFirst;
+  expectSuccess(SemanticFirst.registerSemanticName("Main"));
+  expectSuccess(SemanticFirst.registerEntrySymbol("Main"));
+  expectSuccess(SemanticFirst.finalize());
+
+  EXPECT_EQ(lookup(EntryFirst, "Main"), "Main");
+  EXPECT_EQ(lookup(EntryFirst, "Main"), lookup(SemanticFirst, "Main"));
+  Expected<bool> PreserveBlock = EntryFirst.canPreserveName("Main");
+  ASSERT_TRUE(static_cast<bool>(PreserveBlock));
+  EXPECT_FALSE(*PreserveBlock);
+}
+
+TEST(MMIXALSymbolMapperTest, EnforcesDistinguishedEntryIdentity) {
+  MMIXALSymbolMapper WrongIdentity;
+  Error Wrong = WrongIdentity.registerEntrySymbol("entry");
+  ASSERT_TRUE(static_cast<bool>(Wrong));
+  EXPECT_EQ(toString(std::move(Wrong)),
+            "MMIXAL distinguished entry must have source identity 'Main'");
+
+  MMIXALSymbolMapper Duplicate;
+  expectSuccess(Duplicate.registerEntrySymbol("Main"));
+  Error Repeated = Duplicate.registerEntrySymbol("Main");
+  ASSERT_TRUE(static_cast<bool>(Repeated));
+  EXPECT_EQ(toString(std::move(Repeated)),
+            "duplicate MMIXAL distinguished entry registration");
+
+  MMIXALSymbolMapper Conflict;
+  expectSuccess(Conflict.registerUserSymbol("Main"));
+  Error ConflictingEntry = Conflict.registerEntrySymbol("Main");
+  ASSERT_TRUE(static_cast<bool>(ConflictingEntry));
+  EXPECT_EQ(toString(std::move(ConflictingEntry)),
+            "MMIXAL distinguished entry conflicts with registered user "
+            "symbol: __LLVM_U_4_4D61696E");
+
+  MMIXALSymbolMapper Finalized;
+  expectSuccess(Finalized.finalize());
+  Error Late = Finalized.registerEntrySymbol("Main");
+  ASSERT_TRUE(static_cast<bool>(Late));
+  EXPECT_EQ(toString(std::move(Late)),
+            "cannot register the MMIXAL entry symbol after finalization");
+}
+
 TEST(MMIXALSymbolMapperTest, SemanticClaimsAreRegistrationOrderIndependent) {
   MMIXALSymbolMapper UserFirst;
   expectSuccess(UserFirst.registerUserSymbol("shared"));

@@ -22,10 +22,12 @@ class MMIXALSymbolMapper {
   StringSet<> RegisteredUserSymbols;
   StringMap<unsigned> NameClaims;
   StringMap<std::string> MappedUserSymbols;
+  bool HasEntrySymbol = false;
   bool Finalized = false;
 
 public:
   Error registerUserSymbol(StringRef Name);
+  Error registerEntrySymbol(StringRef Name);
   Error registerSemanticName(StringRef Name);
   Error finalize();
   Expected<StringRef> getMappedUserSymbol(StringRef Name) const;

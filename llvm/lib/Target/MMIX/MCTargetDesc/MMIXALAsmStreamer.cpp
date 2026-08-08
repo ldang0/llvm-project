@@ -935,6 +935,11 @@ Error MMIXALAsmStreamer::registerUserSymbol(const MCSymbol &Symbol,
   return Symbols.registerUserSymbol(Symbol, RawName);
 }
 
+Error MMIXALAsmStreamer::registerEntrySymbol(const MCSymbol &Symbol,
+                                             StringRef RawName) {
+  return Symbols.registerEntrySymbol(Symbol, RawName);
+}
+
 Error MMIXALAsmStreamer::registerSourceBlock(const MCSymbol &AddressSymbol,
                                              StringRef FunctionName,
                                              StringRef BlockName) {

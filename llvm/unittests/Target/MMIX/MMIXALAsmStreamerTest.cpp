@@ -356,6 +356,39 @@ TEST_F(MMIXALAsmStreamerTest, ResolvesUserAndSourceBlockNameClaimsTogether) {
   Streamer->finish();
 }
 
+TEST_F(MMIXALAsmStreamerTest, PreservesDistinguishedEntryAndMapsItsReferences) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Entry = Context.getOrCreateSymbol("canonical_main");
+  MCSymbol *Alias = Context.getOrCreateSymbol("canonical_entry_alias");
+  expectSuccess(Streamer->registerEntrySymbol(*Entry, "Main"));
+  expectSuccess(Streamer->registerUserSymbol(*Alias, "entry_alias"));
+  expectSuccess(Streamer->registerSourceBlock(*Entry, "Main", "Main"));
+
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Entry);
+  Streamer->emitAssignment(Alias, MCSymbolRefExpr::create(Entry, Context));
+  MCInst Jump;
+  Jump.setOpcode(MMIX::JMP);
+  Jump.addOperand(
+      MCOperand::createExpr(MCSymbolRefExpr::create(Entry, Context)));
+  Streamer->emitInstruction(Jump, *STI);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(lookup(*Streamer, *Entry), "Main");
+  EXPECT_EQ(lookup(*Streamer, *Alias), "entry_alias");
+  EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
+                    "Main\tIS @\n"
+                    "__LLVM_B_F_4D61696E_B_4D61696E\tIS @\n"
+                    "entry_alias\tIS @\n"
+                    "\tJMP Main\n");
+}
+
 TEST_F(MMIXALAsmStreamerTest, DiagnosesPrivateMappingCollision) {
   using Kind = MMIXALSymbolTable::PrivateSymbolKind;
   MCContext Context(TT, MAI, *MRI, *STI);

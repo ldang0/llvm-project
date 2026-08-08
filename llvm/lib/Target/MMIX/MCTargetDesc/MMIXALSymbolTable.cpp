@@ -63,6 +63,19 @@ Error MMIXALSymbolTable::registerUserSymbol(const MCSymbol &Symbol,
   return Error::success();
 }
 
+Error MMIXALSymbolTable::registerEntrySymbol(const MCSymbol &Symbol,
+                                             StringRef RawName) {
+  if (Error Err = checkCanRegister(Symbol))
+    return Err;
+  if (Error Err = UserMapper.registerEntrySymbol(RawName))
+    return Err;
+
+  SymbolIndices.try_emplace(&Symbol, RegisteredSymbols.size());
+  RegisteredSymbols.push_back({&Symbol, SymbolClass::User, RawName.str(),
+                               PrivateSymbolKind::Temporary, 0});
+  return Error::success();
+}
+
 Error MMIXALSymbolTable::registerSourceBlock(const MCSymbol &AddressSymbol,
                                              StringRef FunctionName,
                                              StringRef BlockName) {

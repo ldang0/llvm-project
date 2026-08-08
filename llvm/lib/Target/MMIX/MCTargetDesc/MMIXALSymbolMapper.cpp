@@ -135,6 +135,29 @@ Error MMIXALSymbolMapper::registerUserSymbol(StringRef Name) {
   return Error::success();
 }
 
+Error MMIXALSymbolMapper::registerEntrySymbol(StringRef Name) {
+  if (Finalized)
+    return createStringError(
+        std::errc::invalid_argument,
+        "cannot register the MMIXAL entry symbol after finalization");
+  if (Name != "Main")
+    return createStringError(
+        "MMIXAL distinguished entry must have source identity 'Main'");
+  if (HasEntrySymbol)
+    return createStringError(
+        "duplicate MMIXAL distinguished entry registration");
+  if (RegisteredUserSymbols.contains(Name))
+    return createStringError(
+        Twine("MMIXAL distinguished entry conflicts with registered user "
+              "symbol: ") +
+        getEscapedUserSymbol(Name));
+
+  RegisteredUserSymbols.insert(Name);
+  ++NameClaims[Name];
+  HasEntrySymbol = true;
+  return Error::success();
+}
+
 Error MMIXALSymbolMapper::registerSemanticName(StringRef Name) {
   if (Finalized)
     return createStringError(
@@ -155,10 +178,12 @@ Error MMIXALSymbolMapper::finalize() {
   for (const auto &Entry : RegisteredUserSymbols) {
     const StringRef Source = Entry.getKey();
     const auto Claim = NameClaims.find(Source);
-    const bool Preserve = isValidOrdinarySymbol(Source) &&
-                          !Source.starts_with("__LLVM_") &&
-                          !isPredefinedSymbol(Source) &&
-                          Claim != NameClaims.end() && Claim->second == 1;
+    const bool IsEntry = HasEntrySymbol && Source == "Main";
+    const bool Preserve =
+        IsEntry ||
+        (isValidOrdinarySymbol(Source) && !Source.starts_with("__LLVM_") &&
+         !isPredefinedSymbol(Source) && Claim != NameClaims.end() &&
+         Claim->second == 1);
     std::string Mapped = Preserve ? Source.str() : getEscapedUserSymbol(Source);
 
     auto [It, Inserted] = SourcesByMappedName.try_emplace(Mapped, Source.str());

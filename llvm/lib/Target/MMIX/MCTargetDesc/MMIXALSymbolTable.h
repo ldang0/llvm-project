@@ -68,6 +68,7 @@ public:
   void reset();
 
   Error registerUserSymbol(const MCSymbol &Symbol, StringRef RawName);
+  Error registerEntrySymbol(const MCSymbol &Symbol, StringRef RawName);
   Error registerSourceBlock(const MCSymbol &AddressSymbol,
                             StringRef FunctionName, StringRef BlockName);
   Error registerFunctionPrivateSymbol(const MCSymbol &Symbol,
