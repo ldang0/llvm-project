@@ -14,4 +14,4 @@ loop:
   br label %loop
 }
 
-; CHECK: error: MMIXAL does not support common-symbol allocation events
+; CHECK: LLVM ERROR: MMIXAL output variant 1 does not support linkage 'common' for symbol 'common_data'

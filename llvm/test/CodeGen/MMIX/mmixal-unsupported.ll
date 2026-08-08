@@ -17,6 +17,43 @@
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
 ; RUN:   --output-asm-variant=1 %t/resolved-helper.ll -o - \
 ; RUN:   | FileCheck %s --check-prefix=RESOLVED-HELPER
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/weak-linkage.ll \
+; RUN:   -o %t/weak-linkage.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=WEAK-LINKAGE
+; RUN: test ! -s %t/weak-linkage.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/comdat.ll -o %t/comdat.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=COMDAT
+; RUN: test ! -s %t/comdat.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/ifunc.ll -o %t/ifunc.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=IFUNC
+; RUN: test ! -s %t/ifunc.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/hidden.ll -o %t/hidden.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=HIDDEN
+; RUN: test ! -s %t/hidden.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/partition.ll -o %t/partition.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=PARTITION
+; RUN: test ! -s %t/partition.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/global-ctors.ll \
+; RUN:   -o %t/global-ctors.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=GLOBAL-CTORS
+; RUN: test ! -s %t/global-ctors.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/init-array.ll -o %t/init-array.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=INIT-ARRAY
+; RUN: test ! -s %t/init-array.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/symvers.ll -o %t/symvers.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=SYMVERS
+; RUN: test ! -s %t/symvers.mms
+; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   %t/canonical-linkage.ll -o - \
+; RUN:   | FileCheck %s --check-prefix=CANONICAL
 
 ; EXTERNAL-FUNCTION: LLVM ERROR: MMIXAL output variant 1 cannot resolve referenced symbol 'external_function'
 ; EXTERNAL-FUNCTION-NOT: __LLVM_
@@ -27,6 +64,16 @@
 ; RESOLVED-HELPER: memcpy IS @
 ; RESOLVED-HELPER: SETH ${{[0-9]+}}, memcpy>>48&65535
 ; RESOLVED-HELPER: PUSHGO $31, ${{[0-9]+}}, 0
+; WEAK-LINKAGE: LLVM ERROR: MMIXAL output variant 1 does not support linkage 'weak' for symbol 'selected'
+; COMDAT: LLVM ERROR: MMIXAL output variant 1 does not support COMDAT membership for symbol 'selected'
+; IFUNC: LLVM ERROR: MMIXAL output variant 1 does not support GlobalIFunc 'selected'
+; HIDDEN: LLVM ERROR: MMIXAL output variant 1 does not support hidden visibility for symbol 'selected'
+; PARTITION: LLVM ERROR: MMIXAL output variant 1 does not support partition 'partition_name' for symbol 'selected'
+; GLOBAL-CTORS: LLVM ERROR: MMIXAL output variant 1 does not support runtime registration symbol 'llvm.global_ctors'
+; INIT-ARRAY: LLVM ERROR: MMIXAL output variant 1 does not support runtime registration section '.init_array.100' for symbol 'registration'
+; SYMVERS: LLVM ERROR: MMIXAL output variant 1 does not support ELF symbol version for 'versioned'
+; CANONICAL: .weak selected
+; CANONICAL: selected:
 
 ;--- external-function.ll
 target triple = "mmix-unknown-elf"
@@ -95,4 +142,151 @@ loop:
 define ptr @memcpy(ptr %destination, ptr %source, i64 %size) {
 entry:
   ret ptr %destination
+}
+
+;--- weak-linkage.ll
+target triple = "mmix-unknown-elf"
+
+define weak void @selected() {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- comdat.ll
+target triple = "mmix-unknown-elf"
+
+$group = comdat any
+
+define void @selected() comdat($group) {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- ifunc.ll
+target triple = "mmix-unknown-elf"
+
+@selected = ifunc void (), ptr @resolver
+
+define ptr @resolver() {
+  ret ptr @implementation
+}
+
+define void @implementation() {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- hidden.ll
+target triple = "mmix-unknown-elf"
+
+@selected = hidden global i64 0
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- partition.ll
+target triple = "mmix-unknown-elf"
+
+@selected = global i64 0, partition "partition_name"
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- global-ctors.ll
+target triple = "mmix-unknown-elf"
+
+@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }]
+  [{ i32, ptr, ptr } { i32 65535, ptr @constructor, ptr null }]
+
+define void @constructor() {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- init-array.ll
+target triple = "mmix-unknown-elf"
+
+@registration = global ptr @initializer, section ".init_array.100"
+
+define void @initializer() {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- symvers.ll
+target triple = "mmix-unknown-elf"
+
+!symvers = !{!0}
+!0 = !{!"versioned", !"versioned@VERSION_1"}
+
+define void @versioned() {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
+}
+
+;--- canonical-linkage.ll
+target triple = "mmix-unknown-elf"
+
+define weak void @selected() {
+  ret void
+}
+
+define void @Main() {
+entry:
+  br label %loop
+
+loop:
+  br label %loop
 }

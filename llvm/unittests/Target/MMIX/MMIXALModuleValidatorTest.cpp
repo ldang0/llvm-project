@@ -325,10 +325,183 @@ TEST_F(MMIXALModuleValidatorTest, RejectsReferencedDeclarations) {
     )") + Reference)
                          .str();
     expectModuleError(
-        IR, (Twine("MMIXAL output variant 1 cannot resolve referenced symbol '") +
-             Symbol + "'")
+        IR,
+        (Twine("MMIXAL output variant 1 cannot resolve referenced symbol '") +
+         Symbol + "'")
+            .str());
+  }
+}
+
+TEST_F(MMIXALModuleValidatorTest, AcceptsExactSymbolIdentity) {
+  EXPECT_NE(expectModule(R"(
+    @data = dso_local unnamed_addr global i64 0
+
+    define void @Main() {
+      br label %loop
+    loop:
+      br label %loop
+    }
+
+    define dso_local void @function() unnamed_addr {
+      ret void
+    }
+  )"),
+            nullptr);
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsLinkerSelectedLinkages) {
+  for (auto [Definition, Linkage] : {
+           std::pair{R"(define available_externally void @selected() {
+                          ret void
+                        })",
+                     "available_externally"},
+           std::pair{R"(define linkonce void @selected() { ret void })",
+                     "linkonce"},
+           std::pair{R"(define linkonce_odr void @selected() { ret void })",
+                     "linkonce_odr"},
+           std::pair{R"(define weak void @selected() { ret void })", "weak"},
+           std::pair{R"(define weak_odr void @selected() { ret void })",
+                     "weak_odr"},
+           std::pair{R"(@selected = appending global [1 x i64] [i64 0])",
+                     "appending"},
+           std::pair{R"(declare extern_weak void @selected())", "extern_weak"},
+           std::pair{R"(@selected = common global i64 0)", "common"},
+       }) {
+    SCOPED_TRACE(Linkage);
+    std::string IR = (Twine(R"(
+      define void @Main() {
+        br label %loop
+      loop:
+        br label %loop
+      }
+    )") + Definition)
+                         .str();
+    expectModuleError(
+        IR, (Twine("MMIXAL output variant 1 does not support linkage '") +
+             Linkage + "' for symbol 'selected'")
                 .str());
   }
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsAliasAndIFuncSelection) {
+  expectModuleError(
+      R"(
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+        @target = global i64 0
+        @selected = weak alias i64, ptr @target
+      )",
+      "MMIXAL output variant 1 does not support linkage 'weak' for symbol "
+      "'selected'");
+
+  expectModuleError(
+      R"(
+        @selected = ifunc void (), ptr @resolver
+        define ptr @resolver() { ret ptr @implementation }
+        define void @implementation() { ret void }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support GlobalIFunc 'selected'");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsComdatAndObjectIdentity) {
+  expectModuleError(
+      R"(
+        $group = comdat any
+        define void @selected() comdat($group) { ret void }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support COMDAT membership for symbol "
+      "'selected'");
+
+  for (auto [Definition, Diagnostic] : {
+           std::pair{R"(@selected = hidden global i64 0)", "hidden visibility"},
+           std::pair{R"(@selected = protected global i64 0)",
+                     "protected visibility"},
+           std::pair{R"(@selected = external dllimport global i64)",
+                     "dllimport storage"},
+           std::pair{R"(@selected = dllexport global i64 0)",
+                     "dllexport storage"},
+       }) {
+    SCOPED_TRACE(Diagnostic);
+    std::string IR = (Twine(R"(
+      define void @Main() {
+        br label %loop
+      loop:
+        br label %loop
+      }
+    )") + Definition)
+                         .str();
+    expectModuleError(IR, (Twine("MMIXAL output variant 1 does not support ") +
+                           Diagnostic + " for symbol 'selected'")
+                              .str());
+  }
+
+  expectModuleError(
+      R"(
+        @selected = global i64 0, partition "partition_name"
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support partition 'partition_name' "
+      "for symbol 'selected'");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsRuntimeRegistration) {
+  expectModuleError(
+      R"(
+        @llvm.global_ctors = appending global [1 x { i32, ptr, ptr }]
+          [{ i32, ptr, ptr } { i32 65535, ptr @constructor, ptr null }]
+        define void @constructor() { ret void }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support runtime registration symbol "
+      "'llvm.global_ctors'");
+
+  expectModuleError(
+      R"(
+        @registration = global ptr @initializer, section ".init_array.100"
+        define void @initializer() { ret void }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support runtime registration section "
+      "'.init_array.100' for symbol 'registration'");
+
+  expectModuleError(
+      R"(
+        !symvers = !{!0}
+        !0 = !{!"versioned", !"versioned@VERSION_1"}
+        define void @versioned() { ret void }
+        define void @Main() {
+          br label %loop
+        loop:
+          br label %loop
+        }
+      )",
+      "MMIXAL output variant 1 does not support ELF symbol version for "
+      "'versioned'");
 }
 
 } // namespace

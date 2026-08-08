@@ -11,8 +11,11 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalIFunc.h"
+#include "llvm/IR/GlobalObject.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
@@ -21,6 +24,89 @@
 using namespace llvm;
 
 namespace {
+
+StringRef getMMIXALLinkageName(GlobalValue::LinkageTypes Linkage) {
+  switch (Linkage) {
+  case GlobalValue::ExternalLinkage:
+    return "external";
+  case GlobalValue::AvailableExternallyLinkage:
+    return "available_externally";
+  case GlobalValue::LinkOnceAnyLinkage:
+    return "linkonce";
+  case GlobalValue::LinkOnceODRLinkage:
+    return "linkonce_odr";
+  case GlobalValue::WeakAnyLinkage:
+    return "weak";
+  case GlobalValue::WeakODRLinkage:
+    return "weak_odr";
+  case GlobalValue::AppendingLinkage:
+    return "appending";
+  case GlobalValue::InternalLinkage:
+    return "internal";
+  case GlobalValue::PrivateLinkage:
+    return "private";
+  case GlobalValue::ExternalWeakLinkage:
+    return "extern_weak";
+  case GlobalValue::CommonLinkage:
+    return "common";
+  }
+  llvm_unreachable("unknown LLVM linkage");
+}
+
+bool isMMIXALRuntimeRegistrationSection(StringRef Section) {
+  for (StringRef Prefix :
+       {".init_array", ".fini_array", ".preinit_array", ".ctors", ".dtors"})
+    if (Section.starts_with(Prefix))
+      return true;
+  return false;
+}
+
+Error validateMMIXALSymbolSemantics(const GlobalValue &GV) {
+  if (isa<GlobalIFunc>(GV))
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support GlobalIFunc '") +
+        GV.getName() + "'");
+
+  switch (GV.getLinkage()) {
+  case GlobalValue::ExternalLinkage:
+  case GlobalValue::InternalLinkage:
+  case GlobalValue::PrivateLinkage:
+    break;
+  default:
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support linkage '") +
+        getMMIXALLinkageName(GV.getLinkage()) + "' for symbol '" +
+        GV.getName() + "'");
+  }
+
+  if (GV.hasComdat())
+    return createStringError(
+        Twine(
+            "MMIXAL output variant 1 does not support COMDAT membership for ") +
+        "symbol '" + GV.getName() + "'");
+
+  if (!GV.hasDefaultVisibility()) {
+    StringRef Visibility = GV.hasHiddenVisibility() ? "hidden" : "protected";
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support ") + Visibility +
+        " visibility for symbol '" + GV.getName() + "'");
+  }
+
+  if (GV.getDLLStorageClass() != GlobalValue::DefaultStorageClass) {
+    StringRef Storage =
+        GV.hasDLLImportStorageClass() ? "dllimport" : "dllexport";
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support ") + Storage +
+        " storage for symbol '" + GV.getName() + "'");
+  }
+
+  if (GV.hasPartition())
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support partition '") +
+        GV.getPartition() + "' for symbol '" + GV.getName() + "'");
+
+  return Error::success();
+}
 
 class MMIXALModuleValidatorLegacy final : public ModulePass {
 public:
@@ -107,10 +193,41 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
                     "in function '") +
               F.getName() + "'");
 
+  if (const NamedMDNode *Symvers = M.getNamedMetadata("symvers");
+      Symvers && Symvers->getNumOperands() != 0) {
+    const MDNode *Version = Symvers->getOperand(0);
+    const auto *Symbol = Version->getNumOperands() == 0
+                             ? nullptr
+                             : dyn_cast<MDString>(Version->getOperand(0));
+    if (Symbol)
+      return createStringError(
+          Twine(
+              "MMIXAL output variant 1 does not support ELF symbol version ") +
+          "for '" + Symbol->getString() + "'");
+    return createStringError(
+        "MMIXAL output variant 1 does not support ELF symbol-version metadata");
+  }
+
+  for (const GlobalVariable &Global : M.globals()) {
+    if (Global.getName() == "llvm.global_ctors" ||
+        Global.getName() == "llvm.global_dtors")
+      return createStringError(Twine("MMIXAL output variant 1 does not support "
+                                     "runtime registration ") +
+                               "symbol '" + Global.getName() + "'");
+    if (Global.hasSection() &&
+        isMMIXALRuntimeRegistrationSection(Global.getSection()))
+      return createStringError(Twine("MMIXAL output variant 1 does not support "
+                                     "runtime registration ") +
+                               "section '" + Global.getSection() +
+                               "' for symbol '" + Global.getName() + "'");
+  }
+
   for (const GlobalValue &GV : M.global_values()) {
-    if (!GV.isDeclaration() || GV.use_empty())
-      continue;
     if (const auto *F = dyn_cast<Function>(&GV); F && F->isIntrinsic())
+      continue;
+    if (Error Err = validateMMIXALSymbolSemantics(GV))
+      return std::move(Err);
+    if (!GV.isDeclaration() || GV.use_empty())
       continue;
     return createStringError(
         Twine("MMIXAL output variant 1 cannot resolve referenced symbol '") +
