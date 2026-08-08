@@ -131,6 +131,17 @@ Error MMIXALSymbolMapper::registerUserSymbol(StringRef Name) {
     return createStringError(Twine("duplicate MMIXAL user symbol identity: ") +
                              getEscapedUserSymbol(Name));
 
+  ++NameClaims[Name];
+  return Error::success();
+}
+
+Error MMIXALSymbolMapper::registerSemanticName(StringRef Name) {
+  if (Finalized)
+    return createStringError(
+        std::errc::invalid_argument,
+        "cannot register an MMIXAL semantic name after finalization");
+
+  ++NameClaims[Name];
   return Error::success();
 }
 
@@ -143,9 +154,11 @@ Error MMIXALSymbolMapper::finalize() {
   StringMap<std::string> SourcesByMappedName;
   for (const auto &Entry : RegisteredUserSymbols) {
     const StringRef Source = Entry.getKey();
+    const auto Claim = NameClaims.find(Source);
     const bool Preserve = isValidOrdinarySymbol(Source) &&
                           !Source.starts_with("__LLVM_") &&
-                          !isPredefinedSymbol(Source);
+                          !isPredefinedSymbol(Source) &&
+                          Claim != NameClaims.end() && Claim->second == 1;
     std::string Mapped = Preserve ? Source.str() : getEscapedUserSymbol(Source);
 
     auto [It, Inserted] = SourcesByMappedName.try_emplace(Mapped, Source.str());
@@ -159,6 +172,16 @@ Error MMIXALSymbolMapper::finalize() {
   MappedUserSymbols = std::move(NewMappings);
   Finalized = true;
   return Error::success();
+}
+
+Expected<bool> MMIXALSymbolMapper::canPreserveName(StringRef Name) const {
+  if (!Finalized)
+    return createStringError(std::errc::invalid_argument,
+                             "MMIXAL symbol mapper is not finalized");
+
+  const auto It = NameClaims.find(Name);
+  return isValidOrdinarySymbol(Name) && !Name.starts_with("__LLVM_") &&
+         !isPredefinedSymbol(Name) && It != NameClaims.end() && It->second == 1;
 }
 
 Expected<StringRef>

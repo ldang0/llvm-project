@@ -20,13 +20,16 @@ namespace llvm {
 
 class MMIXALSymbolMapper {
   StringSet<> RegisteredUserSymbols;
+  StringMap<unsigned> NameClaims;
   StringMap<std::string> MappedUserSymbols;
   bool Finalized = false;
 
 public:
   Error registerUserSymbol(StringRef Name);
+  Error registerSemanticName(StringRef Name);
   Error finalize();
   Expected<StringRef> getMappedUserSymbol(StringRef Name) const;
+  Expected<bool> canPreserveName(StringRef Name) const;
 
   bool isFinalized() const { return Finalized; }
   size_t getNumUserSymbols() const { return RegisteredUserSymbols.size(); }

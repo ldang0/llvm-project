@@ -1,6 +1,7 @@
 add_llvm_component_library(LLVMMMIXDesc
   MMIXALAsmStreamer.cpp
   MMIXALSymbolMapper.cpp
+  MMIXALSymbolTable.cpp
   MMIXAsmBackend.cpp
   MMIXMCCodeEmitter.cpp
   MMIXMCAsmInfo.cpp

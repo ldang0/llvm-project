@@ -236,4 +236,34 @@ TEST(MMIXALSymbolMapperTest, EscapingIsInjectiveAtReservedBoundary) {
   EXPECT_NE(lookup(Mapper, "A"), lookup(Mapper, "__LLVM_U_1_41"));
 }
 
+TEST(MMIXALSymbolMapperTest, SemanticNameClaimPreventsUserPreservation) {
+  MMIXALSymbolMapper Mapper;
+  expectSuccess(Mapper.registerUserSymbol("shared"));
+  expectSuccess(Mapper.registerSemanticName("shared"));
+  expectSuccess(Mapper.registerSemanticName("unique_block"));
+  expectSuccess(Mapper.finalize());
+
+  EXPECT_EQ(lookup(Mapper, "shared"), "__LLVM_U_6_736861726564");
+  Expected<bool> Shared = Mapper.canPreserveName("shared");
+  ASSERT_TRUE(static_cast<bool>(Shared));
+  EXPECT_FALSE(*Shared);
+  Expected<bool> UniqueBlock = Mapper.canPreserveName("unique_block");
+  ASSERT_TRUE(static_cast<bool>(UniqueBlock));
+  EXPECT_TRUE(*UniqueBlock);
+}
+
+TEST(MMIXALSymbolMapperTest, SemanticClaimsAreRegistrationOrderIndependent) {
+  MMIXALSymbolMapper UserFirst;
+  expectSuccess(UserFirst.registerUserSymbol("shared"));
+  expectSuccess(UserFirst.registerSemanticName("shared"));
+  expectSuccess(UserFirst.finalize());
+
+  MMIXALSymbolMapper SemanticFirst;
+  expectSuccess(SemanticFirst.registerSemanticName("shared"));
+  expectSuccess(SemanticFirst.registerUserSymbol("shared"));
+  expectSuccess(SemanticFirst.finalize());
+
+  EXPECT_EQ(lookup(UserFirst, "shared"), lookup(SemanticFirst, "shared"));
+}
+
 } // namespace
