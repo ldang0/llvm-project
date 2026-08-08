@@ -9,11 +9,15 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALSTARTUP_H
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALSTARTUP_H
 
+#include "llvm/MC/MCInst.h"
+#include <array>
+
 namespace llvm {
 
 class MMIXALAsmStreamer;
 
 void addMMIXALBareMetalGlobalRegisterPrelude(MMIXALAsmStreamer &Streamer);
+std::array<MCInst, 2> createMMIXALRawEntryPrefix();
 
 } // namespace llvm
 

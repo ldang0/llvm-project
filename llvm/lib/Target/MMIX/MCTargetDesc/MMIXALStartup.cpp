@@ -9,6 +9,7 @@
 #include "MMIXALStartup.h"
 #include "MMIXALAsmStreamer.h"
 #include "MMIXALLayout.h"
+#include "MMIXMCTargetDesc.h"
 #include "llvm/ADT/Twine.h"
 #include <string>
 
@@ -30,4 +31,15 @@ void llvm::addMMIXALBareMetalGlobalRegisterPrelude(
     Streamer.addPreludeGlobalRegister(Name, Register, InitialValue);
   }
   Streamer.finalizePrelude();
+}
+
+std::array<MCInst, 2> llvm::createMMIXALRawEntryPrefix() {
+  std::array<MCInst, 2> Prefix;
+  Prefix[0].setOpcode(MMIX::PUTI);
+  Prefix[0].addOperand(MCOperand::createReg(MMIX::RA));
+  Prefix[0].addOperand(MCOperand::createImm(0));
+  Prefix[1].setOpcode(MMIX::PUTI);
+  Prefix[1].addOperand(MCOperand::createReg(MMIX::RL));
+  Prefix[1].addOperand(MCOperand::createImm(0));
+  return Prefix;
 }

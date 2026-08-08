@@ -333,6 +333,55 @@ TEST_F(MMIXALAsmStreamerTest, RejectsFixedPreludeCollisionAtomically) {
   EXPECT_TRUE(Output.empty());
 }
 
+TEST_F(MMIXALAsmStreamerTest, BuildsAndPlacesRawEntryPrefix) {
+  const std::array<MCInst, 2> Prefix = createMMIXALRawEntryPrefix();
+  ASSERT_EQ(Prefix[0].getOpcode(), MMIX::PUTI);
+  ASSERT_EQ(Prefix[0].getNumOperands(), 2u);
+  EXPECT_TRUE(Prefix[0].getOperand(0).isReg());
+  EXPECT_EQ(Prefix[0].getOperand(0).getReg(), MMIX::RA);
+  EXPECT_TRUE(Prefix[0].getOperand(1).isImm());
+  EXPECT_EQ(Prefix[0].getOperand(1).getImm(), 0);
+  ASSERT_EQ(Prefix[1].getOpcode(), MMIX::PUTI);
+  ASSERT_EQ(Prefix[1].getNumOperands(), 2u);
+  EXPECT_TRUE(Prefix[1].getOperand(0).isReg());
+  EXPECT_EQ(Prefix[1].getOperand(0).getReg(), MMIX::RL);
+  EXPECT_TRUE(Prefix[1].getOperand(1).isImm());
+  EXPECT_EQ(Prefix[1].getOperand(1).getImm(), 0);
+
+  using Kind = MMIXALSymbolTable::PrivateSymbolKind;
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+  MCSymbol *Entry = Context.getOrCreateSymbol("canonical_main");
+  MCSymbol *Body = Context.getOrCreateSymbol("canonical_entry_body");
+  expectSuccess(Streamer->registerEntrySymbol(*Entry, "Main"));
+  expectSuccess(Streamer->registerFunctionPrivateSymbol(*Body, "Main",
+                                                        Kind::BasicBlock, 0));
+
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitLabel(Entry);
+  for (const MCInst &Inst : Prefix)
+    Streamer->emitInstruction(Inst, *STI);
+  Streamer->emitLabel(Body);
+  MCInst Jump;
+  Jump.setOpcode(MMIX::JMPB);
+  Jump.addOperand(
+      MCOperand::createExpr(MCSymbolRefExpr::create(Entry, Context)));
+  Streamer->emitInstruction(Jump, *STI);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #0000000000000100\n"
+                    "Main\tIS @\n"
+                    "\tPUT rA, 0\n"
+                    "\tPUT rL, 0\n"
+                    "\tLOC #0000000000000108\n"
+                    "__LLVM_L_F_4D61696E_BB_0\tIS @\n"
+                    "\tJMP Main\n");
+}
+
 TEST_F(MMIXALAsmStreamerTest,
        SuppressesAddressNeutralMetadataAndEmptyNoteSections) {
   MCContext Context(TT, MAI, *MRI, *STI);
