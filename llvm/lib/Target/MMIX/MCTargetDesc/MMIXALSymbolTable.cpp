@@ -198,3 +198,14 @@ MMIXALSymbolTable::getSourceBlockAlias(const MCSymbol &AddressSymbol) const {
         AddressSymbol.getName());
   return StringRef(It->second);
 }
+
+std::optional<MMIXALSymbolTable::PrivateSymbolKind>
+MMIXALSymbolTable::getPrivateSymbolKind(const MCSymbol &Symbol) const {
+  const auto It = SymbolIndices.find(&Symbol);
+  if (It == SymbolIndices.end())
+    return std::nullopt;
+  const SymbolRegistration &Registration = RegisteredSymbols[It->second];
+  if (Registration.Class == SymbolClass::User)
+    return std::nullopt;
+  return Registration.Kind;
+}

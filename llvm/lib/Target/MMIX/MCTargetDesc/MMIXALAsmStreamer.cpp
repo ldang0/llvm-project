@@ -7,16 +7,36 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXALAsmStreamer.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FormattedStream.h"
 #include <cassert>
+#include <limits>
 #include <system_error>
 #include <utility>
 
 using namespace llvm;
+
+namespace {
+
+bool hasUnsupportedSpecialPurpose(StringRef Name) {
+  return Name == ".eh_frame" || Name.starts_with(".gcc_except_table") ||
+         Name.starts_with(".init_array") || Name.starts_with(".fini_array") ||
+         Name.starts_with(".preinit_array") || Name.starts_with(".ctors") ||
+         Name.starts_with(".dtors") || Name.starts_with(".tdata") ||
+         Name.starts_with(".tbss") || Name.starts_with(".note") ||
+         Name.starts_with(".debug") || Name.starts_with(".llvm") ||
+         Name.starts_with(".got") || Name.starts_with(".plt") ||
+         Name.starts_with(".mmix") || Name.starts_with(".MMIX");
+}
+
+} // namespace
 
 MMIXALAsmStreamer::MMIXALAsmStreamer(
     MCContext &Context, std::unique_ptr<formatted_raw_ostream> Output,
@@ -30,9 +50,182 @@ MMIXALAsmStreamer::MMIXALAsmStreamer(
 
 MMIXALAsmStreamer::~MMIXALAsmStreamer() = default;
 
+size_t MMIXALAsmStreamer::getGroupIndex(LogicalGroup Group) {
+  return static_cast<size_t>(Group);
+}
+
+void MMIXALAsmStreamer::recordClassificationError(const Twine &Message) {
+  if (ClassificationError.empty())
+    ClassificationError = Message.str();
+}
+
+Expected<MMIXALAsmStreamer::LogicalGroup>
+MMIXALAsmStreamer::classifySection(const MCSection &Section,
+                                   uint32_t Subsection) const {
+  if (Subsection != 0)
+    return createStringError(
+        Twine("MMIXAL cannot classify section '") + Section.getName() +
+        "': nonzero ELF subsections have unsupported ordering semantics");
+  if (getContext().getObjectFileType() != MCContext::IsELF)
+    return createStringError(Twine("MMIXAL cannot classify non-ELF section '") +
+                             Section.getName() + "'");
+
+  const auto &ELFSection = static_cast<const MCSectionELF &>(Section);
+  const StringRef Name = ELFSection.getName();
+  const unsigned Type = ELFSection.getType();
+  const unsigned Flags = ELFSection.getFlags();
+  if (!(Flags & ELF::SHF_ALLOC))
+    return createStringError(Twine("MMIXAL cannot allocate section '") + Name +
+                             "': section is not allocated");
+  if (hasUnsupportedSpecialPurpose(Name))
+    return createStringError(
+        Twine("MMIXAL cannot allocate section '") + Name +
+        "': special-purpose section semantics are unsupported");
+
+  constexpr unsigned OrdinaryFlags =
+      ELF::SHF_ALLOC | ELF::SHF_WRITE | ELF::SHF_EXECINSTR;
+  if (Flags & ~OrdinaryFlags)
+    return createStringError(
+        Twine("MMIXAL cannot allocate section '") + Name +
+        "': merge, TLS, group, ordering, or target-specific ELF flags are "
+        "unsupported");
+  if (ELFSection.getEntrySize() != 0)
+    return createStringError(
+        Twine("MMIXAL cannot allocate section '") + Name +
+        "': fixed-entry section semantics are unsupported");
+  if (Type != ELF::SHT_PROGBITS && Type != ELF::SHT_NOBITS)
+    return createStringError(Twine("MMIXAL cannot allocate section '") + Name +
+                             "': unsupported ELF section type");
+
+  const bool IsWritable = Flags & ELF::SHF_WRITE;
+  const bool IsExecutable = Flags & ELF::SHF_EXECINSTR;
+  if (IsExecutable && IsWritable)
+    return createStringError(Twine("MMIXAL cannot allocate section '") + Name +
+                             "': writable executable sections are ambiguous");
+  if (Type == ELF::SHT_NOBITS) {
+    if (!IsWritable || IsExecutable)
+      return createStringError(
+          Twine("MMIXAL cannot allocate section '") + Name +
+          "': zero-storage sections must be writable and non-executable");
+    return LogicalGroup::ZeroStorage;
+  }
+  if (IsExecutable)
+    return LogicalGroup::Text;
+  if (IsWritable)
+    return LogicalGroup::WritableData;
+  return LogicalGroup::ReadOnly;
+}
+
+std::optional<MMIXALAsmStreamer::LogicalGroup>
+MMIXALAsmStreamer::classifyCurrentSection() {
+  const MCSectionSubPair Current = getCurrentSection();
+  if (!Current.first) {
+    recordClassificationError(
+        "MMIXAL allocated event has no active MC section");
+    return std::nullopt;
+  }
+  Expected<LogicalGroup> Group =
+      classifySection(*Current.first, Current.second);
+  if (!Group) {
+    recordClassificationError(toString(Group.takeError()));
+    return std::nullopt;
+  }
+  return *Group;
+}
+
+MMIXALAsmStreamer::BufferedItem *MMIXALAsmStreamer::getOrCreateCurrentItem() {
+  if (CurrentItem)
+    return &*CurrentItem;
+  std::optional<LogicalGroup> Group = classifyCurrentSection();
+  if (!Group)
+    return nullptr;
+  CurrentItem.emplace(
+      BufferedItem{*Group, getCurrentSection().first, NextItemOrder++});
+  return &*CurrentItem;
+}
+
+void MMIXALAsmStreamer::flushCurrentItem() {
+  if (!CurrentItem)
+    return;
+  if (!CurrentItem->EventIndices.empty())
+    ItemGroups[getGroupIndex(CurrentItem->Group)].push_back(
+        std::move(*CurrentItem));
+  CurrentItem.reset();
+}
+
+void MMIXALAsmStreamer::appendEventToCurrentItem(BufferedEvent Event,
+                                                 std::optional<uint64_t> Size,
+                                                 bool IsPayload) {
+  BufferedItem *Item = getOrCreateCurrentItem();
+  const size_t EventIndex = Events.size();
+  Events.push_back(std::move(Event));
+  if (!Item)
+    return;
+
+  const BufferedEvent &StoredEvent = Events.back();
+  Item->EventIndices.push_back(EventIndex);
+  for (const MCSymbol *Dependency : StoredEvent.Dependencies)
+    if (!llvm::is_contained(Item->Dependencies, Dependency))
+      Item->Dependencies.push_back(Dependency);
+  if (Size) {
+    if (*Size > std::numeric_limits<uint64_t>::max() - Item->KnownSize)
+      Item->SizeIsKnown = false;
+    else if (Item->SizeIsKnown)
+      Item->KnownSize += *Size;
+  } else if (IsPayload) {
+    Item->SizeIsKnown = false;
+  }
+  Item->HasPayload |= IsPayload;
+}
+
+void MMIXALAsmStreamer::updateCurrentItemGroupForSymbol(
+    const MCSymbol &Symbol) {
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (!Item)
+    return;
+  std::optional<MMIXALSymbolTable::PrivateSymbolKind> Kind =
+      Symbols.getPrivateSymbolKind(Symbol);
+  if (!Kind)
+    return;
+
+  std::optional<LogicalGroup> RequiredGroup;
+  if (*Kind == MMIXALSymbolTable::PrivateSymbolKind::ConstantPool)
+    RequiredGroup = LogicalGroup::ConstantPool;
+  else if (*Kind == MMIXALSymbolTable::PrivateSymbolKind::JumpTable)
+    RequiredGroup = LogicalGroup::JumpTable;
+  else if (*Kind == MMIXALSymbolTable::PrivateSymbolKind::BlockAddress &&
+           Item->Group != LogicalGroup::Text)
+    RequiredGroup = LogicalGroup::JumpTable;
+  if (!RequiredGroup)
+    return;
+
+  if (Item->Group == LogicalGroup::Text ||
+      Item->Group == LogicalGroup::ZeroStorage) {
+    recordClassificationError(Twine("MMIXAL private data symbol '") +
+                              Symbol.getName() +
+                              "' is defined in an incompatible section");
+    return;
+  }
+  if ((Item->Group == LogicalGroup::ConstantPool ||
+       Item->Group == LogicalGroup::JumpTable) &&
+      Item->Group != *RequiredGroup) {
+    recordClassificationError(
+        Twine("MMIXAL item has conflicting private symbol classes at '") +
+        Symbol.getName() + "'");
+    return;
+  }
+  Item->Group = *RequiredGroup;
+}
+
 void MMIXALAsmStreamer::reset() {
   MCStreamer::reset();
   Events.clear();
+  for (auto &Group : ItemGroups)
+    Group.clear();
+  CurrentItem.reset();
+  DependencySink = nullptr;
+  ClassificationError.clear();
+  NextItemOrder = 0;
   Symbols.reset();
   ActiveFunctionName.clear();
   PendingFunctionSymbols.clear();
@@ -42,33 +235,67 @@ void MMIXALAsmStreamer::reset() {
   HasActiveFunction = false;
 }
 
+void MMIXALAsmStreamer::switchSection(MCSection *Section, uint32_t Subsection) {
+  assert(Section && "cannot switch to a null section");
+  const MCSectionSubPair Previous = getCurrentSection();
+  if (Previous != MCSectionSubPair(Section, Subsection))
+    flushCurrentItem();
+  MCStreamer::switchSection(Section, Subsection);
+
+  BufferedEvent Event{EventKind::SectionSwitch};
+  Event.Section = Section;
+  Event.Subsection = Subsection;
+  Events.push_back(std::move(Event));
+}
+
 void MMIXALAsmStreamer::emitBytes(StringRef Data) {
   if (Data.empty())
     return;
   BufferedEvent Event{EventKind::Bytes};
   Event.Bytes = Data.str();
-  Events.push_back(std::move(Event));
+  Event.Section = getCurrentSection().first;
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (Item && Item->Group == LogicalGroup::ZeroStorage)
+    recordClassificationError(
+        "MMIXAL zero-storage section contains initialized bytes");
+  appendEventToCurrentItem(std::move(Event), Data.size());
 }
 
 void MMIXALAsmStreamer::emitInstruction(const MCInst &Inst,
                                         const MCSubtargetInfo &STI) {
+  SmallVector<const MCSymbol *, 2> Dependencies;
+  DependencySink = &Dependencies;
   MCStreamer::emitInstruction(Inst, STI);
+  DependencySink = nullptr;
   BufferedEvent Event{EventKind::Instruction};
   Event.Inst = Inst;
   Event.STI = &STI;
-  Events.push_back(std::move(Event));
+  Event.Section = getCurrentSection().first;
+  Event.Dependencies = std::move(Dependencies);
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (Item && Item->Group != LogicalGroup::Text)
+    recordClassificationError("MMIXAL instruction is not in executable text");
+  appendEventToCurrentItem(std::move(Event), 4);
 }
 
 void MMIXALAsmStreamer::emitLabel(MCSymbol *Symbol, SMLoc) {
   assert(Symbol && "cannot emit a null symbol");
   observeSymbol(*Symbol);
+  if (CurrentItem && CurrentItem->HasPayload)
+    flushCurrentItem();
+  updateCurrentItemGroupForSymbol(*Symbol);
   BufferedEvent Event{EventKind::Label};
   Event.Symbol = Symbol;
-  Events.push_back(std::move(Event));
+  Event.Section = getCurrentSection().first;
+  appendEventToCurrentItem(std::move(Event), 0, false);
+  if (CurrentItem)
+    CurrentItem->OwningSymbols.push_back(Symbol);
 }
 
 void MMIXALAsmStreamer::visitUsedSymbol(const MCSymbol &Symbol) {
   observeSymbol(Symbol);
+  if (DependencySink && !llvm::is_contained(*DependencySink, &Symbol))
+    DependencySink->push_back(&Symbol);
 }
 
 bool MMIXALAsmStreamer::emitSymbolAttribute(MCSymbol *Symbol,
@@ -77,6 +304,7 @@ bool MMIXALAsmStreamer::emitSymbolAttribute(MCSymbol *Symbol,
   observeSymbol(*Symbol);
   BufferedEvent Event{EventKind::SymbolAttribute};
   Event.Symbol = Symbol;
+  Event.Section = getCurrentSection().first;
   Event.Attribute = Attribute;
   Events.push_back(std::move(Event));
   return true;
@@ -86,11 +314,192 @@ void MMIXALAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                          Align ByteAlignment) {
   assert(Symbol && "cannot emit a null common symbol");
   observeSymbol(*Symbol);
+  flushCurrentItem();
   BufferedEvent Event{EventKind::CommonSymbol};
   Event.Symbol = Symbol;
   Event.Size = Size;
   Event.Alignment = ByteAlignment;
+  const size_t EventIndex = Events.size();
   Events.push_back(std::move(Event));
+
+  BufferedItem Item{LogicalGroup::ZeroStorage, nullptr, NextItemOrder++};
+  Item.EventIndices.push_back(EventIndex);
+  Item.OwningSymbols.push_back(Symbol);
+  Item.RequiredAlignment = ByteAlignment;
+  Item.KnownSize = Size;
+  Item.HasPayload = true;
+  ItemGroups[getGroupIndex(Item.Group)].push_back(std::move(Item));
+}
+
+void MMIXALAsmStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+                                              Align ByteAlignment) {
+  emitCommonSymbol(Symbol, Size, ByteAlignment);
+}
+
+void MMIXALAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
+                                     uint64_t Size, Align ByteAlignment,
+                                     SMLoc) {
+  assert(Section && "cannot emit zerofill without a section");
+  flushCurrentItem();
+  Expected<LogicalGroup> Group = classifySection(*Section, 0);
+  if (!Group) {
+    recordClassificationError(toString(Group.takeError()));
+    return;
+  }
+  if (*Group != LogicalGroup::ZeroStorage) {
+    recordClassificationError(
+        Twine("MMIXAL zerofill requires a zero-storage section, not '") +
+        Section->getName() + "'");
+    return;
+  }
+
+  BufferedEvent Event{EventKind::Fill};
+  Event.Symbol = Symbol;
+  Event.Section = Section;
+  Event.Size = Size;
+  Event.Alignment = ByteAlignment;
+  const size_t EventIndex = Events.size();
+  Events.push_back(std::move(Event));
+
+  BufferedItem Item{LogicalGroup::ZeroStorage, Section, NextItemOrder++};
+  Item.EventIndices.push_back(EventIndex);
+  if (Symbol) {
+    observeSymbol(*Symbol);
+    Item.OwningSymbols.push_back(Symbol);
+  }
+  Item.RequiredAlignment = ByteAlignment;
+  Item.KnownSize = Size;
+  Item.HasPayload = true;
+  ItemGroups[getGroupIndex(Item.Group)].push_back(std::move(Item));
+}
+
+void MMIXALAsmStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
+                                       uint64_t Size, Align ByteAlignment) {
+  if (Symbol)
+    observeSymbol(*Symbol);
+  recordClassificationError("MMIXAL thread-local zero storage is unsupported");
+  BufferedEvent Event{EventKind::CommonSymbol};
+  Event.Symbol = Symbol;
+  Event.Section = Section;
+  Event.Size = Size;
+  Event.Alignment = ByteAlignment;
+  Events.push_back(std::move(Event));
+}
+
+void MMIXALAsmStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
+                                      SMLoc) {
+  assert(Value && "cannot emit a null value expression");
+  SmallVector<const MCSymbol *, 2> Dependencies;
+  DependencySink = &Dependencies;
+  MCStreamer::emitValueImpl(Value, Size);
+  DependencySink = nullptr;
+
+  BufferedEvent Event{EventKind::Value};
+  Event.Section = getCurrentSection().first;
+  Event.Expression = Value;
+  Event.Dependencies = std::move(Dependencies);
+  Event.ValueSize = Size;
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (Item && Item->Group == LogicalGroup::ZeroStorage)
+    recordClassificationError(
+        "MMIXAL zero-storage section contains an initialized value");
+  appendEventToCurrentItem(std::move(Event), Size);
+}
+
+void MMIXALAsmStreamer::emitFill(const MCExpr &NumBytes, uint64_t FillValue,
+                                 SMLoc) {
+  SmallVector<const MCSymbol *, 2> Dependencies;
+  DependencySink = &Dependencies;
+  visitUsedExpr(NumBytes);
+  DependencySink = nullptr;
+
+  int64_t ByteCount = 0;
+  std::optional<uint64_t> KnownSize;
+  if (NumBytes.evaluateAsAbsolute(ByteCount) && ByteCount >= 0)
+    KnownSize = static_cast<uint64_t>(ByteCount);
+
+  BufferedEvent Event{EventKind::Fill};
+  Event.Section = getCurrentSection().first;
+  Event.Expression = &NumBytes;
+  Event.Dependencies = std::move(Dependencies);
+  Event.FillValue = FillValue;
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (Item && Item->Group == LogicalGroup::ZeroStorage && FillValue != 0)
+    recordClassificationError(
+        "MMIXAL zero-storage section contains a nonzero fill");
+  appendEventToCurrentItem(std::move(Event), KnownSize);
+}
+
+void MMIXALAsmStreamer::emitFill(const MCExpr &NumValues, int64_t Size,
+                                 int64_t Expr, SMLoc) {
+  SmallVector<const MCSymbol *, 2> Dependencies;
+  DependencySink = &Dependencies;
+  visitUsedExpr(NumValues);
+  DependencySink = nullptr;
+
+  int64_t Count = 0;
+  std::optional<uint64_t> KnownSize;
+  if (Size >= 0 && NumValues.evaluateAsAbsolute(Count) && Count >= 0 &&
+      static_cast<uint64_t>(Count) <=
+          std::numeric_limits<uint64_t>::max() /
+              static_cast<uint64_t>(Size == 0 ? 1 : Size))
+    KnownSize = static_cast<uint64_t>(Count) * static_cast<uint64_t>(Size);
+
+  BufferedEvent Event{EventKind::Fill};
+  Event.Section = getCurrentSection().first;
+  Event.Expression = &NumValues;
+  Event.Dependencies = std::move(Dependencies);
+  Event.ValueSize = Size < 0 ? 0 : static_cast<unsigned>(Size);
+  Event.RepeatValue = Expr;
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (Item && Item->Group == LogicalGroup::ZeroStorage && Expr != 0)
+    recordClassificationError(
+        "MMIXAL zero-storage section contains a nonzero repeated fill");
+  appendEventToCurrentItem(std::move(Event), KnownSize);
+}
+
+void MMIXALAsmStreamer::emitValueToAlignment(Align Alignment, int64_t Fill,
+                                             uint8_t FillLength,
+                                             unsigned MaxBytesToEmit) {
+  if (CurrentItem &&
+      (CurrentItem->HasPayload || !CurrentItem->OwningSymbols.empty()))
+    flushCurrentItem();
+  BufferedEvent Event{EventKind::Alignment};
+  Event.Section = getCurrentSection().first;
+  Event.Alignment = Alignment;
+  Event.AlignmentFill = Fill;
+  Event.AlignmentFillLength = FillLength;
+  Event.MaxBytesToEmit = MaxBytesToEmit;
+  appendEventToCurrentItem(std::move(Event), 0, false);
+  if (CurrentItem) {
+    CurrentItem->Alignments.push_back(
+        {Alignment, Fill, FillLength, MaxBytesToEmit, false});
+    if (CurrentItem->RequiredAlignment < Alignment)
+      CurrentItem->RequiredAlignment = Alignment;
+  }
+}
+
+void MMIXALAsmStreamer::emitCodeAlignment(Align Alignment,
+                                          const MCSubtargetInfo &,
+                                          unsigned MaxBytesToEmit) {
+  if (CurrentItem &&
+      (CurrentItem->HasPayload || !CurrentItem->OwningSymbols.empty()))
+    flushCurrentItem();
+  BufferedEvent Event{EventKind::Alignment};
+  Event.Section = getCurrentSection().first;
+  Event.Alignment = Alignment;
+  Event.MaxBytesToEmit = MaxBytesToEmit;
+  Event.IsCodeAlignment = true;
+  BufferedItem *Item = getOrCreateCurrentItem();
+  if (Item && Item->Group != LogicalGroup::Text)
+    recordClassificationError(
+        "MMIXAL code alignment is not in executable text");
+  appendEventToCurrentItem(std::move(Event), 0, false);
+  if (CurrentItem) {
+    CurrentItem->Alignments.push_back({Alignment, 0, 1, MaxBytesToEmit, true});
+    if (CurrentItem->RequiredAlignment < Alignment)
+      CurrentItem->RequiredAlignment = Alignment;
+  }
 }
 
 Error MMIXALAsmStreamer::registerUserSymbol(const MCSymbol &Symbol,
@@ -203,7 +612,26 @@ MMIXALAsmStreamer::getSourceBlockAlias(const MCSymbol &AddressSymbol) const {
   return Symbols.getSourceBlockAlias(AddressSymbol);
 }
 
+ArrayRef<MMIXALAsmStreamer::BufferedItem>
+MMIXALAsmStreamer::getBufferedItems(LogicalGroup Group) {
+  flushCurrentItem();
+  return ItemGroups[getGroupIndex(Group)];
+}
+
+size_t MMIXALAsmStreamer::getNumBufferedItems() {
+  flushCurrentItem();
+  size_t Count = 0;
+  for (const auto &Group : ItemGroups)
+    Count += Group.size();
+  return Count;
+}
+
 void MMIXALAsmStreamer::finishImpl() {
+  flushCurrentItem();
+  if (!ClassificationError.empty()) {
+    getContext().reportError(SMLoc(), ClassificationError);
+    return;
+  }
   if (!Symbols.isFinalized())
     if (Error Err = finalizeSymbolMappings()) {
       getContext().reportError(SMLoc(), toString(std::move(Err)));

@@ -16,6 +16,7 @@
 #include "llvm/Support/Error.h"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace llvm {
@@ -83,6 +84,8 @@ public:
   bool isRegistered(const MCSymbol &Symbol) const {
     return SymbolIndices.contains(&Symbol);
   }
+  std::optional<PrivateSymbolKind>
+  getPrivateSymbolKind(const MCSymbol &Symbol) const;
   size_t getNumRegisteredSymbols() const { return RegisteredSymbols.size(); }
   size_t getNumSourceBlockAliases() const { return SourceBlocks.size(); }
 };

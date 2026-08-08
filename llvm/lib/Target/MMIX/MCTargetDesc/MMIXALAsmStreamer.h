@@ -10,27 +10,70 @@
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXALASMSTREAMER_H
 
 #include "MMIXALSymbolTable.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace llvm {
 
 class formatted_raw_ostream;
+class MCExpr;
 class MCInstPrinter;
+class MCSection;
 class MCSymbol;
+class Twine;
 
 class MMIXALAsmStreamer final : public MCStreamer {
+public:
+  enum class LogicalGroup : uint8_t {
+    Text,
+    ReadOnly,
+    ConstantPool,
+    JumpTable,
+    WritableData,
+    ZeroStorage,
+  };
+
+  struct AlignmentRequest {
+    Align Alignment{1};
+    int64_t Fill = 0;
+    uint8_t FillLength = 1;
+    unsigned MaxBytesToEmit = 0;
+    bool IsCodeAlignment = false;
+  };
+
+  struct BufferedItem {
+    LogicalGroup Group;
+    const MCSection *Section = nullptr;
+    uint64_t SourceOrder = 0;
+    SmallVector<size_t, 4> EventIndices;
+    SmallVector<const MCSymbol *, 2> OwningSymbols;
+    SmallVector<const MCSymbol *, 2> Dependencies;
+    SmallVector<AlignmentRequest, 1> Alignments;
+    Align RequiredAlignment{1};
+    uint64_t KnownSize = 0;
+    bool SizeIsKnown = true;
+    bool HasPayload = false;
+  };
+
+private:
   enum class EventKind {
+    Alignment,
     Bytes,
     CommonSymbol,
+    Fill,
     Instruction,
     Label,
+    SectionSwitch,
+    Value,
     SymbolAttribute
   };
 
@@ -40,14 +83,30 @@ class MMIXALAsmStreamer final : public MCStreamer {
     std::string Bytes;
     const MCSubtargetInfo *STI = nullptr;
     MCSymbol *Symbol = nullptr;
+    const MCSection *Section = nullptr;
+    const MCExpr *Expression = nullptr;
+    SmallVector<const MCSymbol *, 2> Dependencies;
     MCSymbolAttr Attribute = MCSA_Invalid;
     uint64_t Size = 0;
+    uint64_t FillValue = 0;
+    int64_t RepeatValue = 0;
+    unsigned ValueSize = 0;
+    uint32_t Subsection = 0;
     Align Alignment{1};
+    int64_t AlignmentFill = 0;
+    uint8_t AlignmentFillLength = 1;
+    unsigned MaxBytesToEmit = 0;
+    bool IsCodeAlignment = false;
   };
 
   std::unique_ptr<formatted_raw_ostream> Output;
   std::unique_ptr<MCInstPrinter> InstPrinter;
   SmallVector<BufferedEvent, 0> Events;
+  std::array<SmallVector<BufferedItem, 0>, 6> ItemGroups;
+  std::optional<BufferedItem> CurrentItem;
+  SmallVector<const MCSymbol *, 2> *DependencySink = nullptr;
+  std::string ClassificationError;
+  uint64_t NextItemOrder = 0;
   MMIXALSymbolTable Symbols;
   std::string ActiveFunctionName;
   SmallVector<const MCSymbol *, 0> PendingFunctionSymbols;
@@ -56,6 +115,17 @@ class MMIXALAsmStreamer final : public MCStreamer {
   SmallPtrSet<const MCSymbol *, 8> PendingModuleSymbolSet;
   bool HasActiveFunction = false;
 
+  static size_t getGroupIndex(LogicalGroup Group);
+  void recordClassificationError(const Twine &Message);
+  Expected<LogicalGroup> classifySection(const MCSection &Section,
+                                         uint32_t Subsection) const;
+  std::optional<LogicalGroup> classifyCurrentSection();
+  BufferedItem *getOrCreateCurrentItem();
+  void flushCurrentItem();
+  void appendEventToCurrentItem(BufferedEvent Event,
+                                std::optional<uint64_t> Size,
+                                bool IsPayload = true);
+  void updateCurrentItemGroupForSymbol(const MCSymbol &Symbol);
   void observeSymbol(const MCSymbol &Symbol);
 
 public:
@@ -65,6 +135,7 @@ public:
   ~MMIXALAsmStreamer() override;
 
   void reset() override;
+  void switchSection(MCSection *Section, uint32_t Subsection = 0) override;
   void emitBytes(StringRef Data) override;
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
@@ -72,6 +143,24 @@ public:
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         Align ByteAlignment) override;
+  void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+                             Align ByteAlignment) override;
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+                    uint64_t Size = 0, Align ByteAlignment = Align(1),
+                    SMLoc Loc = SMLoc()) override;
+  void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
+                      Align ByteAlignment = Align(1)) override;
+  void emitValueImpl(const MCExpr *Value, unsigned Size,
+                     SMLoc Loc = SMLoc()) override;
+  void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
+                SMLoc Loc = SMLoc()) override;
+  void emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,
+                SMLoc Loc = SMLoc()) override;
+  void emitValueToAlignment(Align Alignment, int64_t Fill = 0,
+                            uint8_t FillLength = 1,
+                            unsigned MaxBytesToEmit = 0) override;
+  void emitCodeAlignment(Align Alignment, const MCSubtargetInfo &STI,
+                         unsigned MaxBytesToEmit = 0) override;
   void finishImpl() override;
 
   Error registerUserSymbol(const MCSymbol &Symbol, StringRef RawName);
@@ -91,6 +180,9 @@ public:
   Expected<StringRef> getSourceBlockAlias(const MCSymbol &AddressSymbol) const;
 
   size_t getNumBufferedEvents() const { return Events.size(); }
+  ArrayRef<BufferedItem> getBufferedItems(LogicalGroup Group);
+  size_t getNumBufferedItems();
+  bool hasClassificationError() const { return !ClassificationError.empty(); }
   size_t getNumRegisteredSymbols() const {
     return Symbols.getNumRegisteredSymbols();
   }
