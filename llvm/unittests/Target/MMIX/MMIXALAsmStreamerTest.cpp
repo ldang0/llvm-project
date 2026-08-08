@@ -173,10 +173,11 @@ TEST_F(MMIXALAsmStreamerTest, InstancesKeepIndependentBuffers) {
   EXPECT_FALSE(SecondContext.hadError());
   EXPECT_TRUE(SecondDiagnostic.empty());
   EXPECT_TRUE(SecondOutput.empty());
-  EXPECT_TRUE(FirstContext.hadError());
-  EXPECT_EQ(FirstDiagnostic,
-            "MMIXAL buffered module emission is not implemented");
-  EXPECT_TRUE(FirstOutput.empty());
+  EXPECT_FALSE(FirstContext.hadError());
+  EXPECT_TRUE(FirstDiagnostic.empty());
+  EXPECT_EQ(FirstOutput, "\tLOC #2000000000000000\n"
+                         "\tBYTE #66, #69, #72, #73, #74, #2D, #6F, #6E, "
+                         "#6C, #79\n");
 }
 
 TEST_F(MMIXALAsmStreamerTest, RegistersSemanticAndPrivateSymbolIdentities) {
@@ -621,6 +622,146 @@ TEST_F(MMIXALAsmStreamerTest,
                     "\tLOC #0000000000000114\n"
                     "__LLVM_L_F_66756E6374696F6E_BB_1\tIS @\n"
                     "\tADD $1, $2, $3\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, EmitsInitializedScalarsAndByteArrays) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Data = Context.getOrCreateSymbol("canonical_data");
+  expectSuccess(Streamer->registerUserSymbol(*Data, "data"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(Data);
+  Streamer->emitValue(MCConstantExpr::create(0x1122334455667788, Context), 8);
+  Streamer->emitValue(MCConstantExpr::create(0x99aabbcc, Context), 4);
+  Streamer->emitValue(MCConstantExpr::create(0xddee, Context), 2);
+  Streamer->emitValue(MCConstantExpr::create(0xff, Context), 1);
+  const char Bytes[] = {0, 1, 0x7f, static_cast<char>(0x80),
+                        static_cast<char>(0xff)};
+  Streamer->emitBytes(StringRef(Bytes, sizeof(Bytes)));
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "data\tIS @\n"
+                    "\tOCTA #1122334455667788\n"
+                    "\tTETRA #99AABBCC\n"
+                    "\tWYDE #DDEE\n"
+                    "\tBYTE #FF\n"
+                    "\tBYTE 0, #01, #7F, #80, #FF\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       PreservesUnalignedAndRepeatedValuesAsBigEndianBytes) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Patterns = Context.getOrCreateSymbol("canonical_patterns");
+  expectSuccess(Streamer->registerUserSymbol(*Patterns, "patterns"));
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitLabel(Patterns);
+  Streamer->emitValue(MCConstantExpr::create(0xa1, Context), 1);
+  Streamer->emitValue(MCConstantExpr::create(0xb2c3, Context), 2);
+  Streamer->emitFill(*MCConstantExpr::create(3, Context), 0x1ab);
+  Streamer->emitFill(*MCConstantExpr::create(2, Context), 3, 0xd4e5f6);
+  Streamer->emitValue(MCConstantExpr::create(-1, Context), 2);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "patterns\tIS @\n"
+                    "\tBYTE #A1\n"
+                    "\tBYTE #B2, #C3\n"
+                    "\tBYTE #AB, #AB, #AB\n"
+                    "\tBYTE #D4, #E5, #F6, #D4, #E5, #F6\n"
+                    "\tWYDE #FFFF\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, BoundsNumericByteArraySourceLines) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Bytes = Context.getOrCreateSymbol("canonical_bytes");
+  expectSuccess(Streamer->registerUserSymbol(*Bytes, "bytes"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(Bytes);
+  Streamer->emitBytes(std::string(20, static_cast<char>(0xff)));
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "bytes\tIS @\n"
+                    "\tBYTE #FF, #FF, #FF, #FF, #FF, #FF, #FF, #FF, #FF, "
+                    "#FF, #FF, #FF, #FF\n"
+                    "\tBYTE #FF, #FF, #FF, #FF, #FF, #FF, #FF\n");
+  SmallVector<StringRef, 8> Lines;
+  StringRef(Output).split(Lines, '\n');
+  for (StringRef Line : Lines)
+    EXPECT_LE(Line.size(), 72u);
+  EXPECT_EQ(Output.find('"'), std::string::npos);
+}
+
+TEST_F(MMIXALAsmStreamerTest, EmitsInitializedAndZeroStorageZerosExplicitly) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Initialized = Context.getOrCreateSymbol("canonical_initialized");
+  MCSymbol *ZeroStorage = Context.getOrCreateSymbol("canonical_zero_storage");
+  expectSuccess(Streamer->registerUserSymbol(*Initialized, "initialized"));
+  expectSuccess(Streamer->registerUserSymbol(*ZeroStorage, "zero_storage"));
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitLabel(Initialized);
+  Streamer->emitFill(*MCConstantExpr::create(19, Context), 0);
+  MCSectionELF *BSS = getSection(Context, ".bss", ELF::SHT_NOBITS,
+                                 ELF::SHF_ALLOC | ELF::SHF_WRITE);
+  Streamer->emitZerofill(BSS, ZeroStorage, 24, Align(8));
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "initialized\tIS @\n"
+                    "\tOCTA 0, 0\n"
+                    "\tWYDE 0\n"
+                    "\tBYTE 0\n"
+                    "\tLOC #2000000000000018\n"
+                    "zero_storage\tIS @\n"
+                    "\tOCTA 0, 0, 0\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsSymbolicDataWithoutPartialOutput) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Data = Context.getOrCreateSymbol("canonical_data");
+  MCSymbol *Target = Context.getOrCreateSymbol("canonical_target");
+  expectSuccess(Streamer->registerUserSymbol(*Data, "data"));
+  expectSuccess(Streamer->registerUserSymbol(*Target, "target"));
+  Streamer->switchSection(
+      getSection(Context, ".rodata", ELF::SHT_PROGBITS, ELF::SHF_ALLOC));
+  Streamer->emitLabel(Data);
+  Streamer->emitValue(MCSymbolRefExpr::create(Target, Context), 8);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL symbolic data value emission is not implemented");
+  EXPECT_TRUE(Output.empty());
 }
 
 TEST_F(MMIXALAsmStreamerTest,

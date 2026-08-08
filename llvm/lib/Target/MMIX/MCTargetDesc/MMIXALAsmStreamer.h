@@ -41,13 +41,15 @@ private:
   enum class EventKind {
     Alignment,
     Assignment,
+    ByteFill,
     Bytes,
     CommonSymbol,
-    Fill,
     Instruction,
     Label,
+    RepeatedValue,
     SectionSwitch,
     Value,
+    ZeroFill,
     SymbolAttribute
   };
 
@@ -101,7 +103,7 @@ private:
                                 bool IsPayload = true);
   void updateCurrentItemGroupForSymbol(const MCSymbol &Symbol);
   void observeSymbol(const MCSymbol &Symbol);
-  Error renderTextModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
+  Error renderModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
 
 public:
   MMIXALAsmStreamer(MCContext &Context,

@@ -13,6 +13,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
@@ -35,6 +36,125 @@ namespace {
 
 constexpr StringLiteral UnsupportedBufferedModule =
     "MMIXAL buffered module emission is not implemented";
+constexpr size_t MMIXALInputLineLimit = 72;
+
+class MMIXALDataListEmitter {
+  raw_ostream &OS;
+  StringRef Directive;
+  unsigned Width;
+  size_t LineLength = 0;
+
+  std::string formatValue(uint64_t Value) const {
+    if (Value == 0)
+      return "0";
+    SmallString<18> Text;
+    raw_svector_ostream ValueOS(Text);
+    ValueOS << '#' << format_hex_no_prefix(Value, Width * 2, /*Upper=*/true);
+    return std::string(Text);
+  }
+
+public:
+  MMIXALDataListEmitter(raw_ostream &OS, StringRef Directive, unsigned Width)
+      : OS(OS), Directive(Directive), Width(Width) {}
+
+  void emit(uint64_t Value) {
+    const std::string Text = formatValue(Value);
+    const size_t SeparatorLength = LineLength == 0 ? 0 : 2;
+    const size_t PrefixLength = Directive.size() + 2;
+    if (LineLength != 0 &&
+        LineLength + SeparatorLength + Text.size() > MMIXALInputLineLimit) {
+      OS << '\n';
+      LineLength = 0;
+    }
+    if (LineLength == 0) {
+      OS << '\t' << Directive << ' ';
+      LineLength = PrefixLength;
+    } else {
+      OS << ", ";
+      LineLength += SeparatorLength;
+    }
+    OS << Text;
+    LineLength += Text.size();
+  }
+
+  void finish() {
+    if (LineLength != 0)
+      OS << '\n';
+  }
+};
+
+StringRef getDataDirective(unsigned Width) {
+  switch (Width) {
+  case 1:
+    return "BYTE";
+  case 2:
+    return "WYDE";
+  case 4:
+    return "TETRA";
+  case 8:
+    return "OCTA";
+  default:
+    llvm_unreachable("unsupported MMIXAL scalar width");
+  }
+}
+
+uint64_t truncateToWidth(uint64_t Value, unsigned Width) {
+  if (Width == 8)
+    return Value;
+  return Value & ((uint64_t(1) << (Width * 8)) - 1);
+}
+
+void emitRepeatedScalar(raw_ostream &OS, unsigned Width, uint64_t Value,
+                        uint64_t Count) {
+  MMIXALDataListEmitter Emitter(OS, getDataDirective(Width), Width);
+  Value = truncateToWidth(Value, Width);
+  for (uint64_t I = 0; I != Count; ++I)
+    Emitter.emit(Value);
+  Emitter.finish();
+}
+
+void emitBigEndianBytes(raw_ostream &OS, uint64_t Value, unsigned Width,
+                        uint64_t Count = 1) {
+  MMIXALDataListEmitter Emitter(OS, "BYTE", 1);
+  for (uint64_t I = 0; I != Count; ++I)
+    for (unsigned Byte = Width; Byte != 0; --Byte)
+      Emitter.emit((Value >> ((Byte - 1) * 8)) & 0xff);
+  Emitter.finish();
+}
+
+void emitByteArray(raw_ostream &OS, StringRef Bytes) {
+  MMIXALDataListEmitter Emitter(OS, "BYTE", 1);
+  for (unsigned char Byte : Bytes.bytes())
+    Emitter.emit(Byte);
+  Emitter.finish();
+}
+
+void emitExplicitZeros(raw_ostream &OS, uint64_t Address, uint64_t Size) {
+  while (Size != 0) {
+    unsigned Width = 1;
+    for (unsigned Candidate : {8u, 4u, 2u})
+      if (Size >= Candidate && Address % Candidate == 0) {
+        Width = Candidate;
+        break;
+      }
+
+    uint64_t Count = 1;
+    if (Width == 8)
+      Count = Size / Width;
+    emitRepeatedScalar(OS, Width, 0, Count);
+    const uint64_t Emitted = Count * Width;
+    Address += Emitted;
+    Size -= Emitted;
+  }
+}
+
+Error advanceDataAddress(uint64_t &Address, uint64_t Size, uint64_t ItemEnd) {
+  if (Address > ItemEnd || Size > ItemEnd - Address)
+    return createStringError(
+        "MMIXAL data event exceeds its planned allocation interval");
+  Address += Size;
+  return Error::success();
+}
 
 bool hasUnsupportedSpecialPurpose(StringRef Name) {
   return Name == ".eh_frame" || Name.starts_with(".gcc_except_table") ||
@@ -476,7 +596,7 @@ void MMIXALAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
     return;
   }
 
-  BufferedEvent Event{EventKind::Fill};
+  BufferedEvent Event{EventKind::ZeroFill};
   Event.Symbol = Symbol;
   Event.Section = Section;
   Event.Size = Size;
@@ -541,7 +661,7 @@ void MMIXALAsmStreamer::emitFill(const MCExpr &NumBytes, uint64_t FillValue,
   if (NumBytes.evaluateAsAbsolute(ByteCount) && ByteCount >= 0)
     KnownSize = static_cast<uint64_t>(ByteCount);
 
-  BufferedEvent Event{EventKind::Fill};
+  BufferedEvent Event{EventKind::ByteFill};
   Event.Section = getCurrentSection().first;
   Event.Expression = &NumBytes;
   Event.Dependencies = std::move(Dependencies);
@@ -568,7 +688,7 @@ void MMIXALAsmStreamer::emitFill(const MCExpr &NumValues, int64_t Size,
               static_cast<uint64_t>(Size == 0 ? 1 : Size))
     KnownSize = static_cast<uint64_t>(Count) * static_cast<uint64_t>(Size);
 
-  BufferedEvent Event{EventKind::Fill};
+  BufferedEvent Event{EventKind::RepeatedValue};
   Event.Section = getCurrentSection().first;
   Event.Expression = &NumValues;
   Event.Dependencies = std::move(Dependencies);
@@ -750,26 +870,27 @@ size_t MMIXALAsmStreamer::getNumBufferedItems() {
   return Count;
 }
 
-Error MMIXALAsmStreamer::renderTextModule(const MMIXALLayoutPlan &Layout,
-                                          raw_ostream &OS) {
+Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
+                                      raw_ostream &OS) {
   DenseSet<size_t> ItemEventIndices;
   for (const MMIXALPlacedItem &Placed : Layout.getItems())
-    if (Placed.Input->Group != LogicalGroup::Text) {
-      return createStringError(UnsupportedBufferedModule);
-    } else {
-      for (size_t EventIndex : Placed.Input->EventIndices)
-        if (!ItemEventIndices.insert(EventIndex).second)
-          return createStringError(
-              "MMIXAL event belongs to more than one logical item");
-    }
+    for (size_t EventIndex : Placed.Input->EventIndices)
+      if (!ItemEventIndices.insert(EventIndex).second)
+        return createStringError(
+            "MMIXAL event belongs to more than one logical item");
   for (size_t EventIndex = 0; EventIndex != Events.size(); ++EventIndex)
     switch (Events[EventIndex].Kind) {
     case EventKind::SectionSwitch:
       break;
     case EventKind::Alignment:
     case EventKind::Assignment:
+    case EventKind::ByteFill:
+    case EventKind::Bytes:
     case EventKind::Instruction:
     case EventKind::Label:
+    case EventKind::RepeatedValue:
+    case EventKind::Value:
+    case EventKind::ZeroFill:
       if (!ItemEventIndices.contains(EventIndex))
         return createStringError(UnsupportedBufferedModule);
       break;
@@ -881,6 +1002,9 @@ Error MMIXALAsmStreamer::renderTextModule(const MMIXALLayoutPlan &Layout,
         break;
       }
       case EventKind::Instruction:
+        if (Placed.Input->Group != LogicalGroup::Text)
+          return createStringError(
+              "MMIXAL instruction is outside executable text");
         for (const MCSymbol *Dependency : Event.Dependencies) {
           Expected<StringRef> Name = Symbols.getMappedSymbol(*Dependency);
           if (!Name)
@@ -898,13 +1022,110 @@ Error MMIXALAsmStreamer::renderTextModule(const MMIXALLayoutPlan &Layout,
         OS << '\n';
         Address += 4;
         break;
+      case EventKind::Bytes:
+        if (Placed.Input->Group == LogicalGroup::Text)
+          return createStringError(
+              "MMIXAL raw bytes are unsupported in executable text");
+        emitByteArray(OS, Event.Bytes);
+        if (Error Err =
+                advanceDataAddress(Address, Event.Bytes.size(), Placed.End))
+          return Err;
+        break;
+      case EventKind::Value: {
+        if (Placed.Input->Group == LogicalGroup::Text)
+          return createStringError(
+              "MMIXAL data value is unsupported in executable text");
+        if (Event.ValueSize != 1 && Event.ValueSize != 2 &&
+            Event.ValueSize != 4 && Event.ValueSize != 8)
+          return createStringError(
+              "MMIXAL data value width must be 1, 2, 4, or 8 bytes");
+        int64_t SignedValue;
+        if (!Event.Expression->evaluateAsAbsolute(SignedValue))
+          return createStringError(
+              "MMIXAL symbolic data value emission is not implemented");
+        const uint64_t Value = static_cast<uint64_t>(SignedValue);
+        if (Address % Event.ValueSize == 0)
+          emitRepeatedScalar(OS, Event.ValueSize, Value, 1);
+        else
+          emitBigEndianBytes(OS, Value, Event.ValueSize);
+        if (Error Err =
+                advanceDataAddress(Address, Event.ValueSize, Placed.End))
+          return Err;
+        break;
+      }
+      case EventKind::ByteFill: {
+        if (Placed.Input->Group == LogicalGroup::Text)
+          return createStringError(
+              "MMIXAL byte fill is unsupported in executable text");
+        int64_t SignedCount;
+        if (!Event.Expression->evaluateAsAbsolute(SignedCount) ||
+            SignedCount < 0)
+          return createStringError(
+              "MMIXAL byte fill count must be a nonnegative absolute value");
+        const uint64_t Count = static_cast<uint64_t>(SignedCount);
+        if (truncateToWidth(Event.FillValue, 1) == 0)
+          emitExplicitZeros(OS, Address, Count);
+        else
+          emitRepeatedScalar(OS, 1, Event.FillValue, Count);
+        if (Error Err = advanceDataAddress(Address, Count, Placed.End))
+          return Err;
+        break;
+      }
+      case EventKind::RepeatedValue: {
+        if (Placed.Input->Group == LogicalGroup::Text)
+          return createStringError(
+              "MMIXAL repeated data is unsupported in executable text");
+        int64_t SignedCount;
+        if (!Event.Expression->evaluateAsAbsolute(SignedCount) ||
+            SignedCount < 0)
+          return createStringError(
+              "MMIXAL repeated-data count must be a nonnegative absolute "
+              "value");
+        if (Event.ValueSize > 8)
+          return createStringError(
+              "MMIXAL repeated-data width must not exceed 8 bytes");
+        const uint64_t Count = static_cast<uint64_t>(SignedCount);
+        if (Event.ValueSize != 0 &&
+            Count > std::numeric_limits<uint64_t>::max() / Event.ValueSize)
+          return createStringError("MMIXAL repeated-data size overflows");
+        const uint64_t Size = Count * Event.ValueSize;
+        if (Event.ValueSize != 0) {
+          const uint64_t Value =
+              static_cast<uint64_t>(static_cast<uint32_t>(Event.RepeatValue));
+          if ((Event.ValueSize == 1 || Event.ValueSize == 2 ||
+               Event.ValueSize == 4 || Event.ValueSize == 8) &&
+              Address % Event.ValueSize == 0)
+            emitRepeatedScalar(OS, Event.ValueSize, Value, Count);
+          else
+            emitBigEndianBytes(OS, Value, Event.ValueSize, Count);
+        }
+        if (Error Err = advanceDataAddress(Address, Size, Placed.End))
+          return Err;
+        break;
+      }
+      case EventKind::ZeroFill:
+        if (Placed.Input->Group != LogicalGroup::ZeroStorage)
+          return createStringError("MMIXAL zero fill is outside zero storage");
+        if (Event.Symbol) {
+          Expected<StringRef> Name = Symbols.getMappedSymbol(*Event.Symbol);
+          if (!Name)
+            return Name.takeError();
+          if (!DefinedSymbols.insert(Event.Symbol).second)
+            return createStringError(
+                Twine("duplicate MMIXAL definition for '") + *Name + "'");
+          OS << *Name << "\tIS @\n";
+        }
+        emitExplicitZeros(OS, Address, Event.Size);
+        if (Error Err = advanceDataAddress(Address, Event.Size, Placed.End))
+          return Err;
+        break;
       default:
         return createStringError(UnsupportedBufferedModule);
       }
     }
     if (Address != Placed.End)
       return createStringError(
-          "MMIXAL text item size does not match its buffered instructions");
+          "MMIXAL item size does not match its buffered contents");
   }
   return Error::success();
 }
@@ -927,7 +1148,7 @@ void MMIXALAsmStreamer::finishImpl() {
   }
   std::string Source;
   raw_string_ostream SourceOS(Source);
-  if (Error Err = renderTextModule(*Layout, SourceOS)) {
+  if (Error Err = renderModule(*Layout, SourceOS)) {
     getContext().reportError(SMLoc(), toString(std::move(Err)));
     return;
   }
