@@ -15,8 +15,10 @@ namespace llvm {
 
 class Function;
 class Module;
+class ModulePass;
 
 Expected<const Function *> validateMMIXALRawEntry(const Module &M);
+ModulePass *createMMIXALModuleValidatorPass();
 
 } // namespace llvm
 

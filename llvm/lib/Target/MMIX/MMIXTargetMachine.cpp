@@ -7,7 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXTargetMachine.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MMIX.h"
+#include "MMIXALModuleValidator.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/CodeGen/AtomicExpand.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -81,6 +83,9 @@ public:
   }
 
   void addIRPasses() override {
+    if (getMMIXTargetMachine().getMCAsmInfo().getOutputAssemblerDialect() ==
+        MMIXII::MMIXALAsmVariant)
+      addPass(createMMIXALModuleValidatorPass());
     addPass(createAtomicExpandLegacyPass());
     TargetPassConfig::addIRPasses();
   }

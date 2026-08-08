@@ -13,9 +13,41 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
+
+namespace {
+
+class MMIXALModuleValidatorLegacy final : public ModulePass {
+public:
+  static char ID;
+
+  MMIXALModuleValidatorLegacy() : ModulePass(ID) {}
+
+  bool runOnModule(Module &M) override {
+    Expected<const Function *> Entry = validateMMIXALRawEntry(M);
+    if (!Entry) {
+      std::string Message = toString(Entry.takeError());
+      reportFatalUsageError(StringRef(Message));
+    }
+    return false;
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+  }
+};
+
+} // namespace
+
+char MMIXALModuleValidatorLegacy::ID = 0;
+
+ModulePass *llvm::createMMIXALModuleValidatorPass() {
+  return new MMIXALModuleValidatorLegacy();
+}
 
 Expected<const Function *> llvm::validateMMIXALRawEntry(const Module &M) {
   const GlobalValue *Main = M.getNamedValue("Main");
