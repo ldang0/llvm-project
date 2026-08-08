@@ -1,4 +1,5 @@
 add_llvm_component_library(LLVMMMIXDesc
+  MMIXALAsmStreamer.cpp
   MMIXAsmBackend.cpp
   MMIXMCCodeEmitter.cpp
   MMIXMCAsmInfo.cpp
