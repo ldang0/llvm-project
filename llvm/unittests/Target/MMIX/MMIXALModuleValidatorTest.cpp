@@ -61,6 +61,30 @@ protected:
     }
     EXPECT_EQ(toString(Entry.takeError()), ExpectedDiagnostic);
   }
+
+  const Function *expectModule(StringRef IR) {
+    Module *M = parseModule(IR);
+    if (!M)
+      return nullptr;
+    Expected<const Function *> Entry = validateMMIXALModule(*M);
+    if (!Entry) {
+      ADD_FAILURE() << toString(Entry.takeError());
+      return nullptr;
+    }
+    return *Entry;
+  }
+
+  void expectModuleError(StringRef IR, StringRef ExpectedDiagnostic) {
+    Module *M = parseModule(IR);
+    if (!M)
+      return;
+    Expected<const Function *> Entry = validateMMIXALModule(*M);
+    if (Entry) {
+      ADD_FAILURE() << "module validation unexpectedly succeeded";
+      return;
+    }
+    EXPECT_EQ(toString(Entry.takeError()), ExpectedDiagnostic);
+  }
 };
 
 TEST_F(MMIXALModuleValidatorTest, AcceptsStrongLoopingEntry) {
@@ -157,6 +181,85 @@ TEST_F(MMIXALModuleValidatorTest, RejectsReachableReturnRegardlessOfAttribute) {
     expectError(
         IR, "MMIXAL bare-metal entry 'Main' must not have a reachable return");
   }
+}
+
+TEST_F(MMIXALModuleValidatorTest, AcceptsModulesWithoutOpaqueAssembly) {
+  const Function *Entry = expectModule(R"(
+    module asm ""
+
+    define void @Main() {
+      br label %loop
+    loop:
+      br label %loop
+    }
+
+    define void @ordinary() {
+      ret void
+    }
+  )");
+  ASSERT_NE(Entry, nullptr);
+  EXPECT_EQ(Entry->getName(), "Main");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsModuleInlineAssembly) {
+  expectModuleError(
+      R"(
+    module asm "SWYM 0, 0, 0"
+
+    define void @Main() {
+      br label %loop
+    loop:
+      br label %loop
+    }
+  )",
+      "MMIXAL output variant 1 does not support module-level inline assembly");
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsFunctionInlineAssembly) {
+  for (StringRef Body : {
+           R"(call void asm "", ""())",
+           R"(call void asm sideeffect "SWYM 0, 0, 0", ""())",
+           R"(%value = call i64 asm "OR $0, $1, 0", "=r,r"(i64 0))",
+       }) {
+    SCOPED_TRACE(Body);
+    std::string IR = (Twine(R"(
+      define void @Main() {
+        br label %loop
+      loop:
+        br label %loop
+      }
+
+      define void @opaque() {
+    )") + Body + R"(
+        ret void
+      }
+    )")
+                         .str();
+    expectModuleError(
+        IR, "MMIXAL output variant 1 does not support inline assembly in "
+            "function 'opaque'");
+  }
+
+  expectModuleError(
+      R"(
+    define void @Main() {
+      br label %loop
+    loop:
+      br label %loop
+    }
+
+    define void @opaque_goto() {
+    entry:
+      callbr void asm sideeffect "", "!i"()
+          to label %fallthrough [label %target]
+    fallthrough:
+      ret void
+    target:
+      ret void
+    }
+  )",
+      "MMIXAL output variant 1 does not support inline assembly in function "
+      "'opaque_goto'");
 }
 
 } // namespace

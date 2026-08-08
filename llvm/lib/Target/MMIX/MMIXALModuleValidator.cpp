@@ -28,7 +28,7 @@ public:
   MMIXALModuleValidatorLegacy() : ModulePass(ID) {}
 
   bool runOnModule(Module &M) override {
-    Expected<const Function *> Entry = validateMMIXALRawEntry(M);
+    Expected<const Function *> Entry = validateMMIXALModule(M);
     if (!Entry) {
       std::string Message = toString(Entry.takeError());
       reportFatalUsageError(StringRef(Message));
@@ -83,4 +83,28 @@ Expected<const Function *> llvm::validateMMIXALRawEntry(const Module &M) {
           "MMIXAL bare-metal entry 'Main' must not have a reachable return");
 
   return Entry;
+}
+
+Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
+  Expected<const Function *> Entry = validateMMIXALRawEntry(M);
+  if (!Entry)
+    return Entry.takeError();
+
+  for (const Module::GlobalAsmFragment &Fragment : M.getModuleInlineAsm())
+    if (!StringRef(Fragment.Asm).trim().empty())
+      return createStringError(
+          "MMIXAL output variant 1 does not support module-level inline "
+          "assembly");
+
+  for (const Function &F : M)
+    for (const BasicBlock &BB : F)
+      for (const Instruction &I : BB)
+        if (const auto *Call = dyn_cast<CallBase>(&I);
+            Call && Call->isInlineAsm())
+          return createStringError(
+              Twine("MMIXAL output variant 1 does not support inline assembly "
+                    "in function '") +
+              F.getName() + "'");
+
+  return *Entry;
 }
