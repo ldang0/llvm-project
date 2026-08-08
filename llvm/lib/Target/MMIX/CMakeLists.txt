@@ -16,6 +16,7 @@ tablegen(LLVM MMIXGenMCCodeEmitter.inc -gen-emitter)
 add_public_tablegen_target(MMIXCommonTableGen)
 
 add_llvm_target(MMIXCodeGen
+  MMIXALModuleValidator.cpp
   MMIXAsmPrinter.cpp
   MMIXFrameLowering.cpp
   MMIXInstrInfo.cpp

@@ -4,7 +4,10 @@ include_directories(
   )
 
 set(LLVM_LINK_COMPONENTS
+  AsmParser
+  Core
   MC
+  MMIXCodeGen
   MMIXDesc
   MMIXInfo
   Support
@@ -16,5 +19,6 @@ add_llvm_target_unittest(MMIXTests
   MMIXALDependencyGraphTest.cpp
   MMIXALInstPrinterTest.cpp
   MMIXALLayoutTest.cpp
+  MMIXALModuleValidatorTest.cpp
   MMIXALSymbolMapperTest.cpp
   )
