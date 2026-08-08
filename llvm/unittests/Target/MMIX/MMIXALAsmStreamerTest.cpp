@@ -24,6 +24,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 #include "gtest/gtest.h"
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -146,6 +147,113 @@ TEST_F(MMIXALAsmStreamerTest, ResetDiscardsBufferedEvents) {
   Streamer->finish();
 
   EXPECT_FALSE(Context.hadError());
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, EmitsPreludeBeforeAllocatedItems) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->addPreludeGlobalRegister("__LLVM_G_SP", 254,
+                                     UINT64_C(0x2000000004000000));
+  Streamer->addPreludeGlobalRegister("__LLVM_G_FP", 253, 0);
+  Streamer->finalizePrelude();
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitIntValue(1, 1);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Streamer->getNumPreludeGlobalRegisters(), 2u);
+  EXPECT_EQ(Output, "__LLVM_G_SP\tGREG #2000000004000000\n"
+                    "__LLVM_G_FP\tGREG 0\n"
+                    "\tLOC #2000000000000000\n"
+                    "\tBYTE #01\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, ResetDiscardsPrelude) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->addPreludeGlobalRegister("__LLVM_G_SP", 254,
+                                     UINT64_C(0x2000000004000000));
+  Streamer->finalizePrelude();
+  ASSERT_EQ(Streamer->getNumPreludeGlobalRegisters(), 1u);
+  Streamer->reset();
+  ASSERT_EQ(Streamer->getNumPreludeGlobalRegisters(), 0u);
+
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsInvalidPreludeDeclarationsAtomically) {
+  struct PreludeCase {
+    const char *Diagnostic;
+    std::function<void(MMIXALAsmStreamer &)> AddInvalidDeclaration;
+  };
+  const PreludeCase Cases[] = {
+      {"duplicate target-owned MMIXAL prelude name: __LLVM_G_SP",
+       [](MMIXALAsmStreamer &Streamer) {
+         Streamer.addPreludeGlobalRegister("__LLVM_G_SP", 254, 0);
+         Streamer.addPreludeGlobalRegister("__LLVM_G_SP", 253, 0);
+       }},
+      {"MMIXAL GREG declaration for $252 is out of allocation order; expected "
+       "$253",
+       [](MMIXALAsmStreamer &Streamer) {
+         Streamer.addPreludeGlobalRegister("__LLVM_G_SP", 254, 0);
+         Streamer.addPreludeGlobalRegister("__LLVM_G_FP", 252, 0);
+       }},
+      {"cannot add an MMIXAL prelude declaration after finalization",
+       [](MMIXALAsmStreamer &Streamer) {
+         Streamer.finalizePrelude();
+         Streamer.addPreludeGlobalRegister("__LLVM_G_SP", 254, 0);
+       }},
+  };
+
+  for (const PreludeCase &Case : Cases) {
+    SCOPED_TRACE(Case.Diagnostic);
+    MCContext Context(TT, MAI, *MRI, *STI);
+    std::string Diagnostic;
+    captureDiagnostic(Context, Diagnostic);
+    std::string Output;
+    raw_string_ostream OutputOS(Output);
+    auto Streamer = createStreamer(Context, OutputOS);
+
+    Case.AddInvalidDeclaration(*Streamer);
+    Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                       ELF::SHF_ALLOC | ELF::SHF_WRITE));
+    Streamer->emitIntValue(1, 1);
+    Streamer->finish();
+
+    EXPECT_TRUE(Context.hadError());
+    EXPECT_EQ(Diagnostic, Case.Diagnostic);
+    EXPECT_TRUE(Output.empty());
+  }
+}
+
+TEST_F(MMIXALAsmStreamerTest, LateModuleFailureDiscardsPrelude) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->addPreludeGlobalRegister("__LLVM_G_SP", 254,
+                                     UINT64_C(0x2000000004000000));
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitValue(MCConstantExpr::create(1, Context), 3);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic, "MMIXAL data value width must be 1, 2, 4, or 8 bytes");
   EXPECT_TRUE(Output.empty());
 }
 

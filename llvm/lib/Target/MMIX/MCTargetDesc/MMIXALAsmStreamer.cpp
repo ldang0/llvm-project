@@ -491,6 +491,8 @@ void MMIXALAsmStreamer::reset() {
   MCStreamer::reset();
   if (CodeEmitter)
     CodeEmitter->reset();
+  PreludeGlobalRegisters.clear();
+  PreludeNames.clear();
   Events.clear();
   for (auto &Group : ItemGroups)
     Group.clear();
@@ -506,6 +508,7 @@ void MMIXALAsmStreamer::reset() {
   PendingModuleSymbolSet.clear();
   ModuleLocalSymbols.clear();
   HasActiveFunction = false;
+  IsPreludeFinalized = false;
 }
 
 void MMIXALAsmStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
@@ -940,6 +943,48 @@ Error MMIXALAsmStreamer::registerEntrySymbol(const MCSymbol &Symbol,
   return Symbols.registerEntrySymbol(Symbol, RawName);
 }
 
+void MMIXALAsmStreamer::addPreludeGlobalRegister(StringRef Name,
+                                                 unsigned AllocatedRegister,
+                                                 uint64_t InitialValue) {
+  if (IsPreludeFinalized) {
+    recordClassificationError(
+        "cannot add an MMIXAL prelude declaration after finalization");
+    return;
+  }
+  if (!MMIXALSymbolMapper::isValidOrdinarySymbol(Name) ||
+      !Name.starts_with("__LLVM_G_")) {
+    recordClassificationError(
+        Twine("invalid target-owned MMIXAL prelude name: ") + Name);
+    return;
+  }
+  if (!PreludeNames.insert(Name).second) {
+    recordClassificationError(
+        Twine("duplicate target-owned MMIXAL prelude name: ") + Name);
+    return;
+  }
+
+  if (!PreludeGlobalRegisters.empty() &&
+      PreludeGlobalRegisters.back().AllocatedRegister == 0) {
+    recordClassificationError(
+        "MMIXAL GREG allocation cannot continue below $0");
+    return;
+  }
+
+  const unsigned ExpectedRegister =
+      PreludeGlobalRegisters.empty()
+          ? 254
+          : PreludeGlobalRegisters.back().AllocatedRegister - 1;
+  if (AllocatedRegister != ExpectedRegister) {
+    recordClassificationError(
+        Twine("MMIXAL GREG declaration for $") + Twine(AllocatedRegister) +
+        " is out of allocation order; expected $" + Twine(ExpectedRegister));
+    return;
+  }
+
+  PreludeGlobalRegisters.push_back(
+      {Name.str(), AllocatedRegister, InitialValue});
+}
+
 Error MMIXALAsmStreamer::registerSourceBlock(const MCSymbol &AddressSymbol,
                                              StringRef FunctionName,
                                              StringRef BlockName) {
@@ -1274,6 +1319,8 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
             DefinedSymbols.contains(&Symbol)};
   };
 
+  renderPrelude(OS);
+
   for (const MMIXALPlacedItem *Scheduled : *ScheduledItems) {
     const MMIXALPlacedItem &Placed = *Scheduled;
     std::optional<uint64_t> CurrentLocation;
@@ -1520,8 +1567,21 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
   return Error::success();
 }
 
+void MMIXALAsmStreamer::renderPrelude(raw_ostream &OS) const {
+  for (const PreludeGlobalRegister &Declaration : PreludeGlobalRegisters) {
+    OS << Declaration.Name << "\tGREG ";
+    if (Declaration.InitialValue == 0)
+      OS << '0';
+    else
+      OS << '#'
+         << format_hex_no_prefix(Declaration.InitialValue, 16, /*Upper=*/true);
+    OS << '\n';
+  }
+}
+
 void MMIXALAsmStreamer::finishImpl() {
   flushCurrentItem();
+  IsPreludeFinalized = true;
   if (!ClassificationError.empty()) {
     getContext().reportError(SMLoc(), ClassificationError);
     return;

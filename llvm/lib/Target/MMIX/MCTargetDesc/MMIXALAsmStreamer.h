@@ -15,6 +15,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
 #include <cstddef>
@@ -74,9 +75,17 @@ private:
     bool IsCodeAlignment = false;
   };
 
+  struct PreludeGlobalRegister {
+    std::string Name;
+    unsigned AllocatedRegister;
+    uint64_t InitialValue;
+  };
+
   std::unique_ptr<formatted_raw_ostream> Output;
   std::unique_ptr<MMIXALInstPrinter> InstPrinter;
   std::unique_ptr<MCCodeEmitter> CodeEmitter;
+  SmallVector<PreludeGlobalRegister, 0> PreludeGlobalRegisters;
+  StringSet<> PreludeNames;
   SmallVector<BufferedEvent, 0> Events;
   MMIXALItemGroups ItemGroups;
   std::optional<BufferedItem> CurrentItem;
@@ -92,6 +101,7 @@ private:
   SmallPtrSet<const MCSymbol *, 4> ModuleLocalSymbols;
   bool HasActiveFunction = false;
   bool IsModuleEmission = false;
+  bool IsPreludeFinalized = false;
 
   static size_t getGroupIndex(LogicalGroup Group);
   void recordClassificationError(const Twine &Message);
@@ -112,6 +122,7 @@ private:
   scheduleItems(const MMIXALLayoutPlan &Layout,
                 DenseMap<const MCSymbol *, uint64_t> &AliasAddresses) const;
   Error renderModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
+  void renderPrelude(raw_ostream &OS) const;
 
 protected:
   void changeSection(MCSection *Section, uint32_t Subsection) override;
@@ -200,6 +211,9 @@ public:
 
   Error registerUserSymbol(const MCSymbol &Symbol, StringRef RawName);
   Error registerEntrySymbol(const MCSymbol &Symbol, StringRef RawName);
+  void addPreludeGlobalRegister(StringRef Name, unsigned AllocatedRegister,
+                                uint64_t InitialValue);
+  void finalizePrelude() { IsPreludeFinalized = true; }
   Error registerSourceBlock(const MCSymbol &AddressSymbol,
                             StringRef FunctionName, StringRef BlockName);
   Error registerFunctionPrivateSymbol(const MCSymbol &Symbol,
@@ -216,6 +230,9 @@ public:
   Expected<StringRef> getSourceBlockAlias(const MCSymbol &AddressSymbol) const;
 
   size_t getNumBufferedEvents() const { return Events.size(); }
+  size_t getNumPreludeGlobalRegisters() const {
+    return PreludeGlobalRegisters.size();
+  }
   ArrayRef<BufferedItem> getBufferedItems(LogicalGroup Group);
   size_t getNumBufferedItems();
   bool hasClassificationError() const { return !ClassificationError.empty(); }
