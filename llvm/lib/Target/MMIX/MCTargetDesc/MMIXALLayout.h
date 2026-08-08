@@ -72,6 +72,11 @@ struct MMIXALBareMetalProfile {
   static constexpr uint64_t MemoryStackEnd = 0x2000000004000000ULL;
 };
 
+struct MMIXALLayoutWindow {
+  uint64_t Start = 0;
+  uint64_t End = 0;
+};
+
 struct MMIXALPaddingInterval {
   uint64_t Begin = 0;
   uint64_t End = 0;
@@ -90,7 +95,9 @@ class MMIXALLayoutPlan {
   DenseMap<const MCSymbol *, uint64_t> SymbolAddresses;
 
   friend Expected<MMIXALLayoutPlan>
-  planMMIXALBareMetalLayout(const MMIXALItemGroups &Groups);
+  planMMIXALLayout(const MMIXALItemGroups &Groups,
+                   MMIXALLayoutWindow TextWindow,
+                   MMIXALLayoutWindow DataWindow);
 
 public:
   ArrayRef<MMIXALPlacedItem> getItems() const { return Items; }
@@ -99,6 +106,9 @@ public:
 
 Expected<MMIXALLayoutPlan>
 planMMIXALBareMetalLayout(const MMIXALItemGroups &Groups);
+Expected<MMIXALLayoutPlan> planMMIXALLayout(const MMIXALItemGroups &Groups,
+                                            MMIXALLayoutWindow TextWindow,
+                                            MMIXALLayoutWindow DataWindow);
 
 } // namespace llvm
 

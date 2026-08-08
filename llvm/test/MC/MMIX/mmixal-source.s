@@ -54,6 +54,5 @@ zero:
 # CHECK-NEXT: LOC #2000000000000028
 # CHECK-NEXT: zero	IS @
 # CHECK-NEXT: OCTA 0
-# CHECK-NOT:  .section
-# CHECK-NOT:  .globl
-# CHECK-NOT:  .Ltemporary
+# CHECK-NOT:  :
+# CHECK-NOT:  {{^[[:space:]]*\.}}

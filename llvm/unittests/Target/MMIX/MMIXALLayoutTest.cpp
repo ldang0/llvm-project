@@ -145,6 +145,17 @@ TEST(MMIXALLayoutTest, RejectsAlignmentOutsideTheAllocationWindow) {
             "allocation window");
 }
 
+TEST(MMIXALLayoutTest, RejectsOverlappingAllocationWindows) {
+  MMIXALItemGroups Groups;
+  addItem(Groups, makeItem(MMIXALLogicalGroup::Text, 0, 16));
+  addItem(Groups, makeItem(MMIXALLogicalGroup::ReadOnly, 1, 8));
+
+  EXPECT_EQ(expectLayoutError(
+                planMMIXALLayout(Groups, {0x100, 0x110}, {0x108, 0x118})),
+            "MMIXAL layout item at source order 1: assigned interval overlaps "
+            "a prior item");
+}
+
 TEST(MMIXALLayoutTest, AcceptsExactAllocationWindowBoundaries) {
   MMIXALItemGroups Groups;
   addItem(Groups, makeItem(MMIXALLogicalGroup::Text, 0,

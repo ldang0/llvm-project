@@ -138,12 +138,22 @@ llvm::planMMIXALBareMetalLayout(const MMIXALItemGroups &Groups) {
   static_assert(MMIXALBareMetalProfile::MemoryStackStart <
                 MMIXALBareMetalProfile::MemoryStackEnd);
 
+  return planMMIXALLayout(
+      Groups,
+      {MMIXALBareMetalProfile::TextStart, MMIXALBareMetalProfile::TextEnd},
+      {MMIXALBareMetalProfile::DataStart, MMIXALBareMetalProfile::DataEnd});
+}
+
+Expected<MMIXALLayoutPlan>
+llvm::planMMIXALLayout(const MMIXALItemGroups &Groups,
+                       MMIXALLayoutWindow TextWindow,
+                       MMIXALLayoutWindow DataWindow) {
   if (Error Err = validateSourceOrders(Groups))
     return std::move(Err);
 
   MMIXALLayoutPlan Plan;
-  uint64_t TextCursor = MMIXALBareMetalProfile::TextStart;
-  uint64_t DataCursor = MMIXALBareMetalProfile::DataStart;
+  uint64_t TextCursor = TextWindow.Start;
+  uint64_t DataCursor = DataWindow.Start;
 
   for (size_t GroupIndex = 0; GroupIndex != MMIXALLogicalGroupCount;
        ++GroupIndex) {
@@ -163,9 +173,8 @@ llvm::planMMIXALBareMetalLayout(const MMIXALItemGroups &Groups) {
 
     uint64_t &Cursor =
         Group == MMIXALLogicalGroup::Text ? TextCursor : DataCursor;
-    const uint64_t WindowEnd = Group == MMIXALLogicalGroup::Text
-                                   ? MMIXALBareMetalProfile::TextEnd
-                                   : MMIXALBareMetalProfile::DataEnd;
+    const uint64_t WindowEnd =
+        Group == MMIXALLogicalGroup::Text ? TextWindow.End : DataWindow.End;
     for (const MMIXALBufferedItem *Item : OrderedItems) {
       Expected<MMIXALPlacedItem> Placed = planItem(*Item, Cursor, WindowEnd);
       if (!Placed)

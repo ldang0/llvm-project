@@ -1,7 +1,7 @@
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   --output-asm-variant=1 %s -o - \
-; RUN:   | FileCheck %s --implicit-check-not=.section \
-; RUN:     --implicit-check-not=.zero --implicit-check-not=.8byte
+; RUN:   | FileCheck %s --implicit-check-not=: \
+; RUN:     --implicit-check-not='{{^[[:space:]]*\.}}'
 
 target triple = "mmix-unknown-elf"
 
@@ -24,9 +24,13 @@ entry:
 ; CHECK-NEXT: BYTE #01, #02, #03, #04, #05, #06, #07, #08
 ; CHECK:      LOC #0000000000000100
 ; CHECK-NEXT: load_readonly	IS @
+; Natural alignment leaves address gaps without emitting synthetic data.
+; CHECK:      LOC #2000000000000008
 ; CHECK:      writable_data	IS @
 ; CHECK-NEXT: BYTE #11, #22, #33, #44
+; CHECK:      LOC #2000000000000010
 ; CHECK:      data_pointer	IS @
 ; CHECK-NEXT: OCTA writable_data
+; CHECK:      LOC #2000000000000020
 ; CHECK:      zero_data	IS @
 ; CHECK-NEXT: OCTA 0, 0
