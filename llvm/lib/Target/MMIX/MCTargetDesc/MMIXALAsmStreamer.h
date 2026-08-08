@@ -44,14 +44,12 @@ private:
     Assignment,
     ByteFill,
     Bytes,
-    CommonSymbol,
     Instruction,
     Label,
     RepeatedValue,
     SectionSwitch,
     Value,
-    ZeroFill,
-    SymbolAttribute
+    ZeroFill
   };
 
   struct BufferedEvent {
@@ -63,7 +61,6 @@ private:
     const MCSection *Section = nullptr;
     const MCExpr *Expression = nullptr;
     SmallVector<const MCSymbol *, 2> Dependencies;
-    MCSymbolAttr Attribute = MCSA_Invalid;
     uint64_t Size = 0;
     uint64_t FillValue = 0;
     int64_t RepeatValue = 0;
@@ -94,6 +91,7 @@ private:
 
   static size_t getGroupIndex(LogicalGroup Group);
   void recordClassificationError(const Twine &Message);
+  void recordUnsupportedEvent(StringRef Event);
   Expected<LogicalGroup> classifySection(const MCSection &Section,
                                          uint32_t Subsection) const;
   std::optional<LogicalGroup> classifyCurrentSection();
@@ -111,6 +109,12 @@ private:
                 DenseMap<const MCSymbol *, uint64_t> &AliasAddresses) const;
   Error renderModule(const MMIXALLayoutPlan &Layout, raw_ostream &OS);
 
+protected:
+  void changeSection(MCSection *Section, uint32_t Subsection) override;
+  void emitCFIStartProcImpl(MCDwarfFrameInfo &Frame) override;
+  void emitCFIEndProcImpl(MCDwarfFrameInfo &Frame) override;
+  void emitRawTextImpl(StringRef Text) override;
+
 public:
   MMIXALAsmStreamer(MCContext &Context,
                     std::unique_ptr<formatted_raw_ostream> Output,
@@ -118,13 +122,19 @@ public:
   ~MMIXALAsmStreamer() override;
 
   void reset() override;
-  void switchSection(MCSection *Section, uint32_t Subsection = 0) override;
   void emitBytes(StringRef Data) override;
   void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
   void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override;
+  void emitConditionalAssignment(MCSymbol *Symbol,
+                                 const MCExpr *Value) override;
+  void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
   void visitUsedSymbol(const MCSymbol &Symbol) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
+  void emitEHSymAttributes(const MCSymbol *Symbol, MCSymbol *EHSymbol) override;
+  void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
+  void emitELFSymverDirective(const MCSymbol *OriginalSym, StringRef Name,
+                              bool KeepOriginalSym) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         Align ByteAlignment) override;
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
@@ -136,6 +146,8 @@ public:
                       Align ByteAlignment = Align(1)) override;
   void emitValueImpl(const MCExpr *Value, unsigned Size,
                      SMLoc Loc = SMLoc()) override;
+  void emitULEB128Value(const MCExpr *Value) override;
+  void emitSLEB128Value(const MCExpr *Value) override;
   void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
                 SMLoc Loc = SMLoc()) override;
   void emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,
@@ -145,6 +157,36 @@ public:
                             unsigned MaxBytesToEmit = 0) override;
   void emitCodeAlignment(Align Alignment, const MCSubtargetInfo &STI,
                          unsigned MaxBytesToEmit = 0) override;
+  void emitNops(int64_t NumBytes, int64_t ControlledNopLength, SMLoc Loc,
+                const MCSubtargetInfo &STI) override;
+  void emitPrefAlign(Align Alignment, const MCSymbol &End, bool EmitNops,
+                     uint8_t Fill, const MCSubtargetInfo &STI) override;
+  void emitValueToOffset(const MCExpr *Offset, unsigned char Value,
+                         SMLoc Loc) override;
+  void emitFileDirective(StringRef Filename) override;
+  void emitFileDirective(StringRef Filename, StringRef CompilerVersion,
+                         StringRef TimeStamp, StringRef Description) override;
+  void emitIdent(StringRef IdentString) override;
+  Expected<unsigned> tryEmitDwarfFileDirective(
+      unsigned FileNo, StringRef Directory, StringRef Filename,
+      std::optional<MD5::MD5Result> Checksum = std::nullopt,
+      std::optional<StringRef> Source = std::nullopt,
+      unsigned CUID = 0) override;
+  void emitDwarfFile0Directive(StringRef Directory, StringRef Filename,
+                               std::optional<MD5::MD5Result> Checksum,
+                               std::optional<StringRef> Source,
+                               unsigned CUID = 0) override;
+  void emitDwarfLocDirective(unsigned FileNo, unsigned Line, unsigned Column,
+                             unsigned Flags, unsigned Isa,
+                             unsigned Discriminator, StringRef FileName,
+                             StringRef Comment = {}) override;
+  void emitDwarfLocLabelDirective(SMLoc Loc, StringRef Name) override;
+  void emitCFISections(bool EH, bool Debug, bool SFrame) override;
+  void emitSyntaxDirective(StringRef Syntax, StringRef Options) override;
+  void emitRelocDirective(const MCExpr &Offset, StringRef Name,
+                          const MCExpr *Expr, SMLoc Loc = {}) override;
+  void emitAddrsig() override;
+  void emitAddrsigSym(const MCSymbol *Symbol) override;
   void finishImpl() override;
 
   Error registerUserSymbol(const MCSymbol &Symbol, StringRef RawName);

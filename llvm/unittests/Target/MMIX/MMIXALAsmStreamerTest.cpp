@@ -101,7 +101,7 @@ TEST_F(MMIXALAsmStreamerTest, EmptyStreamFinishesWithoutOutput) {
   EXPECT_TRUE(Output.empty());
 }
 
-TEST_F(MMIXALAsmStreamerTest, NonEmptyStreamFailsAtomically) {
+TEST_F(MMIXALAsmStreamerTest, LateLinkageEventFailsAtomically) {
   MCContext Context(TT, MAI, *MRI, *STI);
   std::string Diagnostic;
   captureDiagnostic(Context, Diagnostic);
@@ -111,20 +111,22 @@ TEST_F(MMIXALAsmStreamerTest, NonEmptyStreamFailsAtomically) {
   Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
                                      ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
 
-  MCInst Inst;
-  Inst.setOpcode(MMIX::ADD);
-  Streamer->emitBytes("data");
-  Streamer->emitInstruction(Inst, *STI);
-  MCSymbol *Label = Context.getOrCreateSymbol("label");
+  MCSymbol *Label = Context.getOrCreateSymbol("canonical_label");
+  expectSuccess(Streamer->registerUserSymbol(*Label, "label"));
   Streamer->emitLabel(Label);
+  MCInst Add;
+  Add.setOpcode(MMIX::ADD);
+  Add.addOperand(MCOperand::createReg(MMIX::R1));
+  Add.addOperand(MCOperand::createReg(MMIX::R2));
+  Add.addOperand(MCOperand::createReg(MMIX::R3));
+  Streamer->emitInstruction(Add, *STI);
   EXPECT_TRUE(Streamer->emitSymbolAttribute(Label, MCSA_Global));
-  Streamer->emitCommonSymbol(Context.getOrCreateSymbol("common"), 8, Align(8));
-  ASSERT_EQ(Streamer->getNumBufferedEvents(), 6u);
 
   Streamer->finish();
 
   EXPECT_TRUE(Context.hadError());
-  EXPECT_EQ(Diagnostic, "MMIXAL buffered module emission is not implemented");
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL does not support symbol linkage or visibility events");
   EXPECT_TRUE(Output.empty());
 }
 
@@ -144,6 +146,81 @@ TEST_F(MMIXALAsmStreamerTest, ResetDiscardsBufferedEvents) {
   Streamer->finish();
 
   EXPECT_FALSE(Context.hadError());
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest,
+       SuppressesAddressNeutralMetadataAndEmptyNoteSections) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->emitFileDirective("input.s");
+  Streamer->emitFileDirective("input.s", "compiler", "timestamp",
+                              "description");
+  Expected<unsigned> File = Streamer->tryEmitDwarfFileDirective(
+      1, "source", "input.s", std::nullopt, std::nullopt, 0);
+  ASSERT_TRUE(static_cast<bool>(File));
+  EXPECT_EQ(*File, 1u);
+  Streamer->emitDwarfFile0Directive("source", "input.s", std::nullopt,
+                                    std::nullopt, 0);
+  Streamer->emitDwarfLocDirective(1, 7, 3, 0, 0, 0, "input.s");
+  Streamer->emitIdent("compiler identification");
+
+  Streamer->switchSection(getSection(Context, ".note.test", ELF::SHT_NOTE, 0));
+  Streamer->switchSection(
+      getSection(Context, ".note.GNU-stack", ELF::SHT_PROGBITS, 0));
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  MCSymbol *Data = Context.getOrCreateSymbol("canonical_data");
+  expectSuccess(Streamer->registerUserSymbol(*Data, "data"));
+  EXPECT_TRUE(Streamer->emitSymbolAttribute(Data, MCSA_ELF_TypeObject));
+  Streamer->emitLabel(Data);
+  Streamer->emitValue(MCConstantExpr::create(42, Context), 8);
+  Streamer->finish();
+
+  EXPECT_FALSE(Context.hadError());
+  EXPECT_EQ(Output, "\tLOC #2000000000000000\n"
+                    "data\tIS @\n"
+                    "\tOCTA #000000000000002A\n");
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsContentInNonallocatingNoteSection) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->switchSection(getSection(Context, ".note.test", ELF::SHT_NOTE, 0));
+  Streamer->emitBytes("note payload");
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL cannot allocate section '.note.test': section is not "
+            "allocated");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsEmptyIncompatibleCustomSection) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->switchSection(
+      getSection(Context, ".custom.metadata", ELF::SHT_PROGBITS, 0));
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL cannot allocate section '.custom.metadata': section is "
+            "not allocated");
   EXPECT_TRUE(Output.empty());
 }
 
@@ -535,6 +612,105 @@ TEST_F(MMIXALAsmStreamerTest, RejectsUnsupportedAllocatedSections) {
         << Diagnostic;
     EXPECT_TRUE(Output.empty());
   }
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsCommonSymbolAllocationAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Common = Context.getOrCreateSymbol("canonical_common");
+  Streamer->emitCommonSymbol(Common, 8, Align(8));
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL does not support common-symbol allocation events");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsCFIUnwindEventsAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->switchSection(getSection(Context, ".text", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_EXECINSTR));
+  Streamer->emitCFIStartProc(false);
+  Streamer->emitCFIDefCfa(MMIX::R254, 0);
+  Streamer->emitCFIEndProc();
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic, "MMIXAL does not support CFI/unwind events");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsUnsupportedScalarWidthAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitValue(MCConstantExpr::create(1, Context), 3);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic, "MMIXAL data value width must be 1, 2, 4, or 8 bytes");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsDuplicateDefinitionAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  MCSymbol *Duplicate = Context.getOrCreateSymbol("canonical_duplicate");
+  expectSuccess(Streamer->registerUserSymbol(*Duplicate, "duplicate"));
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitLabel(Duplicate);
+  Streamer->emitLabel(Duplicate);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL layout item 'canonical_duplicate': symbol "
+            "'canonical_duplicate' is assigned by more than one item");
+  EXPECT_TRUE(Output.empty());
+}
+
+TEST_F(MMIXALAsmStreamerTest, RejectsNonzeroDataAlignmentFillAtomically) {
+  MCContext Context(TT, MAI, *MRI, *STI);
+  std::string Diagnostic;
+  captureDiagnostic(Context, Diagnostic);
+  std::string Output;
+  raw_string_ostream OutputOS(Output);
+  auto Streamer = createStreamer(Context, OutputOS);
+
+  Streamer->switchSection(getSection(Context, ".data", ELF::SHT_PROGBITS,
+                                     ELF::SHF_ALLOC | ELF::SHF_WRITE));
+  Streamer->emitIntValue(1, 1);
+  Streamer->emitValueToAlignment(Align(8), 0xff);
+  Streamer->finish();
+
+  EXPECT_TRUE(Context.hadError());
+  EXPECT_EQ(Diagnostic,
+            "MMIXAL data alignment with nonzero fill is unsupported");
+  EXPECT_TRUE(Output.empty());
 }
 
 TEST_F(MMIXALAsmStreamerTest, RejectsInitializedContentInZeroStorage) {

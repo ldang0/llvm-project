@@ -277,6 +277,11 @@ void MMIXALAsmStreamer::recordClassificationError(const Twine &Message) {
     ClassificationError = Message.str();
 }
 
+void MMIXALAsmStreamer::recordUnsupportedEvent(StringRef Event) {
+  recordClassificationError(Twine("MMIXAL does not support ") + Event +
+                            " events");
+}
+
 Expected<MMIXALAsmStreamer::LogicalGroup>
 MMIXALAsmStreamer::classifySection(const MCSection &Section,
                                    uint32_t Subsection) const {
@@ -458,6 +463,19 @@ void MMIXALAsmStreamer::updateCurrentItemGroupForDependencies(
   }
 }
 
+void MMIXALAsmStreamer::emitCFIStartProcImpl(MCDwarfFrameInfo &Frame) {
+  recordUnsupportedEvent("CFI/unwind");
+}
+
+void MMIXALAsmStreamer::emitCFIEndProcImpl(MCDwarfFrameInfo &Frame) {
+  MCStreamer::emitCFIEndProcImpl(Frame);
+  recordUnsupportedEvent("CFI/unwind");
+}
+
+void MMIXALAsmStreamer::emitRawTextImpl(StringRef Text) {
+  recordUnsupportedEvent("opaque assembly text");
+}
+
 void MMIXALAsmStreamer::reset() {
   MCStreamer::reset();
   Events.clear();
@@ -476,12 +494,23 @@ void MMIXALAsmStreamer::reset() {
   HasActiveFunction = false;
 }
 
-void MMIXALAsmStreamer::switchSection(MCSection *Section, uint32_t Subsection) {
-  assert(Section && "cannot switch to a null section");
-  const MCSectionSubPair Previous = getCurrentSection();
-  if (Previous != MCSectionSubPair(Section, Subsection))
-    flushCurrentItem();
-  MCStreamer::switchSection(Section, Subsection);
+void MMIXALAsmStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
+  flushCurrentItem();
+  MCStreamer::changeSection(Section, Subsection);
+
+  bool IsSuppressibleNote = false;
+  if (getContext().getObjectFileType() == MCContext::IsELF) {
+    const auto &ELFSection = static_cast<const MCSectionELF &>(*Section);
+    IsSuppressibleNote = Subsection == 0 && ELFSection.getFlags() == 0 &&
+                         ELFSection.getEntrySize() == 0 &&
+                         (ELFSection.getType() == ELF::SHT_NOTE ||
+                          (ELFSection.getType() == ELF::SHT_PROGBITS &&
+                           ELFSection.getName() == ".note.GNU-stack"));
+  }
+  if (!IsSuppressibleNote)
+    if (Expected<LogicalGroup> Group = classifySection(*Section, Subsection);
+        !Group)
+      recordClassificationError(toString(Group.takeError()));
 
   BufferedEvent Event{EventKind::SectionSwitch};
   Event.Section = Section;
@@ -552,6 +581,16 @@ void MMIXALAsmStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
     Events.push_back(std::move(Event));
 }
 
+void MMIXALAsmStreamer::emitConditionalAssignment(MCSymbol *Symbol,
+                                                  const MCExpr *Value) {
+  recordUnsupportedEvent("conditional symbol assignment");
+}
+
+void MMIXALAsmStreamer::emitWeakReference(MCSymbol *Alias,
+                                          const MCSymbol *Symbol) {
+  recordUnsupportedEvent("weak symbol reference");
+}
+
 void MMIXALAsmStreamer::visitUsedSymbol(const MCSymbol &Symbol) {
   observeSymbol(Symbol);
   if (DependencySink && !llvm::is_contained(*DependencySink, &Symbol))
@@ -562,33 +601,33 @@ bool MMIXALAsmStreamer::emitSymbolAttribute(MCSymbol *Symbol,
                                             MCSymbolAttr Attribute) {
   assert(Symbol && "cannot emit an attribute for a null symbol");
   observeSymbol(*Symbol);
-  BufferedEvent Event{EventKind::SymbolAttribute};
-  Event.Symbol = Symbol;
-  Event.Section = getCurrentSection().first;
-  Event.Attribute = Attribute;
-  Events.push_back(std::move(Event));
+  if (Attribute == MCSA_ELF_TypeFunction || Attribute == MCSA_ELF_TypeObject ||
+      Attribute == MCSA_ELF_TypeNoType)
+    return true;
+  recordUnsupportedEvent("symbol linkage or visibility");
   return true;
+}
+
+void MMIXALAsmStreamer::emitEHSymAttributes(const MCSymbol *Symbol,
+                                            MCSymbol *EHSymbol) {
+  recordUnsupportedEvent("exception-handling symbol attribute");
+}
+
+void MMIXALAsmStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {
+  recordUnsupportedEvent("ELF symbol size");
+}
+
+void MMIXALAsmStreamer::emitELFSymverDirective(const MCSymbol *OriginalSym,
+                                               StringRef Name,
+                                               bool KeepOriginalSym) {
+  recordUnsupportedEvent("ELF symbol version");
 }
 
 void MMIXALAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                          Align ByteAlignment) {
   assert(Symbol && "cannot emit a null common symbol");
   observeSymbol(*Symbol);
-  flushCurrentItem();
-  BufferedEvent Event{EventKind::CommonSymbol};
-  Event.Symbol = Symbol;
-  Event.Size = Size;
-  Event.Alignment = ByteAlignment;
-  const size_t EventIndex = Events.size();
-  Events.push_back(std::move(Event));
-
-  BufferedItem Item{LogicalGroup::ZeroStorage, nullptr, NextItemOrder++};
-  Item.EventIndices.push_back(EventIndex);
-  Item.OwningSymbols.push_back(Symbol);
-  Item.RequiredAlignment = ByteAlignment.value();
-  Item.KnownSize = Size;
-  Item.HasPayload = true;
-  ItemGroups[getGroupIndex(Item.Group)].push_back(std::move(Item));
+  recordUnsupportedEvent("common-symbol allocation");
 }
 
 void MMIXALAsmStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
@@ -637,13 +676,7 @@ void MMIXALAsmStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                        uint64_t Size, Align ByteAlignment) {
   if (Symbol)
     observeSymbol(*Symbol);
-  recordClassificationError("MMIXAL thread-local zero storage is unsupported");
-  BufferedEvent Event{EventKind::CommonSymbol};
-  Event.Symbol = Symbol;
-  Event.Section = Section;
-  Event.Size = Size;
-  Event.Alignment = ByteAlignment;
-  Events.push_back(std::move(Event));
+  recordUnsupportedEvent("thread-local zero-storage allocation");
 }
 
 void MMIXALAsmStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
@@ -664,6 +697,14 @@ void MMIXALAsmStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
     recordClassificationError(
         "MMIXAL zero-storage section contains an initialized value");
   appendEventToCurrentItem(std::move(Event), Size);
+}
+
+void MMIXALAsmStreamer::emitULEB128Value(const MCExpr *Value) {
+  recordUnsupportedEvent("ULEB128 data");
+}
+
+void MMIXALAsmStreamer::emitSLEB128Value(const MCExpr *Value) {
+  recordUnsupportedEvent("SLEB128 data");
 }
 
 void MMIXALAsmStreamer::emitFill(const MCExpr &NumBytes, uint64_t FillValue,
@@ -761,6 +802,83 @@ void MMIXALAsmStreamer::emitCodeAlignment(Align Alignment,
     if (CurrentItem->RequiredAlignment < Alignment.value())
       CurrentItem->RequiredAlignment = Alignment.value();
   }
+}
+
+void MMIXALAsmStreamer::emitNops(int64_t NumBytes, int64_t ControlledNopLength,
+                                 SMLoc Loc, const MCSubtargetInfo &STI) {
+  recordUnsupportedEvent("explicit nop padding");
+}
+
+void MMIXALAsmStreamer::emitPrefAlign(Align Alignment, const MCSymbol &End,
+                                      bool EmitNops, uint8_t Fill,
+                                      const MCSubtargetInfo &STI) {
+  recordUnsupportedEvent("prefix alignment");
+}
+
+void MMIXALAsmStreamer::emitValueToOffset(const MCExpr *Offset,
+                                          unsigned char Value, SMLoc Loc) {
+  recordUnsupportedEvent("address-offset padding");
+}
+
+void MMIXALAsmStreamer::emitFileDirective(StringRef Filename) {}
+
+void MMIXALAsmStreamer::emitFileDirective(StringRef Filename,
+                                          StringRef CompilerVersion,
+                                          StringRef TimeStamp,
+                                          StringRef Description) {}
+
+void MMIXALAsmStreamer::emitIdent(StringRef IdentString) {}
+
+Expected<unsigned> MMIXALAsmStreamer::tryEmitDwarfFileDirective(
+    unsigned FileNo, StringRef Directory, StringRef Filename,
+    std::optional<MD5::MD5Result> Checksum, std::optional<StringRef> Source,
+    unsigned CUID) {
+  return MCStreamer::tryEmitDwarfFileDirective(FileNo, Directory, Filename,
+                                               Checksum, Source, CUID);
+}
+
+void MMIXALAsmStreamer::emitDwarfFile0Directive(
+    StringRef Directory, StringRef Filename,
+    std::optional<MD5::MD5Result> Checksum, std::optional<StringRef> Source,
+    unsigned CUID) {
+  MCStreamer::emitDwarfFile0Directive(Directory, Filename, Checksum, Source,
+                                      CUID);
+}
+
+void MMIXALAsmStreamer::emitDwarfLocDirective(unsigned FileNo, unsigned Line,
+                                              unsigned Column, unsigned Flags,
+                                              unsigned Isa,
+                                              unsigned Discriminator,
+                                              StringRef FileName,
+                                              StringRef Comment) {
+  MCStreamer::emitDwarfLocDirective(FileNo, Line, Column, Flags, Isa,
+                                    Discriminator, FileName, Comment);
+}
+
+void MMIXALAsmStreamer::emitDwarfLocLabelDirective(SMLoc Loc, StringRef Name) {
+  recordUnsupportedEvent("DWARF location label");
+}
+
+void MMIXALAsmStreamer::emitCFISections(bool EH, bool Debug, bool SFrame) {
+  recordUnsupportedEvent("CFI/unwind section selection");
+}
+
+void MMIXALAsmStreamer::emitSyntaxDirective(StringRef Syntax,
+                                            StringRef Options) {
+  recordUnsupportedEvent("source syntax directive");
+}
+
+void MMIXALAsmStreamer::emitRelocDirective(const MCExpr &Offset, StringRef Name,
+                                           const MCExpr *Expr, SMLoc Loc) {
+  recordUnsupportedEvent("explicit relocation");
+}
+
+void MMIXALAsmStreamer::emitAddrsig() {
+  recordUnsupportedEvent("address-significance table");
+}
+
+void MMIXALAsmStreamer::emitAddrsigSym(const MCSymbol *Symbol) {
+  recordUnsupportedEvent("address-significance symbol");
 }
 
 Error MMIXALAsmStreamer::registerUserSymbol(const MCSymbol &Symbol,
@@ -1102,6 +1220,9 @@ Error MMIXALAsmStreamer::renderModule(const MMIXALLayoutPlan &Layout,
     std::optional<uint64_t> CurrentLocation;
     for (const MMIXALPaddingInterval &Padding : Placed.Padding) {
       if (!Padding.Request.IsCodeAlignment) {
+        if (Padding.Request.Fill != 0)
+          return createStringError(
+              "MMIXAL data alignment with nonzero fill is unsupported");
         emitAbsoluteLocation(Padding.End, OS);
         CurrentLocation = Padding.End;
         continue;
