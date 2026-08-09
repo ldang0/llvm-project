@@ -10,6 +10,7 @@
 #define LLVM_LIB_TARGET_MMIX_MCTARGETDESC_MMIXMCTARGETDESC_H
 
 #include "llvm/ADT/StringRef.h"
+#include <memory>
 
 namespace llvm {
 
@@ -17,6 +18,7 @@ class MCInstrInfo;
 class MCCodeEmitter;
 class MCAsmBackend;
 class MCContext;
+class MCObjectTargetWriter;
 class MCRegisterInfo;
 class MCSubtargetInfo;
 class MCTargetOptions;
@@ -31,6 +33,7 @@ MCCodeEmitter *createMMIXMCCodeEmitter(const MCInstrInfo &MCII, MCContext &Ctx);
 MCAsmBackend *createMMIXAsmBackend(const Target &T, const MCSubtargetInfo &STI,
                                    const MCRegisterInfo &MRI,
                                    const MCTargetOptions &Options);
+std::unique_ptr<MCObjectTargetWriter> createMMIXELFObjectWriter();
 
 } // namespace llvm
 
