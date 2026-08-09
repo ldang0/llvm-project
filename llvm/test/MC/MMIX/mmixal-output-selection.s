@@ -9,7 +9,7 @@
 # RUN: test ! -s %t.unknown
 
 # SOURCE: LOC #0000000000000100
-# SOURCE-NEXT: ADD $1, $2, $3
+# SOURCE-NEXT: ADD $1,$2,$3
 # OBJECT: error: MMIXAL complete-source emission is not available
 # UNKNOWN: error: unable to create instruction printer for target triple 'mmix' with assembly variant 42
 
