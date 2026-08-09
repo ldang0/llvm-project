@@ -134,6 +134,16 @@ TEST(ELFObjectFileTest, MachineTestForMIPS) {
     checkFormatAndArch(Data, Formats[Idx], Archs[Idx]);
 }
 
+TEST(ELFObjectFileTest, MachineTestForMMIX) {
+  std::array<StringRef, 4> Formats = {"elf32-unknown", "elf32-unknown",
+                                      "elf64-unknown", "elf64-mmix"};
+  std::array<Triple::ArchType, 4> Archs = {Triple::UnknownArch,
+                                           Triple::UnknownArch,
+                                           Triple::UnknownArch, Triple::mmix};
+  for (auto [Idx, Data] : enumerate(generateData(ELF::EM_MMIX)))
+    checkFormatAndArch(Data, Formats[Idx], Archs[Idx]);
+}
+
 TEST(ELFObjectFileTest, MachineTestForAMDGPU) {
   std::array<StringRef, 4> Formats = {"elf32-amdgpu", "elf32-amdgpu",
                                       "elf64-amdgpu", "elf64-amdgpu"};

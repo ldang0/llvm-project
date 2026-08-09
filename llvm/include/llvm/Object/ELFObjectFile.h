@@ -1344,6 +1344,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "elf64-sparc";
     case ELF::EM_MIPS:
       return "elf64-mips";
+    case ELF::EM_MMIX:
+      return IsLittleEndian ? "elf64-unknown" : "elf64-mmix";
     case ELF::EM_AMDGPU:
       return "elf64-amdgpu";
     case ELF::EM_BPF:
@@ -1390,6 +1392,9 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     default:
       report_fatal_error("Invalid ELFCLASS!");
     }
+  case ELF::EM_MMIX:
+    return !IsLittleEndian && ELFT::Is64Bits ? Triple::mmix
+                                             : Triple::UnknownArch;
   case ELF::EM_MSP430:
     return Triple::msp430;
   case ELF::EM_PPC:
