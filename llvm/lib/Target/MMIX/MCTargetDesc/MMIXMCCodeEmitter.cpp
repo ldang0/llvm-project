@@ -71,7 +71,9 @@ MMIXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
   if (MO.isImm())
     return static_cast<unsigned>(MO.getImm());
 
-  Ctx.reportError(MI.getLoc(), "MMIX expression operand is not relocatable");
+  Ctx.reportError(MI.getLoc(),
+                  "unresolved MMIX symbolic instruction operand requires "
+                  "relocation support");
   return 0;
 }
 

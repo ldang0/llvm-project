@@ -6,16 +6,25 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MMIXFixupKinds.h"
 #include "MMIXMCTargetDesc.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCELFObjectWriter.h"
-#include "llvm/Support/ErrorHandling.h"
+#include "llvm/MC/MCFixup.h"
 
 using namespace llvm;
 
 namespace {
 
 class MMIXELFObjectWriter : public MCELFObjectTargetWriter {
+  unsigned rejectRelocation(const MCFixup &Fixup, const Twine &Message) const {
+    reportError(Fixup.getLoc(), Message);
+    // MCAssembler suppresses object emission after an error, so this recovery
+    // value cannot become a relocation record.
+    return 0;
+  }
+
 public:
   MMIXELFObjectWriter()
       : MCELFObjectTargetWriter(
@@ -23,8 +32,45 @@ public:
             /*HasRelocationAddend=*/true, /*ABIVersion=*/0) {}
 
 protected:
-  unsigned getRelocType(const MCFixup &, const MCValue &, bool) const override {
-    report_fatal_error("MMIX ELF relocations are not implemented");
+  unsigned getRelocType(const MCFixup &Fixup, const MCValue &,
+                        bool IsPCRel) const override {
+    unsigned Width;
+    switch (Fixup.getKind()) {
+    case FK_Data_1:
+      Width = 8;
+      break;
+    case FK_Data_2:
+      Width = 16;
+      break;
+    case FK_Data_4:
+      Width = 32;
+      break;
+    case FK_Data_8:
+      Width = 64;
+      break;
+    case MMIX::fixup_mmix_branch_forward:
+      return rejectRelocation(
+          Fixup, "MMIX 16-bit forward PC-relative instruction relocation "
+                 "is not implemented");
+    case MMIX::fixup_mmix_branch_backward:
+      return rejectRelocation(
+          Fixup, "MMIX 16-bit backward PC-relative instruction relocation "
+                 "is not implemented");
+    case MMIX::fixup_mmix_jump_forward:
+      return rejectRelocation(
+          Fixup, "MMIX 24-bit forward PC-relative instruction relocation "
+                 "is not implemented");
+    case MMIX::fixup_mmix_jump_backward:
+      return rejectRelocation(
+          Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
+                 "is not implemented");
+    default:
+      return rejectRelocation(Fixup, "MMIX ELF relocation is not implemented");
+    }
+
+    return rejectRelocation(Fixup, Twine("MMIX ") + Twine(Width) + "-bit " +
+                                       (IsPCRel ? "PC-relative" : "absolute") +
+                                       " data relocation is not implemented");
   }
 };
 

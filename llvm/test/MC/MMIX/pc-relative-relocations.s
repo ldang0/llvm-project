@@ -1,6 +1,7 @@
 # RUN: echo 'BN r1, external' | not llvm-mc -triple=mmix -filetype=obj \
-# RUN:   -o /dev/null 2>&1 | FileCheck %s
+# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=BRANCH
 # RUN: echo 'JMP external' | not llvm-mc -triple=mmix -filetype=obj \
-# RUN:   -o /dev/null 2>&1 | FileCheck %s
+# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=JUMP
 
-# CHECK: error: unresolved MMIX PC-relative fixup requires relocation support
+# BRANCH: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
+# JUMP: error: MMIX 24-bit forward PC-relative instruction relocation is not implemented

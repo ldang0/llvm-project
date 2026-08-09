@@ -13,7 +13,7 @@
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/Support/Endian.h"
-#include "llvm/Support/ErrorHandling.h"
+#include <cassert>
 #include <cstdint>
 
 using namespace llvm;
@@ -25,24 +25,51 @@ public:
   MMIXAsmBackend() : MCAsmBackend(llvm::endianness::big) {}
   ~MMIXAsmBackend() override = default;
 
-  void applyFixup(const MCFragment &, const MCFixup &Fixup, const MCValue &,
-                  uint8_t *Data, uint64_t Value, bool IsResolved) override {
+  void applyFixup(const MCFragment &F, const MCFixup &Fixup,
+                  const MCValue &Target, uint8_t *Data, uint64_t Value,
+                  bool IsResolved) override {
+    if (!IsResolved) {
+      maybeAddReloc(F, Fixup, Target, Value, IsResolved);
+      return;
+    }
+
+    const MCFixupKind Kind = Fixup.getKind();
+    if (Kind < FirstTargetFixupKind) {
+      unsigned Size;
+      switch (Kind) {
+      case FK_Data_1:
+        Size = 1;
+        break;
+      case FK_Data_2:
+        Size = 2;
+        break;
+      case FK_Data_4:
+        Size = 4;
+        break;
+      case FK_Data_8:
+        Size = 8;
+        break;
+      default:
+        getContext().reportError(Fixup.getLoc(),
+                                 "unsupported resolved MMIX data fixup");
+        return;
+      }
+      assert(Fixup.getOffset() + Size <= F.getSize() &&
+             "invalid MMIX data fixup offset");
+      for (unsigned I = 0; I != Size; ++I)
+        Data[I] |= static_cast<uint8_t>(Value >> ((Size - I - 1) * 8));
+      return;
+    }
+
     int64_t Delta = static_cast<int64_t>(Value);
-    const bool IsBranch = Fixup.getKind() == MMIX::fixup_mmix_branch_forward ||
-                          Fixup.getKind() == MMIX::fixup_mmix_branch_backward;
-    const bool IsBackward =
-        Fixup.getKind() == MMIX::fixup_mmix_branch_backward ||
-        Fixup.getKind() == MMIX::fixup_mmix_jump_backward;
+    const bool IsBranch = Kind == MMIX::fixup_mmix_branch_forward ||
+                          Kind == MMIX::fixup_mmix_branch_backward;
+    const bool IsBackward = Kind == MMIX::fixup_mmix_branch_backward ||
+                            Kind == MMIX::fixup_mmix_jump_backward;
     const unsigned Width = IsBranch ? 16 : 24;
     const int64_t Min = IsBackward ? -(int64_t(1) << Width) : 0;
     const int64_t Max = IsBackward ? -1 : (int64_t(1) << Width) - 1;
 
-    if (!IsResolved) {
-      getContext().reportError(
-          Fixup.getLoc(),
-          "unresolved MMIX PC-relative fixup requires relocation support");
-      return;
-    }
     if ((Delta & 3) != 0) {
       getContext().reportError(
           Fixup.getLoc(), "MMIX PC-relative fixup is not instruction aligned");

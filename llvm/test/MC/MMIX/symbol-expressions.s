@@ -5,7 +5,7 @@
 # CHECK:      INCMH r1, (symbol>>32)&65535
 # CHECK:      INCML r1, (symbol>>16)&65535
 # CHECK:      INCL r1, symbol&65535
-# OBJ: error: MMIX expression operand is not relocatable
+# OBJ: error: unresolved MMIX symbolic instruction operand requires relocation support
 
 SETH r1, (symbol >> 48) & 65535
 INCMH r1, (symbol >> 32) & 65535
