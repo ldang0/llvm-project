@@ -486,6 +486,11 @@ enum {
 #include "ELFRelocs/ARC.def"
 };
 
+// ELF Relocation types for MMIX.
+enum {
+#include "ELFRelocs/MMIX.def"
+};
+
 // AVR specific e_flags
 enum : unsigned {
   EF_AVR_ARCH_AVR1 = 1,

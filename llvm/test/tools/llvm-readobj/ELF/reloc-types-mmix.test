@@ -1,0 +1,127 @@
+## Test that llvm-readobj shows the GNU MMIX relocation names and values.
+
+# RUN: yaml2obj %s -o %t.o
+# RUN: llvm-readobj -r --expand-relocs %t.o | FileCheck %s
+
+# CHECK:      Type: R_MMIX_NONE (0)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_8 (1)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_16 (2)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_24 (3)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_32 (4)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_64 (5)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PC_8 (6)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PC_16 (7)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PC_24 (8)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PC_32 (9)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PC_64 (10)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_GNU_VTINHERIT (11)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_GNU_VTENTRY (12)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_GETA (13)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_GETA_1 (14)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_GETA_2 (15)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_GETA_3 (16)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_CBRANCH (17)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_CBRANCH_J (18)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_CBRANCH_1 (19)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_CBRANCH_2 (20)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_CBRANCH_3 (21)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PUSHJ (22)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PUSHJ_1 (23)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PUSHJ_2 (24)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PUSHJ_3 (25)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_JMP (26)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_JMP_1 (27)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_JMP_2 (28)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_JMP_3 (29)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_ADDR19 (30)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_ADDR27 (31)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_REG_OR_BYTE (32)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_REG (33)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_BASE_PLUS_OFFSET (34)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_LOCAL (35)
+# CHECK-NEXT: Symbol: - (0)
+# CHECK:      Type: R_MMIX_PUSHJ_STUBBABLE (36)
+# CHECK-NEXT: Symbol: - (0)
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .rela.text
+    Type: SHT_RELA
+    Relocations:
+      - Type: R_MMIX_NONE
+      - Type: R_MMIX_8
+      - Type: R_MMIX_16
+      - Type: R_MMIX_24
+      - Type: R_MMIX_32
+      - Type: R_MMIX_64
+      - Type: R_MMIX_PC_8
+      - Type: R_MMIX_PC_16
+      - Type: R_MMIX_PC_24
+      - Type: R_MMIX_PC_32
+      - Type: R_MMIX_PC_64
+      - Type: R_MMIX_GNU_VTINHERIT
+      - Type: R_MMIX_GNU_VTENTRY
+      - Type: R_MMIX_GETA
+      - Type: R_MMIX_GETA_1
+      - Type: R_MMIX_GETA_2
+      - Type: R_MMIX_GETA_3
+      - Type: R_MMIX_CBRANCH
+      - Type: R_MMIX_CBRANCH_J
+      - Type: R_MMIX_CBRANCH_1
+      - Type: R_MMIX_CBRANCH_2
+      - Type: R_MMIX_CBRANCH_3
+      - Type: R_MMIX_PUSHJ
+      - Type: R_MMIX_PUSHJ_1
+      - Type: R_MMIX_PUSHJ_2
+      - Type: R_MMIX_PUSHJ_3
+      - Type: R_MMIX_JMP
+      - Type: R_MMIX_JMP_1
+      - Type: R_MMIX_JMP_2
+      - Type: R_MMIX_JMP_3
+      - Type: R_MMIX_ADDR19
+      - Type: R_MMIX_ADDR27
+      - Type: R_MMIX_REG_OR_BYTE
+      - Type: R_MMIX_REG
+      - Type: R_MMIX_BASE_PLUS_OFFSET
+      - Type: R_MMIX_LOCAL
+      - Type: R_MMIX_PUSHJ_STUBBABLE

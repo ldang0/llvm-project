@@ -76,6 +76,13 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
+  case ELF::EM_MMIX:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/MMIX.def"
+    default:
+      break;
+    }
+    break;
   case ELF::EM_AVR:
     switch (Type) {
 #include "llvm/BinaryFormat/ELFRelocs/AVR.def"
