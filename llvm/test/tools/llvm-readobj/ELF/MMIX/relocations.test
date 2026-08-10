@@ -1,7 +1,9 @@
-## Test that llvm-readobj shows the GNU MMIX relocation names and values.
+## Test that llvm-readobj recognizes all 37 GNU MMIX relocation identities.
+## These synthetic records check names and values only; they do not imply that
+## LLVM produces or applies every relocation.
 
 # RUN: yaml2obj %s -o %t.o
-# RUN: llvm-readobj -r --expand-relocs %t.o | FileCheck %s
+# RUN: llvm-readobj --relocations --expand-relocs %t.o | FileCheck %s
 
 # CHECK:      Type: R_MMIX_NONE (0)
 # CHECK-NEXT: Symbol: - (0)
