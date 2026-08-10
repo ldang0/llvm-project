@@ -8,6 +8,7 @@
 
 #include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MCTargetDesc/MMIXTargetStreamer.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -211,6 +212,8 @@ class MMIXAsmParser : public MCTargetAsmParser {
                                OperandVector &Operands, MCStreamer &Out,
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
+  ParseStatus parseDirective(AsmToken DirectiveID) override;
+  bool parseDirectiveData24(SMLoc DirectiveLoc, bool IsPCRel);
   void onBeginOfFile() override;
 
 public:
@@ -222,6 +225,43 @@ public:
 };
 
 } // namespace
+
+bool MMIXAsmParser::parseDirectiveData24(SMLoc DirectiveLoc, bool IsPCRel) {
+  if (getContext().getAsmInfo().getOutputAssemblerDialect() !=
+      MMIXII::CanonicalAsmVariant)
+    return Error(DirectiveLoc,
+                 "MMIX 24-in-32 directives require canonical assembly");
+
+  const SMLoc HighByteLoc = Parser.getTok().getLoc();
+  int64_t HighByte;
+  if (Parser.parseAbsoluteExpression(HighByte))
+    return true;
+  if (HighByte < 0 || HighByte > UINT8_MAX)
+    return Error(HighByteLoc, "expected preserved high byte in range [0, 255]");
+  if (Parser.parseComma())
+    return true;
+
+  const SMLoc ValueLoc = Parser.getTok().getLoc();
+  const MCExpr *Value;
+  if (Parser.parseExpression(Value) || Parser.parseEOL())
+    return true;
+
+  auto *TargetStreamer = Parser.getStreamer().getTargetStreamer();
+  if (!TargetStreamer)
+    return Error(DirectiveLoc,
+                 "MMIX 24-in-32 directive is unavailable for this output");
+  static_cast<MMIXTargetStreamer *>(TargetStreamer)
+      ->emitData24(static_cast<uint8_t>(HighByte), Value, IsPCRel, ValueLoc);
+  return false;
+}
+
+ParseStatus MMIXAsmParser::parseDirective(AsmToken DirectiveID) {
+  if (DirectiveID.getString() == ".mmix_24")
+    return parseDirectiveData24(DirectiveID.getLoc(), /*IsPCRel=*/false);
+  if (DirectiveID.getString() == ".mmix_pc_24")
+    return parseDirectiveData24(DirectiveID.getLoc(), /*IsPCRel=*/true);
+  return ParseStatus::NoMatch;
+}
 
 void MMIXAsmParser::onBeginOfFile() {
   const unsigned AsmVariant =

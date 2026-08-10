@@ -12,6 +12,7 @@
 #include "MMIXBaseInfo.h"
 #include "MMIXInstPrinter.h"
 #include "MMIXMCAsmInfo.h"
+#include "MMIXTargetStreamer.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -98,4 +99,8 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
   TargetRegistry::RegisterAsmStreamer(T, createMMIXAsmStreamer);
   TargetRegistry::RegisterMCCodeEmitter(T, createMMIXMCCodeEmitter);
   TargetRegistry::RegisterMCAsmBackend(T, createMMIXAsmBackend);
+  TargetRegistry::RegisterObjectTargetStreamer(T,
+                                               createMMIXObjectTargetStreamer);
+  TargetRegistry::RegisterAsmTargetStreamer(T, createMMIXAsmTargetStreamer);
+  TargetRegistry::RegisterNullTargetStreamer(T, createMMIXNullTargetStreamer);
 }

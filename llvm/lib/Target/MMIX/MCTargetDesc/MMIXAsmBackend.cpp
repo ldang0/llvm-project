@@ -61,6 +61,21 @@ public:
       return;
     }
 
+    if (Kind == MMIX::fixup_mmix_data_24 || Kind == MMIX::fixup_mmix_pcrel_24) {
+      assert(Fixup.getOffset() + 4 <= F.getSize() &&
+             "invalid MMIX 24-in-32 data fixup offset");
+      if (Value > 0xffffff && Value < 0xffffffffff000000ULL) {
+        getContext().reportError(Fixup.getLoc(),
+                                 "MMIX 24-bit data fixup is out of range");
+        return;
+      }
+
+      uint32_t Word = support::endian::read32be(Data);
+      Word = (Word & 0xff000000) | (static_cast<uint32_t>(Value) & 0xffffff);
+      support::endian::write32be(Data, Word);
+      return;
+    }
+
     int64_t Delta = static_cast<int64_t>(Value);
     const bool IsBranch = Kind == MMIX::fixup_mmix_branch_forward ||
                           Kind == MMIX::fixup_mmix_branch_backward;
@@ -102,6 +117,8 @@ public:
         {"fixup_mmix_branch_backward", 0, 16, 0},
         {"fixup_mmix_jump_forward", 0, 24, 0},
         {"fixup_mmix_jump_backward", 0, 24, 0},
+        {"fixup_mmix_data_24", 0, 24, 0},
+        {"fixup_mmix_pcrel_24", 0, 24, 0},
     };
 
     if (Kind < FirstTargetFixupKind)

@@ -13,6 +13,7 @@ add_llvm_component_library(LLVMMMIXDesc
   MMIXInstPrinter.cpp
   MMIXALInstPrinter.cpp
   MMIXMCTargetDesc.cpp
+  MMIXTargetStreamer.cpp
 
   LINK_COMPONENTS
   MC

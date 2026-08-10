@@ -69,6 +69,13 @@ protected:
       return rejectRelocation(
           Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
                  "is not implemented");
+    case MMIX::fixup_mmix_data_24:
+      return rejectRelocation(
+          Fixup, "MMIX 24-in-32 absolute data relocation is not implemented");
+    case MMIX::fixup_mmix_pcrel_24:
+      return rejectRelocation(
+          Fixup,
+          "MMIX 24-in-32 PC-relative data relocation is not implemented");
     default:
       return rejectRelocation(Fixup, "MMIX ELF relocation is not implemented");
     }
