@@ -47,10 +47,22 @@ public:
   MMIXAsmBackend() : MCAsmBackend(llvm::endianness::big) {}
   ~MMIXAsmBackend() override = default;
 
+  std::optional<MCFixupKind> getFixupKind(StringRef Name) const override {
+    if (Name == "R_MMIX_GETA")
+      return static_cast<MCFixupKind>(MMIX::fixup_mmix_geta);
+    return MCAsmBackend::getFixupKind(Name);
+  }
+
   void applyFixup(const MCFragment &F, const MCFixup &Fixup,
                   const MCValue &Target, uint8_t *Data, uint64_t Value,
                   bool IsResolved) override {
     if (Fixup.getKind() == MMIX::fixup_mmix_geta) {
+      if (!Fixup.isPCRel()) {
+        getContext().reportError(
+            Fixup.getLoc(),
+            "R_MMIX_GETA requires an assembler-owned 16-byte reservation");
+        return;
+      }
       if (Fixup.isLinkerRelaxable()) {
         maybeAddReloc(F, Fixup, Target, Value, /*IsResolved=*/false);
         return;
@@ -59,6 +71,11 @@ public:
         getContext().reportError(
             Fixup.getLoc(),
             "unresolved GETA relocation is missing its reservation");
+        return;
+      }
+      if ((Value & 3) != 0) {
+        getContext().reportError(
+            Fixup.getLoc(), "MMIX GETA target is not instruction aligned");
         return;
       }
       if (!isDirectGETAValue(Value)) {
@@ -199,7 +216,7 @@ public:
                                     bool Resolved) const override {
     assert(Fixup.getKind() == MMIX::fixup_mmix_geta &&
            "unexpected MMIX relaxable fixup");
-    return !Resolved || !isDirectGETAValue(Value);
+    return !Resolved || ((Value & 3) == 0 && !isDirectGETAValue(Value));
   }
 
   void relaxInstruction(MCInst &Inst,

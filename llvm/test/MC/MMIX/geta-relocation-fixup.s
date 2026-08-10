@@ -33,10 +33,10 @@
 # INVALID: invalid.s:5:1: error: '%geta' expression requires a GETA instruction
 # INVALID: invalid.s:6:11: error: expected '%geta' expression specifier
 
-# SPLIT: split-address.s:1:1: error: unresolved MMIX symbolic instruction operand requires relocation support
-# SPLIT: split-address.s:2:1: error: unresolved MMIX symbolic instruction operand requires relocation support
-# SPLIT: split-address.s:3:1: error: unresolved MMIX symbolic instruction operand requires relocation support
-# SPLIT: split-address.s:4:1: error: unresolved MMIX symbolic instruction operand requires relocation support
+# SPLIT: split-address.s:1:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
+# SPLIT: split-address.s:2:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
+# SPLIT: split-address.s:3:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
+# SPLIT: split-address.s:4:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
 
 #--- valid.s
 GETA r3, %geta(external + 7)

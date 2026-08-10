@@ -5,7 +5,7 @@
 # CHECK:      INCMH r1, (symbol>>32)&65535
 # CHECK:      INCML r1, (symbol>>16)&65535
 # CHECK:      INCL r1, symbol&65535
-# OBJ: error: unresolved MMIX symbolic instruction operand requires relocation support
+# OBJ-COUNT-4: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
 
 SETH r1, (symbol >> 48) & 65535
 INCMH r1, (symbol >> 32) & 65535

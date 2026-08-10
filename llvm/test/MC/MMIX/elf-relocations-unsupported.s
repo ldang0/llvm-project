@@ -34,10 +34,10 @@
 
 # WEAK: weak.s:4:8: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
 
-# SPLIT: split-address.s:1:1: error: unresolved MMIX symbolic instruction operand requires relocation support
-# SPLIT: split-address.s:2:1: error: unresolved MMIX symbolic instruction operand requires relocation support
-# SPLIT: split-address.s:3:1: error: unresolved MMIX symbolic instruction operand requires relocation support
-# SPLIT: split-address.s:4:1: error: unresolved MMIX symbolic instruction operand requires relocation support
+# SPLIT: split-address.s:1:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
+# SPLIT: split-address.s:2:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
+# SPLIT: split-address.s:3:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
+# SPLIT: split-address.s:4:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
 
 # RESOLVED:      Name: .data
 # RESOLVED:      Size: 16

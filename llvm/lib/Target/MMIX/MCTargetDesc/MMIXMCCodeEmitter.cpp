@@ -69,6 +69,11 @@ static bool countGETASymbolTerms(const MCExpr *Expr, unsigned &Symbols) {
   }
 }
 
+static bool isSplitAddressOpcode(unsigned Opcode) {
+  return Opcode == MMIX::SETH || Opcode == MMIX::INCMH ||
+         Opcode == MMIX::INCML || Opcode == MMIX::INCL;
+}
+
 class MMIXMCCodeEmitter : public MCCodeEmitter {
   const MCInstrInfo &MCII;
   const MCRegisterInfo &MRI;
@@ -137,6 +142,13 @@ MMIXMCCodeEmitter::getMachineOpValue(const MCInst &MI, const MCOperand &MO,
     return MRI.getEncodingValue(MO.getReg());
   if (MO.isImm())
     return static_cast<unsigned>(MO.getImm());
+
+  if (MO.isExpr() && isSplitAddressOpcode(MI.getOpcode())) {
+    Ctx.reportError(MI.getLoc(),
+                    "unresolved MMIX split-address expression is not "
+                    "supported; use GETA with '%geta(...)'");
+    return 0;
+  }
 
   Ctx.reportError(MI.getLoc(),
                   "unresolved MMIX symbolic instruction operand requires "
