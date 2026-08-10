@@ -89,8 +89,15 @@ protected:
                  : ELF::R_MMIX_ADDR27;
     }
     case MMIX::fixup_mmix_call:
-      return rejectRelocation(
-          Fixup, "MMIX stubbable call relocation is not implemented");
+      if (!IsPCRel)
+        return rejectRelocation(
+            Fixup, "MMIX stubbable call relocation must be PC-relative");
+      if (Target.getSubSym())
+        return rejectRelocation(
+            Fixup,
+            "MMIX stubbable call relocations do not support symbol "
+            "differences");
+      return ELF::R_MMIX_PUSHJ_STUBBABLE;
     case MMIX::fixup_mmix_geta:
       if (Target.getSubSym())
         return rejectRelocation(

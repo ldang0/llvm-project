@@ -1,9 +1,5 @@
 # RUN: split-file %s %t
 
-# RUN: not llvm-mc -triple=mmix -filetype=obj %t/instruction.s \
-# RUN:   -o %t/instruction.o 2>&1 | FileCheck %s --check-prefix=INSTRUCTION
-# RUN: not test -e %t/instruction.o
-
 # RUN: not llvm-mc -triple=mmix -filetype=obj %t/split-address.s \
 # RUN:   -o %t/split-address.o 2>&1 | FileCheck %s --check-prefix=SPLIT
 # RUN: not test -e %t/split-address.o
@@ -14,8 +10,6 @@
 # RUN:   | FileCheck %s --check-prefix=RESOLVED \
 # RUN:       --implicit-check-not='Name: .rel' \
 # RUN:       --implicit-check-not='Name: .rela'
-
-# INSTRUCTION: instruction.s:1:20: error: MMIX stubbable call relocation is not implemented
 
 # SPLIT: split-address.s:1:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
 # SPLIT: split-address.s:2:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
@@ -29,9 +23,6 @@
 # RESOLVED-NEXT: )
 # RESOLVED:      Relocations [
 # RESOLVED-NEXT: ]
-
-#--- instruction.s
-PUSHJ r2, external - 8
 
 #--- split-address.s
 SETH r1, (symbol >> 48) & 65535
