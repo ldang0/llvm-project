@@ -2,6 +2,134 @@
 ; RUN:   -stop-after=postrapseudos %s -o - | FileCheck %s --check-prefix=MIR
 ; RUN: llc -mtriple=mmix-unknown-elf -verify-machineinstrs -filetype=asm \
 ; RUN:   %s -o - | FileCheck %s --check-prefix=ASM
+; RUN: llc -mtriple=mmix-unknown-elf -verify-machineinstrs -filetype=obj \
+; RUN:   %s -o %t.o
+; RUN: llvm-readobj --relocations --expand-relocs %t.o \
+; RUN:   | FileCheck %s --check-prefix=RELOCS --implicit-check-not=R_MMIX_
+; RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
+; RUN:   | FileCheck %s --check-prefix=OBJ
+
+; Constant-pool object emission is covered by elf-constant-pool-address.mir.
+; The dormant jump-table address operand remains structurally covered by
+; address-materialization.mir.
+
+; RELOCS:      Section {{.*}} .rela.text {
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x4
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: .bss
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x18
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: external_data
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x2C
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: .text
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x40
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: external_function
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x54
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: .bss
+; RELOCS-NEXT:     Addend: 0x1234
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x70
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: external_data
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x88
+; RELOCS-NEXT:     Type: R_MMIX_GETA (13)
+; RELOCS-NEXT:     Symbol: .text
+; RELOCS-NEXT:     Addend: 0x88
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0xA0
+; RELOCS-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+; RELOCS-NEXT:     Symbol: external_function
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT: }
+
+; OBJ-LABEL: <defined_data_address>:
+; OBJ-NEXT:  {{.*}} GETA r231, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA .bss
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; OBJ-LABEL: <external_data_address>:
+; OBJ-NEXT:  {{.*}} GETA r231, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA external_data
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; OBJ-LABEL: <defined_function_address>:
+; OBJ-NEXT:  {{.*}} GETA r231, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA .text
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; OBJ-LABEL: <external_function_address>:
+; OBJ-NEXT:  {{.*}} GETA r231, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA external_function
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; OBJ-LABEL: <positive_address_offset>:
+; OBJ-NEXT:  {{.*}} GETA r231, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA .bss+0x1234
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; OBJ-LABEL: <negative_address_offset>:
+; OBJ-NEXT:  {{.*}} SETL r250, 4660
+; OBJ-NEXT:  {{.*}} NEGU r250, 0, r250
+; OBJ-NEXT:  {{.*}} GETA r249, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA external_data
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} ADDU r231, r249, r250
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; OBJ-LABEL: <block_address>:
+; OBJ-NEXT:  {{.*}} GETA r231, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_GETA .text+0x88
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} SWYM 0, 0, 0
+; OBJ-NEXT:  {{.*}} POP 0, 0
+
+; A function address uses GETA, while direct and indirect calls retain their
+; separately owned stubbable and register-indirect paths.
+; OBJ-LABEL: <direct_call>:
+; OBJ:       {{.*}} PUSHJ r31, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE external_function
+; OBJ-LABEL: <indirect_call>:
+; OBJ:       {{.*}} PUSHGO r31, r231, 0
 
 target triple = "mmix-unknown-elf"
 
