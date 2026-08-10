@@ -88,6 +88,9 @@ protected:
                  ? ELF::R_MMIX_ADDR19
                  : ELF::R_MMIX_ADDR27;
     }
+    case MMIX::fixup_mmix_call:
+      return rejectRelocation(
+          Fixup, "MMIX stubbable call relocation is not implemented");
     case MMIX::fixup_mmix_geta:
       if (Target.getSubSym())
         return rejectRelocation(

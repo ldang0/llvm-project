@@ -92,10 +92,8 @@ class MMIXMCCodeEmitter : public MCCodeEmitter {
                                 const MCSubtargetInfo &STI) const;
 
   static MCFixupKind getPCRelativeFixup(const MCInst &MI, uint64_t TSFlags) {
-    const bool IsBackward = TSFlags & MMIXII::PCRelativeBackward;
     if (MI.getOpcode() == MMIX::PUSHJ || MI.getOpcode() == MMIX::PUSHJB)
-      return IsBackward ? MMIX::fixup_mmix_branch_backward
-                        : MMIX::fixup_mmix_branch_forward;
+      return MMIX::fixup_mmix_call;
     return MMIXII::getPCRelativeWidth(TSFlags) == 16
                ? MMIX::fixup_mmix_addr19
                : MMIX::fixup_mmix_addr27;

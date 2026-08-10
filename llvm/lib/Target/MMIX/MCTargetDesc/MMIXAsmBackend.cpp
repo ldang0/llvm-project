@@ -218,16 +218,17 @@ public:
     int64_t Delta = static_cast<int64_t>(Value);
     const bool IsTerminal = Kind == MMIX::fixup_mmix_addr19 ||
                             Kind == MMIX::fixup_mmix_addr27;
+    const bool IsCall = Kind == MMIX::fixup_mmix_call;
     const bool Uses16BitDisplacement =
         Kind == MMIX::fixup_mmix_branch_forward ||
         Kind == MMIX::fixup_mmix_branch_backward ||
-        Kind == MMIX::fixup_mmix_addr19;
+        Kind == MMIX::fixup_mmix_addr19 || IsCall;
     uint32_t Word = support::endian::read32be(Data);
     constexpr uint32_t BackwardOpcodeBit = uint32_t(1) << 24;
     const bool IsBackward =
         Kind == MMIX::fixup_mmix_branch_backward ||
         Kind == MMIX::fixup_mmix_jump_backward ||
-        (IsTerminal && (Word & BackwardOpcodeBit) != 0);
+        ((IsTerminal || IsCall) && (Word & BackwardOpcodeBit) != 0);
     const unsigned Width = Uses16BitDisplacement ? 16 : 24;
     const int64_t Min = IsBackward ? -(int64_t(1) << Width) : 0;
     const int64_t Max = IsBackward ? -1 : (int64_t(1) << Width) - 1;
@@ -285,6 +286,7 @@ public:
         {"fixup_mmix_jump_backward", 0, 24, 0},
         {"fixup_mmix_addr19", 0, 16, 0},
         {"fixup_mmix_addr27", 0, 24, 0},
+        {"fixup_mmix_call", 0, 16, 0},
         {"fixup_mmix_data_24", 0, 24, 0},
         {"fixup_mmix_pcrel_24", 0, 24, 0},
         {"fixup_mmix_geta", 0, 16, 0},

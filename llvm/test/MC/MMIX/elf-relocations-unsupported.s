@@ -15,7 +15,7 @@
 # RUN:       --implicit-check-not='Name: .rel' \
 # RUN:       --implicit-check-not='Name: .rela'
 
-# INSTRUCTION: instruction.s:1:11: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
+# INSTRUCTION: instruction.s:1:20: error: MMIX stubbable call relocation is not implemented
 
 # SPLIT: split-address.s:1:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
 # SPLIT: split-address.s:2:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
@@ -31,7 +31,7 @@
 # RESOLVED-NEXT: ]
 
 #--- instruction.s
-PUSHJ r2, external
+PUSHJ r2, external - 8
 
 #--- split-address.s
 SETH r1, (symbol >> 48) & 65535
