@@ -23,16 +23,16 @@
 # RUN:       --implicit-check-not='Name: .rel' \
 # RUN:       --implicit-check-not='Name: .rela'
 
-# INSTRUCTION: instruction.s:1:8: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
-# INSTRUCTION: instruction.s:2:5: error: MMIX 24-bit forward PC-relative instruction relocation is not implemented
+# INSTRUCTION: instruction.s:1:8: error: MMIX 19-bit direction-neutral PC-relative instruction relocation is not implemented
+# INSTRUCTION: instruction.s:2:5: error: MMIX 27-bit direction-neutral PC-relative instruction relocation is not implemented
 # INSTRUCTION: instruction.s:3:11: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
-# INSTRUCTION: instruction.s:4:10: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
-# INSTRUCTION: instruction.s:5:9: error: MMIX 16-bit backward PC-relative instruction relocation is not implemented
-# INSTRUCTION: instruction.s:6:6: error: MMIX 24-bit backward PC-relative instruction relocation is not implemented
+# INSTRUCTION: instruction.s:4:10: error: MMIX 19-bit direction-neutral PC-relative instruction relocation is not implemented
+# INSTRUCTION: instruction.s:5:9: error: MMIX 19-bit direction-neutral PC-relative instruction relocation is not implemented
+# INSTRUCTION: instruction.s:6:6: error: MMIX 27-bit direction-neutral PC-relative instruction relocation is not implemented
 
-# INTER: inter-section.s:2:8: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
+# INTER: inter-section.s:2:8: error: MMIX 19-bit direction-neutral PC-relative instruction relocation is not implemented
 
-# WEAK: weak.s:4:8: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
+# WEAK: weak.s:4:8: error: MMIX 19-bit direction-neutral PC-relative instruction relocation is not implemented
 
 # SPLIT: split-address.s:1:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
 # SPLIT: split-address.s:2:1: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'

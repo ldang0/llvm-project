@@ -91,13 +91,14 @@ class MMIXMCCodeEmitter : public MCCodeEmitter {
                                 SmallVectorImpl<MCFixup> &Fixups,
                                 const MCSubtargetInfo &STI) const;
 
-  static MCFixupKind getPCRelativeFixup(uint64_t TSFlags) {
+  static MCFixupKind getPCRelativeFixup(const MCInst &MI, uint64_t TSFlags) {
     const bool IsBackward = TSFlags & MMIXII::PCRelativeBackward;
-    if (MMIXII::getPCRelativeWidth(TSFlags) == 16)
+    if (MI.getOpcode() == MMIX::PUSHJ || MI.getOpcode() == MMIX::PUSHJB)
       return IsBackward ? MMIX::fixup_mmix_branch_backward
                         : MMIX::fixup_mmix_branch_forward;
-    return IsBackward ? MMIX::fixup_mmix_jump_backward
-                      : MMIX::fixup_mmix_jump_forward;
+    return MMIXII::getPCRelativeWidth(TSFlags) == 16
+               ? MMIX::fixup_mmix_addr19
+               : MMIX::fixup_mmix_addr27;
   }
 
 public:
@@ -192,7 +193,7 @@ MMIXMCCodeEmitter::getPCRelativeOpValue(const MCInst &MI, unsigned OpNo,
           MCFixup::create(0, Expr, MMIX::fixup_mmix_geta, /*IsPCRel=*/true));
       return 0;
     }
-    Fixups.push_back(MCFixup::create(0, Expr, getPCRelativeFixup(TSFlags),
+    Fixups.push_back(MCFixup::create(0, Expr, getPCRelativeFixup(MI, TSFlags),
                                      /*IsPCRel=*/true));
     return 0;
   }

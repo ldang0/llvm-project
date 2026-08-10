@@ -70,6 +70,14 @@ protected:
       return rejectRelocation(
           Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
                  "is not implemented");
+    case MMIX::fixup_mmix_addr19:
+      return rejectRelocation(
+          Fixup, "MMIX 19-bit direction-neutral PC-relative instruction "
+                 "relocation is not implemented");
+    case MMIX::fixup_mmix_addr27:
+      return rejectRelocation(
+          Fixup, "MMIX 27-bit direction-neutral PC-relative instruction "
+                 "relocation is not implemented");
     case MMIX::fixup_mmix_geta:
       if (Target.getSubSym())
         return rejectRelocation(

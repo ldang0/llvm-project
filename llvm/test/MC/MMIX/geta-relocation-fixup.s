@@ -20,9 +20,9 @@
 # ENCODING-SAME: encoding: [0xf4'A',0x06'A',0x00,0x00]
 # ENCODING-NEXT: fixup A - offset: 0, value: external-9, kind: fixup_mmix_geta
 # ENCODING:      GETA r4, local
-# ENCODING-NEXT: fixup A - offset: 0, value: local, kind: fixup_mmix_branch_forward
+# ENCODING-NEXT: fixup A - offset: 0, value: local, kind: fixup_mmix_addr19
 # ENCODING:      GETAB r5, local
-# ENCODING-NEXT: fixup A - offset: 0, value: local, kind: fixup_mmix_branch_backward
+# ENCODING-NEXT: fixup A - offset: 0, value: local, kind: fixup_mmix_addr19
 
 # ASM: GETA r3, %geta(external+7)
 

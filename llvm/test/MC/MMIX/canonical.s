@@ -15,12 +15,12 @@ LDB r1, r2, 4
 
 BN r1, target
 # CHECK: BN r1, target
-# CHECK: fixup_mmix_branch_forward
+# CHECK: fixup_mmix_addr19
 
 target:
 JMP target
 # CHECK: JMP target
-# CHECK: fixup_mmix_jump_forward
+# CHECK: fixup_mmix_addr27
 
 GET r1, rA
 # CHECK: GET r1, rA{{.*}}[0xfe,0x01,0x00,0x15]
