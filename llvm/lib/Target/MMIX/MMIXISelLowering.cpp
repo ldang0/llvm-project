@@ -1170,11 +1170,13 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
          (TargetFunction->hasLocalLinkage() || TargetFunction->isDSOLocal()));
     Callee = HasStableTextLayout && IsLocalTarget
                  ? Target
-                 : DAG.getNode(MMIXISD::LOAD_ADDR, CLI.DL, MVT::i64, Target);
+                 : DAG.getNode(MMIXISD::LOAD_CALL_ADDR, CLI.DL, MVT::i64,
+                               Target);
   } else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     SDValue Target =
         DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
-    Callee = DAG.getNode(MMIXISD::LOAD_ADDR, CLI.DL, MVT::i64, Target);
+    Callee =
+        DAG.getNode(MMIXISD::LOAD_CALL_ADDR, CLI.DL, MVT::i64, Target);
   }
 
   SmallVector<SDValue, 20> CallOps = {Chain, Callee};

@@ -1,5 +1,6 @@
 ; RUN: llc -mtriple=mmix -verify-machineinstrs -filetype=asm %s -o - | FileCheck %s --check-prefix=ASM
 ; RUN: llc -mtriple=mmix -verify-machineinstrs -filetype=asm %s -o - | llvm-mc -triple=mmix -filetype=asm -o /dev/null
+; RUN: llc -mtriple=mmix -verify-machineinstrs -stop-after=mmix-isel %s -o - | FileCheck %s --check-prefix=ISEL
 ; RUN: llc -mtriple=mmix -verify-machineinstrs -stop-after=postrapseudos %s -o - | FileCheck %s --check-prefix=MIR
 ; RUN: not --crash llc -mtriple=mmix -relocation-model=pic -filetype=asm %s -o /dev/null 2>&1 | FileCheck %s --check-prefix=PIC
 
@@ -14,6 +15,8 @@ declare void @callee()
 ; ASM-NEXT: INCMH r231, (data>>32)&65535
 ; ASM-NEXT: INCML r231, (data>>16)&65535
 ; ASM-NEXT: INCL r231, data&65535
+; ISEL-LABEL: name: global_address
+; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR @data
 ; MIR-LABEL: name: global_address
 ; MIR:      $r231 = SETH target-flags(mmix-abs-hi) @data
 ; MIR-NEXT: $r231 = INCMH target-flags(mmix-abs-mh) @data
@@ -28,6 +31,8 @@ define ptr @global_address() {
 ; ASM-NEXT: INCMH r231, (callee>>32)&65535
 ; ASM-NEXT: INCML r231, (callee>>16)&65535
 ; ASM-NEXT: INCL r231, callee&65535
+; ISEL-LABEL: name: function_address
+; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR @callee
 define ptr @function_address() {
   ret ptr @callee
 }
@@ -49,6 +54,8 @@ define ptr @global_address_addend() {
 ; ASM-NEXT: INCMH r231, ([[BLOCK]]>>32)&65535
 ; ASM-NEXT: INCML r231, ([[BLOCK]]>>16)&65535
 ; ASM-NEXT: INCL r231, [[BLOCK]]&65535
+; ISEL-LABEL: name: block_address
+; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR blockaddress(@block_address, %ir-block.target)
 define ptr @block_address() {
 entry:
   br label %target

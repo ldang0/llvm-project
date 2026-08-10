@@ -31,7 +31,15 @@ def MMIXret_value
     : SDNode<"MMIXISD::RET_VALUE_GLUE", SDTNone,
              [SDNPHasChain, SDNPInGlue]>;
 def SDT_MMIXLoadAddr : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
-def MMIXload_addr : SDNode<"MMIXISD::LOAD_ADDR", SDT_MMIXLoadAddr>;
+class MMIXAddressProducerNode<string Use, string Opcode>
+    : SDNode<Opcode, SDT_MMIXLoadAddr> {
+  string MMIXAddressProducerUse = Use;
+}
+def MMIXload_addr
+    : MMIXAddressProducerNode<"static-address", "MMIXISD::LOAD_ADDR">;
+def MMIXload_call_addr
+    : MMIXAddressProducerNode<"unresolved-direct-call",
+                              "MMIXISD::LOAD_CALL_ADDR">;
 def SDT_MMIXFPCompare
     : SDTypeProfile<1, 2, [SDTCisVT<0, i64>, SDTCisVT<1, f64>,
                            SDTCisSameAs<1, 2>]>;
@@ -2306,11 +2314,16 @@ def : Pat<(f64 fpimm:$value),
           (COPY_TO_REGCLASS
               (LOAD_IMM64 (mmix_fpimm_bits f64:$value)), FPR64)>;
 
-def LOAD_ADDR
+class MMIXAddressProducerPseudo<string Use>
     : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),
                             (ins i64imm:$symbol), ""> {
+  string MMIXAddressProducerUse = Use;
   let Size = 16;
 }
+
+def LOAD_ADDR : MMIXAddressProducerPseudo<"static-address">;
+def LOAD_CALL_ADDR
+    : MMIXAddressProducerPseudo<"unresolved-direct-call">;
 
 def : Pat<(MMIXload_addr tglobaladdr:$symbol),
           (LOAD_ADDR tglobaladdr:$symbol)>;
@@ -2322,6 +2335,10 @@ def : Pat<(MMIXload_addr tconstpool:$symbol),
           (LOAD_ADDR tconstpool:$symbol)>;
 def : Pat<(MMIXload_addr tjumptable:$symbol),
           (LOAD_ADDR tjumptable:$symbol)>;
+def : Pat<(MMIXload_call_addr tglobaladdr:$symbol),
+          (LOAD_CALL_ADDR tglobaladdr:$symbol)>;
+def : Pat<(MMIXload_call_addr texternalsym:$symbol),
+          (LOAD_CALL_ADDR texternalsym:$symbol)>;
 
 def SET_RD_ZERO : MMIXPseudoInstruction<(outs), (ins), ""> {
   let Defs = [RD];

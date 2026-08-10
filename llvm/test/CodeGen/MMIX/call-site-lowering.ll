@@ -14,7 +14,8 @@ declare double @many_callee(i64, i64, i64, i64, i64, i64, i64, i64,
 
 ; ISEL-LABEL: name: call_void
 ; ISEL:       ADJCALLSTACKDOWN 0, 0
-; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254
+; ISEL-NEXT:  [[VOID_CALLEE:%[0-9]+]]:gpr64codegen = LOAD_CALL_ADDR @void_callee
+; ISEL-NEXT:  CALL_STATE killed [[VOID_CALLEE]], csr_mmix{{.*}}implicit $r254
 ; ISEL-NEXT:  ADJCALLSTACKUP 0, 0
 define void @call_void() {
   call void @void_callee()
@@ -93,6 +94,7 @@ define double @call_with_stack_arguments() {
 ; Procedure instruction selection happens after register allocation, so an
 ; indirect callee is still neutral at the SelectionDAG instruction stage.
 ; ISEL-LABEL: name: call_indirect
+; ISEL-NOT:   LOAD_CALL_ADDR
 ; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 define i64 @call_indirect(ptr %callee, i64 %value) {
   %result = call i64 %callee(i64 %value)
