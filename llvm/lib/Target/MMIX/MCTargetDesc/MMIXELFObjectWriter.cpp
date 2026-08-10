@@ -12,6 +12,7 @@
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCFixup.h"
+#include "llvm/MC/MCValue.h"
 
 using namespace llvm;
 
@@ -32,7 +33,7 @@ public:
             /*HasRelocationAddend=*/true, /*ABIVersion=*/0) {}
 
 protected:
-  unsigned getRelocType(const MCFixup &Fixup, const MCValue &,
+  unsigned getRelocType(const MCFixup &Fixup, const MCValue &Target,
                         bool IsPCRel) const override {
     unsigned AbsoluteType;
     unsigned PCRelativeType;
@@ -70,12 +71,14 @@ protected:
           Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
                  "is not implemented");
     case MMIX::fixup_mmix_data_24:
-      return rejectRelocation(
-          Fixup, "MMIX 24-in-32 absolute data relocation is not implemented");
     case MMIX::fixup_mmix_pcrel_24:
-      return rejectRelocation(
-          Fixup,
-          "MMIX 24-in-32 PC-relative data relocation is not implemented");
+      if (Target.getSubSym())
+        return rejectRelocation(
+            Fixup,
+            "MMIX 24-in-32 data relocations do not support symbol differences");
+      return Fixup.getKind() == MMIX::fixup_mmix_pcrel_24
+                 ? ELF::R_MMIX_PC_24
+                 : ELF::R_MMIX_24;
     default:
       return rejectRelocation(Fixup, "MMIX ELF relocation is not implemented");
     }
