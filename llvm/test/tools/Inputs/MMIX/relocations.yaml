@@ -1,0 +1,91 @@
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name:         .text
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC, SHF_EXECINSTR ]
+    AddressAlign: 4
+    Size:         96
+  - Name:         .data
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_WRITE, SHF_ALLOC ]
+    AddressAlign: 8
+    Size:         64
+  - Name: .rela.data
+    Type: SHT_RELA
+    Link: .symtab
+    Info: .data
+    Relocations:
+      # No-op and absolute data records.
+      - { Offset: 0,  Type: R_MMIX_NONE, Symbol: 0, Addend: 0 }
+      - { Offset: 1,  Type: R_MMIX_8, Symbol: local_data, Addend: 0 }
+      - { Offset: 2,  Type: R_MMIX_16, Symbol: external, Addend: 4 }
+      - { Offset: 4,  Type: R_MMIX_24, Symbol: 2, Addend: 8 }
+      - { Offset: 8,  Type: R_MMIX_32, Symbol: weak_target, Addend: -4 }
+      - { Offset: 16, Type: R_MMIX_64, Symbol: local_data, Addend: 16 }
+      # PC-relative data records.
+      - { Offset: 24, Type: R_MMIX_PC_8, Symbol: external, Addend: -1 }
+      - { Offset: 26, Type: R_MMIX_PC_16, Symbol: local_data, Addend: 2 }
+      - { Offset: 28, Type: R_MMIX_PC_24, Symbol: 2, Addend: 4 }
+      - { Offset: 32, Type: R_MMIX_PC_32, Symbol: weak_target, Addend: -8 }
+      - { Offset: 40, Type: R_MMIX_PC_64, Symbol: external, Addend: 16 }
+      # GNU vtable metadata records.
+      - { Offset: 48, Type: R_MMIX_GNU_VTINHERIT, Symbol: local_data, Addend: 0 }
+      - { Offset: 56, Type: R_MMIX_GNU_VTENTRY, Symbol: external, Addend: 3 }
+  - Name: .rela.text
+    Type: SHT_RELA
+    Link: .symtab
+    Info: .text
+    Relocations:
+      # GETA expansion records.
+      - { Offset: 0, Type: R_MMIX_GETA, Symbol: external, Addend: 0 }
+      - { Offset: 4, Type: R_MMIX_GETA_1, Symbol: local_func, Addend: 4 }
+      - { Offset: 8, Type: R_MMIX_GETA_2, Symbol: weak_target, Addend: -4 }
+      - { Offset: 12, Type: R_MMIX_GETA_3, Symbol: 1, Addend: 8 }
+      # Conditional-branch expansion records.
+      - { Offset: 16, Type: R_MMIX_CBRANCH, Symbol: external, Addend: 0 }
+      - { Offset: 20, Type: R_MMIX_CBRANCH_J, Symbol: local_func, Addend: 4 }
+      - { Offset: 24, Type: R_MMIX_CBRANCH_1, Symbol: weak_target, Addend: -4 }
+      - { Offset: 28, Type: R_MMIX_CBRANCH_2, Symbol: 1, Addend: 8 }
+      - { Offset: 32, Type: R_MMIX_CBRANCH_3, Symbol: external, Addend: -8 }
+      # PUSHJ expansion records.
+      - { Offset: 36, Type: R_MMIX_PUSHJ, Symbol: local_func, Addend: 0 }
+      - { Offset: 40, Type: R_MMIX_PUSHJ_1, Symbol: weak_target, Addend: 4 }
+      - { Offset: 44, Type: R_MMIX_PUSHJ_2, Symbol: 1, Addend: -4 }
+      - { Offset: 48, Type: R_MMIX_PUSHJ_3, Symbol: external, Addend: 8 }
+      # JMP expansion records.
+      - { Offset: 52, Type: R_MMIX_JMP, Symbol: local_func, Addend: -8 }
+      - { Offset: 56, Type: R_MMIX_JMP_1, Symbol: weak_target, Addend: 0 }
+      - { Offset: 60, Type: R_MMIX_JMP_2, Symbol: 1, Addend: 4 }
+      - { Offset: 64, Type: R_MMIX_JMP_3, Symbol: external, Addend: -4 }
+      # Terminal control, GNU register-model, and stubbable-call records.
+      - { Offset: 68, Type: R_MMIX_ADDR19, Symbol: local_func, Addend: 8 }
+      - { Offset: 72, Type: R_MMIX_ADDR27, Symbol: weak_target, Addend: -8 }
+      - { Offset: 76, Type: R_MMIX_REG_OR_BYTE, Symbol: 1, Addend: 0 }
+      - { Offset: 80, Type: R_MMIX_REG, Symbol: external, Addend: 4 }
+      - { Offset: 84, Type: R_MMIX_BASE_PLUS_OFFSET, Symbol: local_func, Addend: -4 }
+      - { Offset: 88, Type: R_MMIX_LOCAL, Symbol: weak_target, Addend: 8 }
+      - { Offset: 92, Type: R_MMIX_PUSHJ_STUBBABLE, Symbol: external, Addend: -8 }
+Symbols:
+  - Name: ""
+    Type: STT_SECTION
+    Section: .text
+  - Name: ""
+    Type: STT_SECTION
+    Section: .data
+  - Name: local_data
+    Type: STT_OBJECT
+    Section: .data
+    Size: 8
+  - Name: local_func
+    Type: STT_FUNC
+    Section: .text
+    Size: 4
+  - Name: external
+    Binding: STB_GLOBAL
+  - Name: weak_target
+    Binding: STB_WEAK

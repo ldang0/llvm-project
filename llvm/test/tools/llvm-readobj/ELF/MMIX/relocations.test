@@ -2,128 +2,296 @@
 ## These synthetic records check names and values only; they do not imply that
 ## LLVM produces or applies every relocation.
 
-# RUN: yaml2obj %s -o %t.o
-# RUN: llvm-readobj --relocations --expand-relocs %t.o | FileCheck %s
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations.yaml -o %t.o
+# RUN: llvm-readobj --relocations %t.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=COMPACT --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+# RUN: llvm-readobj --relocations --expand-relocs %t.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=EXPANDED --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
 
-# CHECK:      Type: R_MMIX_NONE (0)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_8 (1)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_16 (2)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_24 (3)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_32 (4)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_64 (5)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PC_8 (6)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PC_16 (7)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PC_24 (8)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PC_32 (9)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PC_64 (10)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_GNU_VTINHERIT (11)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_GNU_VTENTRY (12)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_GETA (13)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_GETA_1 (14)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_GETA_2 (15)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_GETA_3 (16)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_CBRANCH (17)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_CBRANCH_J (18)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_CBRANCH_1 (19)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_CBRANCH_2 (20)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_CBRANCH_3 (21)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PUSHJ (22)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PUSHJ_1 (23)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PUSHJ_2 (24)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PUSHJ_3 (25)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_JMP (26)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_JMP_1 (27)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_JMP_2 (28)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_JMP_3 (29)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_ADDR19 (30)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_ADDR27 (31)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_REG_OR_BYTE (32)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_REG (33)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_BASE_PLUS_OFFSET (34)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_LOCAL (35)
-# CHECK-NEXT: Symbol: - (0)
-# CHECK:      Type: R_MMIX_PUSHJ_STUBBABLE (36)
-# CHECK-NEXT: Symbol: - (0)
+# COMPACT:      Relocations [
+# COMPACT-NEXT:   Section (3) .rela.data {
+# COMPACT-NEXT:     0x0 R_MMIX_NONE - 0x0
+# COMPACT-NEXT:     0x1 R_MMIX_8 local_data 0x0
+# COMPACT-NEXT:     0x2 R_MMIX_16 external 0x4
+# COMPACT-NEXT:     0x4 R_MMIX_24 .data 0x8
+# COMPACT-NEXT:     0x8 R_MMIX_32 weak_target 0xFFFFFFFFFFFFFFFC
+# COMPACT-NEXT:     0x10 R_MMIX_64 local_data 0x10
+# COMPACT-NEXT:     0x18 R_MMIX_PC_8 external 0xFFFFFFFFFFFFFFFF
+# COMPACT-NEXT:     0x1A R_MMIX_PC_16 local_data 0x2
+# COMPACT-NEXT:     0x1C R_MMIX_PC_24 .data 0x4
+# COMPACT-NEXT:     0x20 R_MMIX_PC_32 weak_target 0xFFFFFFFFFFFFFFF8
+# COMPACT-NEXT:     0x28 R_MMIX_PC_64 external 0x10
+# COMPACT-NEXT:     0x30 R_MMIX_GNU_VTINHERIT local_data 0x0
+# COMPACT-NEXT:     0x38 R_MMIX_GNU_VTENTRY external 0x3
+# COMPACT-NEXT:   }
+# COMPACT-NEXT:   Section (4) .rela.text {
+# COMPACT-NEXT:     0x0 R_MMIX_GETA external 0x0
+# COMPACT-NEXT:     0x4 R_MMIX_GETA_1 local_func 0x4
+# COMPACT-NEXT:     0x8 R_MMIX_GETA_2 weak_target 0xFFFFFFFFFFFFFFFC
+# COMPACT-NEXT:     0xC R_MMIX_GETA_3 .text 0x8
+# COMPACT-NEXT:     0x10 R_MMIX_CBRANCH external 0x0
+# COMPACT-NEXT:     0x14 R_MMIX_CBRANCH_J local_func 0x4
+# COMPACT-NEXT:     0x18 R_MMIX_CBRANCH_1 weak_target 0xFFFFFFFFFFFFFFFC
+# COMPACT-NEXT:     0x1C R_MMIX_CBRANCH_2 .text 0x8
+# COMPACT-NEXT:     0x20 R_MMIX_CBRANCH_3 external 0xFFFFFFFFFFFFFFF8
+# COMPACT-NEXT:     0x24 R_MMIX_PUSHJ local_func 0x0
+# COMPACT-NEXT:     0x28 R_MMIX_PUSHJ_1 weak_target 0x4
+# COMPACT-NEXT:     0x2C R_MMIX_PUSHJ_2 .text 0xFFFFFFFFFFFFFFFC
+# COMPACT-NEXT:     0x30 R_MMIX_PUSHJ_3 external 0x8
+# COMPACT-NEXT:     0x34 R_MMIX_JMP local_func 0xFFFFFFFFFFFFFFF8
+# COMPACT-NEXT:     0x38 R_MMIX_JMP_1 weak_target 0x0
+# COMPACT-NEXT:     0x3C R_MMIX_JMP_2 .text 0x4
+# COMPACT-NEXT:     0x40 R_MMIX_JMP_3 external 0xFFFFFFFFFFFFFFFC
+# COMPACT-NEXT:     0x44 R_MMIX_ADDR19 local_func 0x8
+# COMPACT-NEXT:     0x48 R_MMIX_ADDR27 weak_target 0xFFFFFFFFFFFFFFF8
+# COMPACT-NEXT:     0x4C R_MMIX_REG_OR_BYTE .text 0x0
+# COMPACT-NEXT:     0x50 R_MMIX_REG external 0x4
+# COMPACT-NEXT:     0x54 R_MMIX_BASE_PLUS_OFFSET local_func 0xFFFFFFFFFFFFFFFC
+# COMPACT-NEXT:     0x58 R_MMIX_LOCAL weak_target 0x8
+# COMPACT-NEXT:     0x5C R_MMIX_PUSHJ_STUBBABLE external 0xFFFFFFFFFFFFFFF8
+# COMPACT-NEXT:   }
+# COMPACT-NEXT: ]
 
---- !ELF
-FileHeader:
-  Class:   ELFCLASS64
-  Data:    ELFDATA2MSB
-  Type:    ET_REL
-  Machine: EM_MMIX
-Sections:
-  - Name: .rela.text
-    Type: SHT_RELA
-    Relocations:
-      - Type: R_MMIX_NONE
-      - Type: R_MMIX_8
-      - Type: R_MMIX_16
-      - Type: R_MMIX_24
-      - Type: R_MMIX_32
-      - Type: R_MMIX_64
-      - Type: R_MMIX_PC_8
-      - Type: R_MMIX_PC_16
-      - Type: R_MMIX_PC_24
-      - Type: R_MMIX_PC_32
-      - Type: R_MMIX_PC_64
-      - Type: R_MMIX_GNU_VTINHERIT
-      - Type: R_MMIX_GNU_VTENTRY
-      - Type: R_MMIX_GETA
-      - Type: R_MMIX_GETA_1
-      - Type: R_MMIX_GETA_2
-      - Type: R_MMIX_GETA_3
-      - Type: R_MMIX_CBRANCH
-      - Type: R_MMIX_CBRANCH_J
-      - Type: R_MMIX_CBRANCH_1
-      - Type: R_MMIX_CBRANCH_2
-      - Type: R_MMIX_CBRANCH_3
-      - Type: R_MMIX_PUSHJ
-      - Type: R_MMIX_PUSHJ_1
-      - Type: R_MMIX_PUSHJ_2
-      - Type: R_MMIX_PUSHJ_3
-      - Type: R_MMIX_JMP
-      - Type: R_MMIX_JMP_1
-      - Type: R_MMIX_JMP_2
-      - Type: R_MMIX_JMP_3
-      - Type: R_MMIX_ADDR19
-      - Type: R_MMIX_ADDR27
-      - Type: R_MMIX_REG_OR_BYTE
-      - Type: R_MMIX_REG
-      - Type: R_MMIX_BASE_PLUS_OFFSET
-      - Type: R_MMIX_LOCAL
-      - Type: R_MMIX_PUSHJ_STUBBABLE
+## No-op and absolute data records.
+# EXPANDED:      Section (3) .rela.data {
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x0
+# EXPANDED-NEXT:     Type: R_MMIX_NONE (0)
+# EXPANDED-NEXT:     Symbol: - (0)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x1
+# EXPANDED-NEXT:     Type: R_MMIX_8 (1)
+# EXPANDED-NEXT:     Symbol: local_data (3)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x2
+# EXPANDED-NEXT:     Type: R_MMIX_16 (2)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x4
+# EXPANDED-NEXT:     Type: R_MMIX_24 (3)
+# EXPANDED-NEXT:     Symbol: .data (2)
+# EXPANDED-NEXT:     Addend: 0x8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x8
+# EXPANDED-NEXT:     Type: R_MMIX_32 (4)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFC
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x10
+# EXPANDED-NEXT:     Type: R_MMIX_64 (5)
+# EXPANDED-NEXT:     Symbol: local_data (3)
+# EXPANDED-NEXT:     Addend: 0x10
+# EXPANDED-NEXT:   }
+
+## PC-relative data records.
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x18
+# EXPANDED-NEXT:     Type: R_MMIX_PC_8 (6)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFF
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x1A
+# EXPANDED-NEXT:     Type: R_MMIX_PC_16 (7)
+# EXPANDED-NEXT:     Symbol: local_data (3)
+# EXPANDED-NEXT:     Addend: 0x2
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x1C
+# EXPANDED-NEXT:     Type: R_MMIX_PC_24 (8)
+# EXPANDED-NEXT:     Symbol: .data (2)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x20
+# EXPANDED-NEXT:     Type: R_MMIX_PC_32 (9)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFF8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x28
+# EXPANDED-NEXT:     Type: R_MMIX_PC_64 (10)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x10
+# EXPANDED-NEXT:   }
+
+## GNU vtable metadata records.
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x30
+# EXPANDED-NEXT:     Type: R_MMIX_GNU_VTINHERIT (11)
+# EXPANDED-NEXT:     Symbol: local_data (3)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x38
+# EXPANDED-NEXT:     Type: R_MMIX_GNU_VTENTRY (12)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x3
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT: }
+
+## GETA expansion records.
+# EXPANDED-NEXT: Section (4) .rela.text {
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x0
+# EXPANDED-NEXT:     Type: R_MMIX_GETA (13)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x4
+# EXPANDED-NEXT:     Type: R_MMIX_GETA_1 (14)
+# EXPANDED-NEXT:     Symbol: local_func (4)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x8
+# EXPANDED-NEXT:     Type: R_MMIX_GETA_2 (15)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFC
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0xC
+# EXPANDED-NEXT:     Type: R_MMIX_GETA_3 (16)
+# EXPANDED-NEXT:     Symbol: .text (1)
+# EXPANDED-NEXT:     Addend: 0x8
+# EXPANDED-NEXT:   }
+
+## Conditional-branch expansion records.
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x10
+# EXPANDED-NEXT:     Type: R_MMIX_CBRANCH (17)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x14
+# EXPANDED-NEXT:     Type: R_MMIX_CBRANCH_J (18)
+# EXPANDED-NEXT:     Symbol: local_func (4)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x18
+# EXPANDED-NEXT:     Type: R_MMIX_CBRANCH_1 (19)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFC
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x1C
+# EXPANDED-NEXT:     Type: R_MMIX_CBRANCH_2 (20)
+# EXPANDED-NEXT:     Symbol: .text (1)
+# EXPANDED-NEXT:     Addend: 0x8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x20
+# EXPANDED-NEXT:     Type: R_MMIX_CBRANCH_3 (21)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFF8
+# EXPANDED-NEXT:   }
+
+## PUSHJ expansion records.
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x24
+# EXPANDED-NEXT:     Type: R_MMIX_PUSHJ (22)
+# EXPANDED-NEXT:     Symbol: local_func (4)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x28
+# EXPANDED-NEXT:     Type: R_MMIX_PUSHJ_1 (23)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x2C
+# EXPANDED-NEXT:     Type: R_MMIX_PUSHJ_2 (24)
+# EXPANDED-NEXT:     Symbol: .text (1)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFC
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x30
+# EXPANDED-NEXT:     Type: R_MMIX_PUSHJ_3 (25)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x8
+# EXPANDED-NEXT:   }
+
+## JMP expansion records.
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x34
+# EXPANDED-NEXT:     Type: R_MMIX_JMP (26)
+# EXPANDED-NEXT:     Symbol: local_func (4)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFF8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x38
+# EXPANDED-NEXT:     Type: R_MMIX_JMP_1 (27)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x3C
+# EXPANDED-NEXT:     Type: R_MMIX_JMP_2 (28)
+# EXPANDED-NEXT:     Symbol: .text (1)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x40
+# EXPANDED-NEXT:     Type: R_MMIX_JMP_3 (29)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFC
+# EXPANDED-NEXT:   }
+
+## Terminal control, GNU register-model, and stubbable-call records.
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x44
+# EXPANDED-NEXT:     Type: R_MMIX_ADDR19 (30)
+# EXPANDED-NEXT:     Symbol: local_func (4)
+# EXPANDED-NEXT:     Addend: 0x8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x48
+# EXPANDED-NEXT:     Type: R_MMIX_ADDR27 (31)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFF8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x4C
+# EXPANDED-NEXT:     Type: R_MMIX_REG_OR_BYTE (32)
+# EXPANDED-NEXT:     Symbol: .text (1)
+# EXPANDED-NEXT:     Addend: 0x0
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x50
+# EXPANDED-NEXT:     Type: R_MMIX_REG (33)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0x4
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x54
+# EXPANDED-NEXT:     Type: R_MMIX_BASE_PLUS_OFFSET (34)
+# EXPANDED-NEXT:     Symbol: local_func (4)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFFC
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x58
+# EXPANDED-NEXT:     Type: R_MMIX_LOCAL (35)
+# EXPANDED-NEXT:     Symbol: weak_target (6)
+# EXPANDED-NEXT:     Addend: 0x8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT:   Relocation {
+# EXPANDED-NEXT:     Offset: 0x5C
+# EXPANDED-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+# EXPANDED-NEXT:     Symbol: external (5)
+# EXPANDED-NEXT:     Addend: 0xFFFFFFFFFFFFFFF8
+# EXPANDED-NEXT:   }
+# EXPANDED-NEXT: }
