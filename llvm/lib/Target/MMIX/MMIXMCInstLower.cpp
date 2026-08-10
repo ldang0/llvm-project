@@ -134,6 +134,14 @@ MCOperand MMIXMCInstLower::lowerOperand(const MachineOperand &MO) const {
   }
 }
 
+const MCExpr *
+MMIXMCInstLower::lowerAddressOperand(const MachineOperand &MO) const {
+  MCOperand Lowered = lowerOperand(MO);
+  if (!Lowered.isExpr())
+    report_fatal_error("MMIX static address does not name a symbol");
+  return Lowered.getExpr();
+}
+
 void MMIXMCInstLower::lower(const MachineInstr &MI, MCInst &OutMI) const {
   unsigned Opcode = MI.getOpcode();
   unsigned PredicateOperand = ~0U;

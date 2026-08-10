@@ -18,10 +18,7 @@ declare void @callee()
 ; ISEL-LABEL: name: global_address
 ; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR @data
 ; MIR-LABEL: name: global_address
-; MIR:      $r231 = SETH target-flags(mmix-abs-hi) @data
-; MIR-NEXT: $r231 = INCMH target-flags(mmix-abs-mh) @data
-; MIR-NEXT: $r231 = INCML target-flags(mmix-abs-ml) @data
-; MIR-NEXT: $r231 = INCL target-flags(mmix-abs-lo) @data
+; MIR:       $r231 = LOAD_ADDR @data
 define ptr @global_address() {
   ret ptr @data
 }

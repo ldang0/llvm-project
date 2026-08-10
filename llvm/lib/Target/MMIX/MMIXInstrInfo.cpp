@@ -192,8 +192,7 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
-  if (MI.getOpcode() == MMIX::LOAD_ADDR ||
-      MI.getOpcode() == MMIX::LOAD_CALL_ADDR) {
+  if (MI.getOpcode() == MMIX::LOAD_CALL_ADDR) {
     static constexpr unsigned Opcodes[] = {MMIX::SETH, MMIX::INCMH, MMIX::INCML,
                                            MMIX::INCL};
     static constexpr unsigned Flags[] = {MMIXII::MO_ABS_HI, MMIXII::MO_ABS_MH,

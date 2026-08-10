@@ -32,6 +32,7 @@ public:
   MMIXMCInstLower(MCContext &Ctx, AsmPrinter &Printer)
       : Ctx(Ctx), Printer(Printer) {}
 
+  const MCExpr *lowerAddressOperand(const MachineOperand &MO) const;
   void lower(const MachineInstr &MI, MCInst &OutMI) const;
 };
 

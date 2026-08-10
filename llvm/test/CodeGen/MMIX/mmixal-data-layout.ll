@@ -32,6 +32,10 @@ entry:
 ; CHECK-NEXT: BYTE #01,#02,#03,#04,#05,#06,#07,#08
 ; CHECK:      LOC #000000000000010C
 ; CHECK-NEXT: load_readonly	IS @
+; CHECK:      SETH ${{[0-9]+}},readonly_data>>48&65535
+; CHECK-NEXT: INCMH ${{[0-9]+}},readonly_data>>32&65535
+; CHECK-NEXT: INCML ${{[0-9]+}},readonly_data>>16&65535
+; CHECK-NEXT: INCL ${{[0-9]+}},readonly_data&65535
 ; Natural alignment leaves address gaps without emitting synthetic data.
 ; CHECK:      LOC #2000000000000008
 ; CHECK:      writable_data	IS @

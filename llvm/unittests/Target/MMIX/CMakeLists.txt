@@ -15,6 +15,7 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_llvm_target_unittest(MMIXTests
+  MMIXAddressEmissionTest.cpp
   MMIXALAsmStreamerTest.cpp
   MMIXALDependencyGraphTest.cpp
   MMIXALInstPrinterTest.cpp

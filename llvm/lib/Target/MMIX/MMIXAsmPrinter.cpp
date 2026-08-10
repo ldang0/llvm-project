@@ -12,6 +12,7 @@
 #include "MCTargetDesc/MMIXInstPrinter.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXALModuleValidator.h"
+#include "MMIXAddressEmission.h"
 #include "MMIXMCInstLower.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -106,6 +107,7 @@ Error validateSymbolicInitializerStorage(const Module &M) {
 
 class MMIXAsmPrinter final : public AsmPrinter {
   MMIXALAsmStreamer *MMIXALStreamer;
+  MMIXStaticAddressOutput StaticAddressOutput;
   const Function *MMIXALRawEntry = nullptr;
 
   void reportSymbolRegistrationError(Error Err) {
@@ -202,8 +204,10 @@ class MMIXAsmPrinter final : public AsmPrinter {
 public:
   explicit MMIXAsmPrinter(TargetMachine &TM,
                           std::unique_ptr<MCStreamer> Streamer,
+                          MMIXStaticAddressOutput StaticAddressOutput,
                           MMIXALAsmStreamer *MMIXALStreamer = nullptr)
-      : AsmPrinter(TM, std::move(Streamer)), MMIXALStreamer(MMIXALStreamer) {}
+      : AsmPrinter(TM, std::move(Streamer)), MMIXALStreamer(MMIXALStreamer),
+        StaticAddressOutput(StaticAddressOutput) {}
 
   StringRef getPassName() const override { return "MMIX Assembly Printer"; }
 
@@ -281,6 +285,18 @@ public:
   }
 
   void emitInstruction(const MachineInstr *MI) override {
+    if (MI->getOpcode() == MMIX::LOAD_ADDR) {
+      if (!MI->getOperand(0).isReg())
+        report_fatal_error("MMIX static address has no destination register");
+      MMIXMCInstLower Lower(OutContext, *this);
+      const MCExpr *Address = Lower.lowerAddressOperand(MI->getOperand(1));
+      for (const MCInst &Inst : createMMIXStaticAddressSequence(
+               StaticAddressOutput, MI->getOperand(0).getReg(), Address,
+               OutContext))
+        emitCheckedMCInstruction(Inst);
+      return;
+    }
+
     if (MI->isPseudo() && MI->getOpcode() != MMIX::PseudoB &&
         MI->getOpcode() != MMIX::PseudoJMP &&
         MI->getOpcode() != MMIX::PseudoPUSHJ &&
@@ -303,9 +319,14 @@ createMMIXAsmPrinter(TargetMachine &TM,
       MMIXII::MMIXALAsmVariant) {
     auto *MMIXALStreamer = static_cast<MMIXALAsmStreamer *>(Streamer.get());
     MMIXALStreamer->beginModuleEmission();
-    return new MMIXAsmPrinter(TM, std::move(Streamer), MMIXALStreamer);
+    return new MMIXAsmPrinter(TM, std::move(Streamer),
+                              MMIXStaticAddressOutput::MMIXALAssembly,
+                              MMIXALStreamer);
   }
-  return new MMIXAsmPrinter(TM, std::move(Streamer));
+  const MMIXStaticAddressOutput Output =
+      Streamer->hasRawTextSupport() ? MMIXStaticAddressOutput::CanonicalAssembly
+                                    : MMIXStaticAddressOutput::ELFObject;
+  return new MMIXAsmPrinter(TM, std::move(Streamer), Output);
 }
 
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void

@@ -21,20 +21,16 @@ jumpTable:
 body: |
   bb.0.entry:
     ; CHECK-LABEL: name: address_materialization
-    ; CHECK:      $r0 = SETH target-flags(mmix-abs-hi) %const.0
-    ; CHECK-NEXT: $r0 = INCMH target-flags(mmix-abs-mh) %const.0
-    ; CHECK-NEXT: $r0 = INCML target-flags(mmix-abs-ml) %const.0
-    ; CHECK-NEXT: $r0 = INCL target-flags(mmix-abs-lo) %const.0
-    ; CHECK-NEXT: $r1 = SETH target-flags(mmix-abs-hi) %jump-table.0
-    ; CHECK-NEXT: $r1 = INCMH target-flags(mmix-abs-mh) %jump-table.0
-    ; CHECK-NEXT: $r1 = INCML target-flags(mmix-abs-ml) %jump-table.0
-    ; CHECK-NEXT: $r1 = INCL target-flags(mmix-abs-lo) %jump-table.0
-    ; CHECK-NEXT: $r2 = SETH target-flags(mmix-abs-hi) &external_name
-    ; CHECK-NEXT: $r2 = INCMH target-flags(mmix-abs-mh) &external_name
-    ; CHECK-NEXT: $r2 = INCML target-flags(mmix-abs-ml) &external_name
-    ; CHECK-NEXT: $r2 = INCL target-flags(mmix-abs-lo) &external_name
+    ; CHECK:      $r0 = LOAD_ADDR %const.0
+    ; CHECK-NEXT: $r1 = LOAD_ADDR %jump-table.0
+    ; CHECK-NEXT: $r2 = LOAD_ADDR &external_name
+    ; CHECK-NEXT: $r3 = SETH target-flags(mmix-abs-hi) &external_callee
+    ; CHECK-NEXT: $r3 = INCMH target-flags(mmix-abs-mh) &external_callee
+    ; CHECK-NEXT: $r3 = INCML target-flags(mmix-abs-ml) &external_callee
+    ; CHECK-NEXT: $r3 = INCL target-flags(mmix-abs-lo) &external_callee
     $r0 = LOAD_ADDR %const.0
     $r1 = LOAD_ADDR %jump-table.0
     $r2 = LOAD_ADDR &external_name
+    $r3 = LOAD_CALL_ADDR &external_callee
     POP 0, 0
 ...
