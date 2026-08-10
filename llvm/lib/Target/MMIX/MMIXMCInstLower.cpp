@@ -136,9 +136,20 @@ MCOperand MMIXMCInstLower::lowerOperand(const MachineOperand &MO) const {
 
 const MCExpr *
 MMIXMCInstLower::lowerAddressOperand(const MachineOperand &MO) const {
+  if (MO.getTargetFlags() != MMIXII::MO_None)
+    report_fatal_error("MMIX static address has unexpected target flags");
+  switch (MO.getType()) {
+  case MachineOperand::MO_GlobalAddress:
+  case MachineOperand::MO_ExternalSymbol:
+  case MachineOperand::MO_BlockAddress:
+  case MachineOperand::MO_ConstantPoolIndex:
+  case MachineOperand::MO_JumpTableIndex:
+    break;
+  default:
+    report_fatal_error("MMIX static address has unsupported symbol kind");
+  }
   MCOperand Lowered = lowerOperand(MO);
-  if (!Lowered.isExpr())
-    report_fatal_error("MMIX static address does not name a symbol");
+  assert(Lowered.isExpr() && "static-address operand did not lower to MCExpr");
   return Lowered.getExpr();
 }
 

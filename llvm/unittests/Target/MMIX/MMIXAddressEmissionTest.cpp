@@ -8,14 +8,19 @@
 
 #include "MMIXAddressEmission.h"
 #include "MCTargetDesc/MMIXBaseInfo.h"
+#include "MCTargetDesc/MMIXFixupKinds.h"
 #include "MCTargetDesc/MMIXMCAsmInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCFixup.h"
+#include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetOptions.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/TargetParser/Triple.h"
 #include "gtest/gtest.h"
@@ -31,6 +36,7 @@ protected:
   Triple TT{"mmix-unknown-elf"};
   MCTargetOptions Options;
   MMIXMCAsmInfo MAI{TT, Options};
+  std::unique_ptr<MCInstrInfo> MII{createMMIXMCInstrInfo()};
   std::unique_ptr<MCRegisterInfo> MRI{createMMIXMCRegisterInfo(TT)};
   std::unique_ptr<MCSubtargetInfo> STI{
       createMMIXMCSubtargetInfo(TT, "generic", "")};
@@ -85,7 +91,8 @@ TEST_F(MMIXAddressEmissionTest, TextOutputsUseCanonicalSplitSequence) {
 }
 
 TEST_F(MMIXAddressEmissionTest, ELFObjectUsesGETAReservationContract) {
-  const MCExpr *Address = symbol("target");
+  const MCExpr *Address = MCBinaryExpr::createAdd(
+      symbol("target"), MCConstantExpr::create(-16, Ctx), Ctx);
   SmallVector<MCInst, 4> Sequence = createMMIXStaticAddressSequence(
       MMIXStaticAddressOutput::ELFObject, MMIX::R9, Address, Ctx);
 
@@ -101,6 +108,29 @@ TEST_F(MMIXAddressEmissionTest, ELFObjectUsesGETAReservationContract) {
   EXPECT_EQ(Specifier->getSubExpr(), Address);
   EXPECT_EQ(Inst.getOperand(2).getImm(), MMIXII::GETARelocationReservedSlots);
   EXPECT_EQ((1 + MMIXII::GETARelocationReservedSlots) * 4, 16u);
+
+  std::unique_ptr<MCCodeEmitter> Emitter{createMMIXMCCodeEmitter(*MII, Ctx)};
+  SmallVector<char, 16> Bytes;
+  SmallVector<MCFixup, 1> Fixups;
+  Emitter->encodeInstruction(Inst, Bytes, Fixups, *STI);
+
+  static constexpr std::array<unsigned char, 16> ExpectedBytes = {
+      0xf4, 0x09, 0x00, 0x00, 0xfd, 0x00, 0x00, 0x00,
+      0xfd, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x00, 0x00};
+  ASSERT_EQ(Bytes.size(), ExpectedBytes.size());
+  for (unsigned I = 0; I != Bytes.size(); ++I)
+    EXPECT_EQ(static_cast<unsigned char>(Bytes[I]), ExpectedBytes[I]);
+
+  ASSERT_EQ(Fixups.size(), 1u);
+  EXPECT_EQ(Fixups.front().getKind(), MMIX::fixup_mmix_geta);
+  EXPECT_TRUE(Fixups.front().isPCRel());
+  EXPECT_TRUE(Fixups.front().isLinkerRelaxable());
+  MCValue Value;
+  ASSERT_TRUE(Fixups.front().getValue()->evaluateAsRelocatable(Value, nullptr));
+  ASSERT_NE(Value.getAddSym(), nullptr);
+  EXPECT_EQ(Value.getAddSym()->getName(), "target");
+  EXPECT_EQ(Value.getSubSym(), nullptr);
+  EXPECT_EQ(Value.getConstant(), -16);
 }
 
 } // namespace
