@@ -23,6 +23,7 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/SMLoc.h"
 #include <cassert>
@@ -141,7 +142,7 @@ public:
   void addImmOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && isImm());
     int64_t Value;
-    if (getImm()->evaluateAsAbsolute(Value))
+    if (!isa<MCSpecifierExpr>(getImm()) && getImm()->evaluateAsAbsolute(Value))
       Inst.addOperand(MCOperand::createImm(Value));
     else
       Inst.addOperand(MCOperand::createExpr(getImm()));
@@ -214,6 +215,7 @@ class MMIXAsmParser : public MCTargetAsmParser {
                                bool MatchingInlineAsm) override;
   ParseStatus parseDirective(AsmToken DirectiveID) override;
   bool parseDirectiveData24(SMLoc DirectiveLoc, bool IsPCRel);
+  bool parseOperandExpression(const MCExpr *&Expr);
   void onBeginOfFile() override;
 
 public:
@@ -294,6 +296,29 @@ bool MMIXAsmParser::parseRegister(MCRegister &Reg, SMLoc &StartLoc,
   return false;
 }
 
+bool MMIXAsmParser::parseOperandExpression(const MCExpr *&Expr) {
+  if (Parser.getTok().isNot(AsmToken::Percent))
+    return Parser.parseExpression(Expr);
+
+  const SMLoc SpecifierLoc = Parser.getTok().getLoc();
+  Parser.Lex();
+  if (Parser.getTok().isNot(AsmToken::Identifier) ||
+      Parser.getTok().getIdentifier() != "geta")
+    return Error(Parser.getTok().getLoc(),
+                 "expected '%geta' expression specifier");
+  Parser.Lex();
+  if (Parser.parseToken(AsmToken::LParen, "expected '(' after '%geta'"))
+    return true;
+
+  SMLoc End;
+  const MCExpr *SubExpr;
+  if (Parser.parseParenExpression(SubExpr, End))
+    return true;
+  Expr = MCSpecifierExpr::create(SubExpr, MMIXII::S_GETA, getContext(),
+                                 SpecifierLoc);
+  return false;
+}
+
 ParseStatus MMIXAsmParser::tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                              SMLoc &EndLoc) {
   if (Parser.getTok().isNot(AsmToken::Identifier))
@@ -319,7 +344,7 @@ bool MMIXAsmParser::parseInstruction(ParseInstructionInfo &, StringRef Name,
       Operands.push_back(MMIXOperand::createReg(Reg, Start, End));
     } else {
       const MCExpr *Expr = nullptr;
-      if (Parser.parseExpression(Expr))
+      if (parseOperandExpression(Expr))
         return true;
       Operands.push_back(MMIXOperand::createImm(Expr, Start, End));
     }

@@ -16,6 +16,8 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCValue.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/EndianStream.h"
 #include <cassert>
 #include <cstdint>
@@ -88,8 +90,34 @@ MMIXMCCodeEmitter::getPCRelativeOpValue(const MCInst &MI, unsigned OpNo,
          "unexpected MMIX PC-relative field width");
 
   if (MO.isExpr()) {
-    Fixups.push_back(MCFixup::create(
-        0, MO.getExpr(), getPCRelativeFixup(TSFlags), /*IsPCRel=*/true));
+    const MCExpr *Expr = MO.getExpr();
+    if (const auto *Specifier = dyn_cast<MCSpecifierExpr>(Expr)) {
+      if (Specifier->getSpecifier() != MMIXII::S_GETA) {
+        Ctx.reportError(MI.getLoc(),
+                        "unsupported MMIX PC-relative expression specifier");
+        return 0;
+      }
+      if (MI.getOpcode() != MMIX::GETA) {
+        Ctx.reportError(MI.getLoc(),
+                        "'%geta' expression requires a GETA instruction");
+        return 0;
+      }
+
+      Expr = Specifier->getSubExpr();
+      MCValue Target;
+      if (!Expr->evaluateAsRelocatable(Target, nullptr) ||
+          !Target.getAddSym() || Target.getSubSym()) {
+        Ctx.reportError(
+            Specifier->getLoc(),
+            "expanding GETA requires one symbol plus an optional addend");
+        return 0;
+      }
+      Fixups.push_back(
+          MCFixup::create(0, Expr, MMIX::fixup_mmix_geta, /*IsPCRel=*/true));
+      return 0;
+    }
+    Fixups.push_back(MCFixup::create(0, Expr, getPCRelativeFixup(TSFlags),
+                                     /*IsPCRel=*/true));
     return 0;
   }
 

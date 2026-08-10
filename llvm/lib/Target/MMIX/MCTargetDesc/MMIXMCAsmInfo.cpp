@@ -7,6 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXMCAsmInfo.h"
+#include "MMIXBaseInfo.h"
+#include "llvm/MC/MCExpr.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 
 using namespace llvm;
@@ -25,4 +28,17 @@ MMIXMCAsmInfo::MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   AllowDigitAtStartOfIdentifier = true;
   UsesELFSectionDirectiveForBSS = true;
   IsLittleEndian = false;
+}
+
+void MMIXMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
+                                       const MCSpecifierExpr &Expr) const {
+  switch (Expr.getSpecifier()) {
+  case MMIXII::S_GETA:
+    OS << "%geta(";
+    printExpr(OS, *Expr.getSubExpr());
+    OS << ')';
+    return;
+  default:
+    llvm_unreachable("unknown MMIX expression specifier");
+  }
 }

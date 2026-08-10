@@ -20,6 +20,7 @@ enum FixupKind {
   fixup_mmix_jump_backward,
   fixup_mmix_data_24,
   fixup_mmix_pcrel_24,
+  fixup_mmix_geta,
   LastTargetFixupKind,
   NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
 };

@@ -13,12 +13,16 @@
 
 namespace llvm {
 
+class MCSpecifierExpr;
 class MCTargetOptions;
 class Triple;
 
 class MMIXMCAsmInfo : public MCAsmInfoELF {
 public:
   explicit MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options);
+
+  void printSpecifierExpr(raw_ostream &OS,
+                          const MCSpecifierExpr &Expr) const override;
 };
 
 } // namespace llvm

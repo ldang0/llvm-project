@@ -28,6 +28,13 @@ public:
   void applyFixup(const MCFragment &F, const MCFixup &Fixup,
                   const MCValue &Target, uint8_t *Data, uint64_t Value,
                   bool IsResolved) override {
+    if (Fixup.getKind() == MMIX::fixup_mmix_geta) {
+      getContext().reportError(
+          Fixup.getLoc(),
+          "expanding GETA relocation reservation is not implemented");
+      return;
+    }
+
     if (!IsResolved) {
       maybeAddReloc(F, Fixup, Target, Value, IsResolved);
       return;
@@ -119,6 +126,7 @@ public:
         {"fixup_mmix_jump_backward", 0, 24, 0},
         {"fixup_mmix_data_24", 0, 24, 0},
         {"fixup_mmix_pcrel_24", 0, 24, 0},
+        {"fixup_mmix_geta", 0, 16, 0},
     };
 
     if (Kind < FirstTargetFixupKind)
