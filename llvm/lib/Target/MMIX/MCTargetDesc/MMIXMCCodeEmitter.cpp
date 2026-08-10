@@ -26,6 +26,12 @@ using namespace llvm;
 
 namespace {
 
+static bool isExpandedGETARelocation(const MCInst &MI) {
+  return MI.getOpcode() == MMIX::GETA && MI.getNumOperands() == 3 &&
+         MI.getOperand(2).isImm() &&
+         MI.getOperand(2).getImm() == MMIXII::GETARelocationReservedSlots;
+}
+
 class MMIXMCCodeEmitter : public MCCodeEmitter {
   const MCInstrInfo &MCII;
   const MCRegisterInfo &MRI;
@@ -59,8 +65,30 @@ public:
   void encodeInstruction(const MCInst &MI, SmallVectorImpl<char> &CB,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override {
+    const bool IsExpandedGETA = isExpandedGETARelocation(MI);
+    [[maybe_unused]] const size_t FirstFixup = Fixups.size();
     const uint32_t Word = getBinaryCodeForInstr(MI, Fixups, STI);
     support::endian::write<uint32_t>(CB, Word, llvm::endianness::big);
+    if (!IsExpandedGETA)
+      return;
+
+    assert(Fixups.size() == FirstFixup + 1 &&
+           Fixups.back().getKind() == MMIX::fixup_mmix_geta &&
+           "expanded GETA must have one relocation fixup");
+    Fixups.back().setLinkerRelaxable();
+
+    MCInst ReservationSlot;
+    ReservationSlot.setOpcode(MMIX::SWYM);
+    ReservationSlot.addOperand(MCOperand::createImm(0));
+    ReservationSlot.addOperand(MCOperand::createImm(0));
+    ReservationSlot.addOperand(MCOperand::createImm(0));
+    const uint32_t ReservationWord =
+        getBinaryCodeForInstr(ReservationSlot, Fixups, STI);
+    assert(Fixups.size() == FirstFixup + 1 &&
+           "SWYM reservation must not add a fixup");
+    for (unsigned I = 0; I != MMIXII::GETARelocationReservedSlots; ++I)
+      support::endian::write<uint32_t>(CB, ReservationWord,
+                                       llvm::endianness::big);
   }
 };
 

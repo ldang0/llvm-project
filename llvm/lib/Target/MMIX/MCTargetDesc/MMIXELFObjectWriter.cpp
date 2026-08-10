@@ -70,6 +70,11 @@ protected:
       return rejectRelocation(
           Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
                  "is not implemented");
+    case MMIX::fixup_mmix_geta:
+      if (Target.getSubSym())
+        return rejectRelocation(
+            Fixup, "R_MMIX_GETA does not support symbol differences");
+      return ELF::R_MMIX_GETA;
     case MMIX::fixup_mmix_data_24:
     case MMIX::fixup_mmix_pcrel_24:
       if (Target.getSubSym())

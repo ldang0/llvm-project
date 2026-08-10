@@ -6,10 +6,6 @@
 # RUN:   | FileCheck %s --check-prefix=ASM
 # RUN: llvm-mc -triple=mmix -filetype=null %t/valid.s
 
-# RUN: not llvm-mc -triple=mmix -filetype=obj %t/expanding.s \
-# RUN:   -o %t/expanding.o 2>&1 | FileCheck %s --check-prefix=OBJECT
-# RUN: not test -e %t/expanding.o
-
 # RUN: not llvm-mc -triple=mmix -show-encoding %t/invalid.s 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=INVALID
 
@@ -30,8 +26,6 @@
 
 # ASM: GETA r3, %geta(external+7)
 
-# OBJECT: expanding.s:1:25: error: expanding GETA relocation reservation is not implemented
-
 # INVALID: invalid.s:1:10: error: expanding GETA requires one symbol plus an optional addend
 # INVALID: invalid.s:2:10: error: expanding GETA requires one symbol plus an optional addend
 # INVALID: invalid.s:3:10: error: expanding GETA requires one symbol plus an optional addend
@@ -50,9 +44,6 @@ GETA r6, %geta(external - 9)
 GETA r4, local
 local:
 GETAB r5, local
-
-#--- expanding.s
-GETA r3, %geta(external - 9)
 
 #--- invalid.s
 GETA r1, %geta(7)

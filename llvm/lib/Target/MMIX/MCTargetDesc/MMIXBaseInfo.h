@@ -62,6 +62,9 @@ enum Specifier : uint16_t {
   S_GETA,
 };
 
+// MC relaxation appends this operand and emits the corresponding SWYM slots.
+constexpr unsigned GETARelocationReservedSlots = 3;
+
 inline unsigned getPCRelativeWidth(uint64_t TSFlags) {
   return (TSFlags & PCRelativeWidthMask) >> PCRelativeWidthShift;
 }

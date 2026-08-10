@@ -6,12 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MMIXBaseInfo.h"
 #include "MMIXFixupKinds.h"
 #include "MMIXMCTargetDesc.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
+#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Endian.h"
 #include <cassert>
 #include <cstdint>
@@ -19,6 +23,22 @@
 using namespace llvm;
 
 namespace {
+
+static bool isUnrelaxedGETARelocation(unsigned Opcode,
+                                      ArrayRef<MCOperand> Operands) {
+  if (Opcode != MMIX::GETA || Operands.size() != 2 ||
+      !Operands[1].isExpr())
+    return false;
+  const auto *Specifier = dyn_cast<MCSpecifierExpr>(Operands[1].getExpr());
+  return Specifier && Specifier->getSpecifier() == MMIXII::S_GETA;
+}
+
+static bool isDirectGETAValue(uint64_t Value) {
+  const int64_t Delta = static_cast<int64_t>(Value);
+  constexpr int64_t Min = -(int64_t(1) << 18);
+  constexpr int64_t Max = (int64_t(1) << 18) - 4;
+  return (Delta & 3) == 0 && Delta >= Min && Delta <= Max;
+}
 
 class MMIXAsmBackend : public MCAsmBackend {
 public:
@@ -29,9 +49,31 @@ public:
                   const MCValue &Target, uint8_t *Data, uint64_t Value,
                   bool IsResolved) override {
     if (Fixup.getKind() == MMIX::fixup_mmix_geta) {
-      getContext().reportError(
-          Fixup.getLoc(),
-          "expanding GETA relocation reservation is not implemented");
+      if (Fixup.isLinkerRelaxable()) {
+        maybeAddReloc(F, Fixup, Target, Value, /*IsResolved=*/false);
+        return;
+      }
+      if (!IsResolved) {
+        getContext().reportError(
+            Fixup.getLoc(),
+            "unresolved GETA relocation is missing its reservation");
+        return;
+      }
+      if (!isDirectGETAValue(Value)) {
+        getContext().reportError(Fixup.getLoc(),
+                                 "MMIX GETA target is not directly encodable");
+        return;
+      }
+
+      const int64_t Delta = static_cast<int64_t>(Value);
+      const uint32_t Encoded = static_cast<uint32_t>(Delta / 4) & 0xffff;
+      assert(Fixup.getOffset() + 4 <= F.getSize() &&
+             "invalid direct MMIX GETA fixup offset");
+      uint32_t Word = support::endian::read32be(Data);
+      constexpr uint32_t BackwardOpcodeBit = uint32_t(1) << 24;
+      Word = (Word & ~(BackwardOpcodeBit | 0xffff)) |
+             (Delta < 0 ? BackwardOpcodeBit : 0) | Encoded;
+      support::endian::write32be(Data, Word);
       return;
     }
 
@@ -132,6 +174,27 @@ public:
     if (Kind < FirstTargetFixupKind)
       return MCAsmBackend::getFixupKindInfo(Kind);
     return Infos[Kind - FirstTargetFixupKind];
+  }
+
+  bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
+                         const MCSubtargetInfo &) const override {
+    return isUnrelaxedGETARelocation(Opcode, Operands);
+  }
+
+  bool fixupNeedsRelaxationAdvanced(const MCFragment &, const MCFixup &Fixup,
+                                    const MCValue &, uint64_t Value,
+                                    bool Resolved) const override {
+    assert(Fixup.getKind() == MMIX::fixup_mmix_geta &&
+           "unexpected MMIX relaxable fixup");
+    return !Resolved || !isDirectGETAValue(Value);
+  }
+
+  void relaxInstruction(MCInst &Inst,
+                        const MCSubtargetInfo &) const override {
+    assert(isUnrelaxedGETARelocation(Inst.getOpcode(), Inst.getOperands()) &&
+           "unexpected MMIX instruction relaxation");
+    Inst.addOperand(
+        MCOperand::createImm(MMIXII::GETARelocationReservedSlots));
   }
 
   bool writeNopData(raw_ostream &OS, uint64_t Count,
