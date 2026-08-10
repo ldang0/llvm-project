@@ -1,7 +1,15 @@
-# RUN: echo 'BN r1, external' | not llvm-mc -triple=mmix -filetype=obj \
-# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=BRANCH
-# RUN: echo 'JMP external' | not llvm-mc -triple=mmix -filetype=obj \
-# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=JUMP
+# RUN: echo 'BN r1, external' | llvm-mc -triple=mmix -filetype=obj \
+# RUN:   -o %t.branch
+# RUN: llvm-readobj --relocations --expand-relocs %t.branch \
+# RUN:   | FileCheck %s --check-prefix=BRANCH
+# RUN: echo 'JMP external' | llvm-mc -triple=mmix -filetype=obj \
+# RUN:   -o %t.jump
+# RUN: llvm-readobj --relocations --expand-relocs %t.jump \
+# RUN:   | FileCheck %s --check-prefix=JUMP
 
-# BRANCH: error: MMIX 19-bit direction-neutral PC-relative instruction relocation is not implemented
-# JUMP: error: MMIX 27-bit direction-neutral PC-relative instruction relocation is not implemented
+# BRANCH:      Type: R_MMIX_ADDR19 (30)
+# BRANCH-NEXT: Symbol: external
+# BRANCH-NEXT: Addend: 0x0
+# JUMP:        Type: R_MMIX_ADDR27 (31)
+# JUMP-NEXT:   Symbol: external
+# JUMP-NEXT:   Addend: 0x0

@@ -71,13 +71,18 @@ protected:
           Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
                  "is not implemented");
     case MMIX::fixup_mmix_addr19:
-      return rejectRelocation(
-          Fixup, "MMIX 19-bit direction-neutral PC-relative instruction "
-                 "relocation is not implemented");
     case MMIX::fixup_mmix_addr27:
-      return rejectRelocation(
-          Fixup, "MMIX 27-bit direction-neutral PC-relative instruction "
-                 "relocation is not implemented");
+      if (!IsPCRel)
+        return rejectRelocation(
+            Fixup, "MMIX terminal control relocation must be PC-relative");
+      if (Target.getSubSym())
+        return rejectRelocation(
+            Fixup,
+            "MMIX terminal control relocations do not support symbol "
+            "differences");
+      return Fixup.getKind() == MMIX::fixup_mmix_addr19
+                 ? ELF::R_MMIX_ADDR19
+                 : ELF::R_MMIX_ADDR27;
     case MMIX::fixup_mmix_geta:
       if (Target.getSubSym())
         return rejectRelocation(
