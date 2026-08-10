@@ -1,0 +1,54 @@
+## Test llvm-objdump presentation of all 37 GNU MMIX relocation identities.
+## The shared synthetic object includes identities that LLVM recognizes but
+## deliberately does not produce or apply.
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations.yaml -o %t.o
+# RUN: llvm-objdump --reloc %t.o > %t.long
+# RUN: llvm-objdump -r %t.o > %t.short
+# RUN: cmp %t.long %t.short
+# RUN: FileCheck %s --input-file=%t.long --check-prefix=RELOCS \
+# RUN:   --strict-whitespace --match-full-lines --implicit-check-not=warning: \
+# RUN:   --implicit-check-not=error:
+
+#      RELOCS:RELOCATION RECORDS FOR [.data]:
+# RELOCS-NEXT:OFFSET           TYPE                     VALUE
+# RELOCS-NEXT:0000000000000000 R_MMIX_NONE              *ABS*
+# RELOCS-NEXT:0000000000000001 R_MMIX_8                 local_data
+# RELOCS-NEXT:0000000000000002 R_MMIX_16                external+0x4
+# RELOCS-NEXT:0000000000000004 R_MMIX_24                .data+0x8
+# RELOCS-NEXT:0000000000000008 R_MMIX_32                weak_target-0x4
+# RELOCS-NEXT:0000000000000010 R_MMIX_64                local_data+0x10
+# RELOCS-NEXT:0000000000000018 R_MMIX_PC_8              external-0x1
+# RELOCS-NEXT:000000000000001a R_MMIX_PC_16             local_data+0x2
+# RELOCS-NEXT:000000000000001c R_MMIX_PC_24             .data+0x4
+# RELOCS-NEXT:0000000000000020 R_MMIX_PC_32             weak_target-0x8
+# RELOCS-NEXT:0000000000000028 R_MMIX_PC_64             external+0x10
+# RELOCS-NEXT:0000000000000030 R_MMIX_GNU_VTINHERIT     local_data
+# RELOCS-NEXT:0000000000000038 R_MMIX_GNU_VTENTRY       external+0x3
+# RELOCS-EMPTY:
+# RELOCS-NEXT:RELOCATION RECORDS FOR [.text]:
+# RELOCS-NEXT:OFFSET           TYPE                     VALUE
+# RELOCS-NEXT:0000000000000000 R_MMIX_GETA              external
+# RELOCS-NEXT:0000000000000004 R_MMIX_GETA_1            local_func+0x4
+# RELOCS-NEXT:0000000000000008 R_MMIX_GETA_2            weak_target-0x4
+# RELOCS-NEXT:000000000000000c R_MMIX_GETA_3            .text+0x8
+# RELOCS-NEXT:0000000000000010 R_MMIX_CBRANCH           external
+# RELOCS-NEXT:0000000000000014 R_MMIX_CBRANCH_J         local_func+0x4
+# RELOCS-NEXT:0000000000000018 R_MMIX_CBRANCH_1         weak_target-0x4
+# RELOCS-NEXT:000000000000001c R_MMIX_CBRANCH_2         .text+0x8
+# RELOCS-NEXT:0000000000000020 R_MMIX_CBRANCH_3         external-0x8
+# RELOCS-NEXT:0000000000000024 R_MMIX_PUSHJ             local_func
+# RELOCS-NEXT:0000000000000028 R_MMIX_PUSHJ_1           weak_target+0x4
+# RELOCS-NEXT:000000000000002c R_MMIX_PUSHJ_2           .text-0x4
+# RELOCS-NEXT:0000000000000030 R_MMIX_PUSHJ_3           external+0x8
+# RELOCS-NEXT:0000000000000034 R_MMIX_JMP               local_func-0x8
+# RELOCS-NEXT:0000000000000038 R_MMIX_JMP_1             weak_target
+# RELOCS-NEXT:000000000000003c R_MMIX_JMP_2             .text+0x4
+# RELOCS-NEXT:0000000000000040 R_MMIX_JMP_3             external-0x4
+# RELOCS-NEXT:0000000000000044 R_MMIX_ADDR19            local_func+0x8
+# RELOCS-NEXT:0000000000000048 R_MMIX_ADDR27            weak_target-0x8
+# RELOCS-NEXT:000000000000004c R_MMIX_REG_OR_BYTE       .text
+# RELOCS-NEXT:0000000000000050 R_MMIX_REG               external+0x4
+# RELOCS-NEXT:0000000000000054 R_MMIX_BASE_PLUS_OFFSET  local_func-0x4
+# RELOCS-NEXT:0000000000000058 R_MMIX_LOCAL             weak_target+0x8
+# RELOCS-NEXT:000000000000005c R_MMIX_PUSHJ_STUBBABLE   external-0x8
