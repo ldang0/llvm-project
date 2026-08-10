@@ -1,0 +1,80 @@
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Size: 4
+  - Name: .rela.text
+    Type: SHT_RELA
+    Link: .symtab
+    Info: .text
+    Relocations:
+      - { Offset: 4, Type: 37 }
+      - { Offset: 8, Type: 0xffffffff }
+Symbols:
+  - Name: boundary
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Size: 4
+  - Name: .rela.text
+    Type: SHT_RELA
+    Link: .symtab
+    Info: .text
+    Relocations:
+      - { Offset: 0, Type: R_MMIX_64, Symbol: 255 }
+Symbols:
+  - Name: valid
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Size: 4
+  - Name: .rela.text
+    Type: SHT_RELA
+    Link: 255
+    Info: .text
+    Relocations:
+      - { Offset: 0, Type: R_MMIX_64 }
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .rela.text
+    Type: SHT_RELA
+    Info: 255
+    Relocations:
+      - { Offset: 0, Type: R_MMIX_64 }
+
+--- !ELF
+FileHeader:
+  Class:   ELFCLASS64
+  Data:    ELFDATA2MSB
+  Type:    ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name:    .rela.text
+    Type:    SHT_RELA
+    EntSize: 24
+    Content: "0000000000000000000000000000000000000000000000"

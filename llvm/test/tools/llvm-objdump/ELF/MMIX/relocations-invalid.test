@@ -1,0 +1,29 @@
+## Check that llvm-objdump presents MMIX relocation boundaries and diagnoses
+## malformed records handled by its existing generic ELF path.
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=1 \
+# RUN:   -o %t.boundary.o
+# RUN: llvm-objdump --reloc %t.boundary.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=BOUNDARY --strict-whitespace \
+# RUN:     --match-full-lines --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+
+#      BOUNDARY:RELOCATION RECORDS FOR [.text]:
+# BOUNDARY-NEXT:OFFSET           TYPE                     VALUE
+# BOUNDARY-NEXT:0000000000000004 Unknown                  *ABS*
+# BOUNDARY-NEXT:0000000000000008 Unknown                  *ABS*
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=2 \
+# RUN:   -o %t.symbol.o
+# RUN: llvm-objdump --reloc %t.symbol.o 2>&1 \
+# RUN:   | FileCheck %s -DFILE=%t.symbol.o --check-prefix=SYMBOL
+
+# SYMBOL: warning: '[[FILE]]': can't read an entry at 0x17e8: it goes past the end of the section (0x30)
+# SYMBOL: 0000000000000000 R_MMIX_64
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=4 \
+# RUN:   -o %t.target.o
+# RUN: not llvm-objdump --reloc %t.target.o 2>&1 \
+# RUN:   | FileCheck %s -DFILE=%t.target.o --check-prefix=TARGET
+
+# TARGET: error: '[[FILE]]': section (1): unable to get a relocation target: invalid section index: 255

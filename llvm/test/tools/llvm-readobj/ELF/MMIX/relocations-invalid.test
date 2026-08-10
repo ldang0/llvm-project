@@ -1,0 +1,52 @@
+## Check MMIX relocation-number boundaries and the target-specific presentation
+## of malformed ELF relocation records. Generic ELF relocation tests own the
+## complete malformed-section matrix; these cases ensure MMIX does not change
+## its diagnostics or alias unknown relocation numbers.
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=1 \
+# RUN:   -o %t.boundary.o
+# RUN: llvm-readobj --relocations --expand-relocs %t.boundary.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=BOUNDARY --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+
+# BOUNDARY:      Section (2) .rela.text {
+# BOUNDARY:        Relocation {
+# BOUNDARY-NEXT:     Offset: 0x4
+# BOUNDARY-NEXT:     Type: Unknown (37)
+# BOUNDARY:        Relocation {
+# BOUNDARY-NEXT:     Offset: 0x8
+# BOUNDARY-NEXT:     Type: Unknown (4294967295)
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=2 \
+# RUN:   -o %t.symbol.o
+# RUN: llvm-readobj --relocations %t.symbol.o 2>&1 \
+# RUN:   | FileCheck %s -DFILE=%t.symbol.o --check-prefix=SYMBOL
+
+# SYMBOL: warning: '[[FILE]]': unable to print relocation 0 in SHT_RELA section with index 2: unable to read an entry with index 255 from SHT_SYMTAB section with index 3: can't read an entry at 0x17e8: it goes past the end of the section (0x30)
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=3 \
+# RUN:   -o %t.link.o
+# RUN: llvm-readobj --relocations %t.link.o 2>&1 \
+# RUN:   | FileCheck %s -DFILE=%t.link.o --check-prefix=LINK
+
+# LINK: warning: '[[FILE]]': unable to locate a symbol table for SHT_RELA section with index 2: invalid section index: 255
+
+## llvm-readobj reports relocations independently of sh_info validity. Keep
+## that generic behavior deterministic for MMIX; llvm-objdump diagnoses the
+## invalid target because it groups records by their relocated section.
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=4 \
+# RUN:   -o %t.target.o
+# RUN: llvm-readobj --relocations %t.target.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=TARGET --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+
+# TARGET:      Section (1) .rela.text {
+# TARGET-NEXT:   0x0 R_MMIX_64 - 0x0
+# TARGET-NEXT: }
+
+# RUN: yaml2obj %S/../../../Inputs/MMIX/relocations-invalid.yaml --docnum=5 \
+# RUN:   -o %t.truncated.o
+# RUN: llvm-readobj --relocations %t.truncated.o 2>&1 \
+# RUN:   | FileCheck %s -DFILE=%t.truncated.o --check-prefix=TRUNCATED
+
+# TRUNCATED: warning: '[[FILE]]': unable to read relocations from SHT_RELA section with index 1: section [index 1] has an invalid sh_size (23) which is not a multiple of its sh_entsize (24)
