@@ -11,12 +11,12 @@
 #include "MMIXMCTargetDesc.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/EndianStream.h"
 #include <cassert>
@@ -30,6 +30,43 @@ static bool isExpandedGETARelocation(const MCInst &MI) {
   return MI.getOpcode() == MMIX::GETA && MI.getNumOperands() == 3 &&
          MI.getOperand(2).isImm() &&
          MI.getOperand(2).getImm() == MMIXII::GETARelocationReservedSlots;
+}
+
+static bool countGETASymbolTerms(const MCExpr *Expr, unsigned &Symbols) {
+  switch (Expr->getKind()) {
+  case MCExpr::Constant:
+    Symbols = 0;
+    return true;
+  case MCExpr::SymbolRef:
+    Symbols = 1;
+    return true;
+  case MCExpr::Unary: {
+    const auto *Unary = cast<MCUnaryExpr>(Expr);
+    if (Unary->getOpcode() != MCUnaryExpr::Plus &&
+        Unary->getOpcode() != MCUnaryExpr::Minus)
+      return false;
+    if (!countGETASymbolTerms(Unary->getSubExpr(), Symbols))
+      return false;
+    return Unary->getOpcode() == MCUnaryExpr::Plus || Symbols == 0;
+  }
+  case MCExpr::Binary: {
+    const auto *Binary = cast<MCBinaryExpr>(Expr);
+    if (Binary->getOpcode() != MCBinaryExpr::Add &&
+        Binary->getOpcode() != MCBinaryExpr::Sub)
+      return false;
+    unsigned LHSSymbols;
+    unsigned RHSSymbols;
+    if (!countGETASymbolTerms(Binary->getLHS(), LHSSymbols) ||
+        !countGETASymbolTerms(Binary->getRHS(), RHSSymbols))
+      return false;
+    if (Binary->getOpcode() == MCBinaryExpr::Sub && RHSSymbols != 0)
+      return false;
+    Symbols = LHSSymbols + RHSSymbols;
+    return Symbols <= 1;
+  }
+  default:
+    return false;
+  }
 }
 
 class MMIXMCCodeEmitter : public MCCodeEmitter {
@@ -132,9 +169,8 @@ MMIXMCCodeEmitter::getPCRelativeOpValue(const MCInst &MI, unsigned OpNo,
       }
 
       Expr = Specifier->getSubExpr();
-      MCValue Target;
-      if (!Expr->evaluateAsRelocatable(Target, nullptr) ||
-          !Target.getAddSym() || Target.getSubSym()) {
+      unsigned Symbols;
+      if (!countGETASymbolTerms(Expr, Symbols) || Symbols != 1) {
         Ctx.reportError(
             Specifier->getLoc(),
             "expanding GETA requires one symbol plus an optional addend");

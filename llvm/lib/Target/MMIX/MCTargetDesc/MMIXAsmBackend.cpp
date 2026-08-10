@@ -10,11 +10,13 @@
 #include "MMIXFixupKinds.h"
 #include "MMIXMCTargetDesc.h"
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Endian.h"
 #include <cassert>
@@ -174,6 +176,17 @@ public:
     if (Kind < FirstTargetFixupKind)
       return MCAsmBackend::getFixupKindInfo(Kind);
     return Infos[Kind - FirstTargetFixupKind];
+  }
+
+  std::optional<bool> evaluateFixup(const MCFragment &F, MCFixup &Fixup,
+                                    MCValue &Target,
+                                    uint64_t &Value) override {
+    if (Fixup.getKind() != MMIX::fixup_mmix_geta || !Target.isAbsolute())
+      return {};
+    Value = Target.getConstant();
+    if (Fixup.isPCRel())
+      Value -= Asm->getFragmentOffset(F) + Fixup.getOffset();
+    return true;
   }
 
   bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
