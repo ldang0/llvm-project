@@ -239,6 +239,10 @@ public:
         getContext().reportError(
             Fixup.getLoc(), Twine("MMIX ") + TerminalField +
                                 " terminal target is not instruction aligned");
+      else if (IsCall)
+        getContext().reportError(
+            Fixup.getLoc(),
+            "MMIX direct call target is not instruction aligned");
       else
         getContext().reportError(
             Fixup.getLoc(),
@@ -246,12 +250,17 @@ public:
       return;
     }
     Delta /= 4;
-    if (IsTerminal && ((IsBackward && Delta >= 0) ||
-                       (!IsBackward && Delta < 0))) {
-      getContext().reportError(
-          Fixup.getLoc(), Twine("MMIX ") + TerminalField +
-                              " terminal target direction does not match "
-                              "instruction");
+    if ((IsTerminal || IsCall) && ((IsBackward && Delta >= 0) ||
+                                   (!IsBackward && Delta < 0))) {
+      if (IsTerminal)
+        getContext().reportError(
+            Fixup.getLoc(), Twine("MMIX ") + TerminalField +
+                                " terminal target direction does not match "
+                                "instruction");
+      else
+        getContext().reportError(
+            Fixup.getLoc(),
+            "MMIX direct call target direction does not match instruction");
       return;
     }
     if (Delta < Min || Delta > Max) {
@@ -259,6 +268,9 @@ public:
         getContext().reportError(
             Fixup.getLoc(), Twine("MMIX ") + TerminalField +
                                 " terminal target is out of range");
+      else if (IsCall)
+        getContext().reportError(Fixup.getLoc(),
+                                 "MMIX direct call target is out of range");
       else
         getContext().reportError(Fixup.getLoc(),
                                  "MMIX PC-relative fixup is out of range");
