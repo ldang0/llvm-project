@@ -51,6 +51,22 @@ weak_defined:
 .long 0x89abcdef
 .quad 0x0123456789abcdef
 
+.section .data.pcrel,"aw",@progbits
+.Lpc_base_8:
+.byte undefined_global - .Lpc_base_8 + 1
+.Lpc_base_16:
+.short undefined_global - .Lpc_base_16 - 2
+.Lpc_base_32:
+.long undefined_global - .Lpc_base_32 + 3
+.Lpc_base_64:
+.quad undefined_global - .Lpc_base_64 - 4
+
+# A same-section difference remains assembly-time resolved.
+.Lresolved_start:
+.byte 0xa5
+.Lresolved_end:
+.short .Lresolved_end - .Lresolved_start
+
 # CHECK:      Name: .rodata
 # CHECK-NEXT: Type: SHT_PROGBITS (0x1)
 # CHECK:      Size: 4
@@ -82,6 +98,29 @@ weak_defined:
 # CHECK:      Size: 264
 # CHECK:      Link: [[SYMTAB:[0-9]+]]
 # CHECK-NEXT: Info: [[DATA]]
+# CHECK-NEXT: AddressAlignment: 8
+# CHECK-NEXT: EntrySize: 24
+
+# CHECK:      Index: [[PCREL_DATA:[0-9]+]]
+# CHECK-NEXT: Name: .data.pcrel
+# CHECK-NEXT: Type: SHT_PROGBITS (0x1)
+# CHECK:      Size: 18
+# CHECK:      AddressAlignment: 1
+# CHECK-NEXT: EntrySize: 0
+# CHECK-NEXT: SectionData (
+# CHECK-NEXT:   0000: 00000000 00000000 00000000 000000A5
+# CHECK-NEXT:   0010: 0001
+# CHECK-NEXT: )
+
+# CHECK:      Index: [[PCREL_RELA:[0-9]+]]
+# CHECK-NEXT: Name: .rela.data.pcrel
+# CHECK-NEXT: Type: SHT_RELA (0x4)
+# CHECK-NEXT: Flags [ (0x40)
+# CHECK-NEXT:   SHF_INFO_LINK (0x40)
+# CHECK-NEXT: ]
+# CHECK:      Size: 96
+# CHECK:      Link: [[SYMTAB]]
+# CHECK-NEXT: Info: [[PCREL_DATA]]
 # CHECK-NEXT: AddressAlignment: 8
 # CHECK-NEXT: EntrySize: 24
 
@@ -156,6 +195,32 @@ weak_defined:
 # CHECK-NEXT:       Type: R_MMIX_32 (4)
 # CHECK-NEXT:       Symbol: common_target ([[COMMON:[0-9]+]])
 # CHECK-NEXT:       Addend: 0xFFFFFFFFFFFFFFF5
+# CHECK-NEXT:     }
+# CHECK-NEXT:   }
+# CHECK-NEXT:   Section ([[PCREL_RELA]]) .rela.data.pcrel {
+# CHECK-NEXT:     Relocation {
+# CHECK-NEXT:       Offset: 0x0
+# CHECK-NEXT:       Type: R_MMIX_PC_8 (6)
+# CHECK-NEXT:       Symbol: undefined_global ([[UNDEFINED]])
+# CHECK-NEXT:       Addend: 0x1
+# CHECK-NEXT:     }
+# CHECK-NEXT:     Relocation {
+# CHECK-NEXT:       Offset: 0x1
+# CHECK-NEXT:       Type: R_MMIX_PC_16 (7)
+# CHECK-NEXT:       Symbol: undefined_global ([[UNDEFINED]])
+# CHECK-NEXT:       Addend: 0xFFFFFFFFFFFFFFFE
+# CHECK-NEXT:     }
+# CHECK-NEXT:     Relocation {
+# CHECK-NEXT:       Offset: 0x3
+# CHECK-NEXT:       Type: R_MMIX_PC_32 (9)
+# CHECK-NEXT:       Symbol: undefined_global ([[UNDEFINED]])
+# CHECK-NEXT:       Addend: 0x3
+# CHECK-NEXT:     }
+# CHECK-NEXT:     Relocation {
+# CHECK-NEXT:       Offset: 0x7
+# CHECK-NEXT:       Type: R_MMIX_PC_64 (10)
+# CHECK-NEXT:       Symbol: undefined_global ([[UNDEFINED]])
+# CHECK-NEXT:       Addend: 0xFFFFFFFFFFFFFFFC
 # CHECK-NEXT:     }
 # CHECK-NEXT:   }
 # CHECK-NEXT: ]

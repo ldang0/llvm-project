@@ -4,10 +4,6 @@
 # RUN:   -o %t/instruction.o 2>&1 | FileCheck %s --check-prefix=INSTRUCTION
 # RUN: not test -e %t/instruction.o
 
-# RUN: not llvm-mc -triple=mmix -filetype=obj %t/relative-data.s \
-# RUN:   -o %t/relative-data.o 2>&1 | FileCheck %s --check-prefix=REL-DATA
-# RUN: not test -e %t/relative-data.o
-
 # RUN: not llvm-mc -triple=mmix -filetype=obj %t/inter-section.s \
 # RUN:   -o %t/inter-section.o 2>&1 | FileCheck %s --check-prefix=INTER
 # RUN: not test -e %t/inter-section.o
@@ -34,8 +30,6 @@
 # INSTRUCTION: instruction.s:5:9: error: MMIX 16-bit backward PC-relative instruction relocation is not implemented
 # INSTRUCTION: instruction.s:6:6: error: MMIX 24-bit backward PC-relative instruction relocation is not implemented
 
-# REL-DATA: relative-data.s:3:15: error: MMIX 32-bit PC-relative data relocation is not implemented
-
 # INTER: inter-section.s:2:8: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
 
 # WEAK: weak.s:4:8: error: MMIX 16-bit forward PC-relative instruction relocation is not implemented
@@ -60,11 +54,6 @@ PUSHJ r2, external
 GETA r3, external
 BNB r4, external
 JMPB external
-
-#--- relative-data.s
-.data
-base:
-.long external-base
 
 #--- inter-section.s
 .text
