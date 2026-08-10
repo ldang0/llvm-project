@@ -79,6 +79,37 @@ static bool isMMIXNonlocalControlIntrinsic(Intrinsic::ID ID) {
   }
 }
 
+static std::optional<std::pair<const GlobalAddressSDNode *, int64_t>>
+getMMIXDirectGlobalCallee(SDValue Callee) {
+  if (const auto *GA = dyn_cast<GlobalAddressSDNode>(Callee))
+    return std::pair(GA, GA->getOffset());
+
+  SDValue Symbol;
+  const ConstantSDNode *Constant = nullptr;
+  if (Callee.getOpcode() == ISD::ADD) {
+    if ((Constant = dyn_cast<ConstantSDNode>(Callee.getOperand(1))))
+      Symbol = Callee.getOperand(0);
+    else if ((Constant = dyn_cast<ConstantSDNode>(Callee.getOperand(0))))
+      Symbol = Callee.getOperand(1);
+  } else if (Callee.getOpcode() == ISD::SUB) {
+    Symbol = Callee.getOperand(0);
+    Constant = dyn_cast<ConstantSDNode>(Callee.getOperand(1));
+  }
+
+  const auto *GA = dyn_cast_or_null<GlobalAddressSDNode>(Symbol.getNode());
+  if (!GA || !Constant)
+    return std::nullopt;
+
+  int64_t Addend = Constant->getSExtValue();
+  if (Callee.getOpcode() == ISD::SUB && SubOverflow(int64_t(0), Addend, Addend))
+    report_fatal_error("MMIX direct call symbol addend is out of range");
+
+  int64_t Offset;
+  if (AddOverflow(GA->getOffset(), Addend, Offset))
+    report_fatal_error("MMIX direct call symbol addend is out of range");
+  return std::pair(GA, Offset);
+}
+
 static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
   switch (Reg.id()) {
   case MMIX::R30:  // Holds the incoming rJ in non-leaf functions.
@@ -1155,9 +1186,10 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   SDValue Callee = CLI.Callee;
   SDValue DirectCallee;
-  if (auto *GA = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    SDValue Target = DAG.getTargetGlobalAddress(GA->getGlobal(), CLI.DL,
-                                                MVT::i64, GA->getOffset());
+  if (auto GlobalCallee = getMMIXDirectGlobalCallee(Callee)) {
+    const GlobalAddressSDNode *GA = GlobalCallee->first;
+    SDValue Target = DAG.getTargetGlobalAddress(
+        GA->getGlobal(), CLI.DL, MVT::i64, GlobalCallee->second);
     const auto *TargetFunction = dyn_cast<Function>(GA->getGlobal());
     const Function &SourceFunction = MF.getFunction();
     bool HasStableTextLayout =

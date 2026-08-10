@@ -1,0 +1,62 @@
+; RUN: split-file %s %t
+
+; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
+; RUN:   %t/misaligned.ll -o %t/misaligned.s
+; RUN: not llvm-mc -triple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/misaligned.s -o %t/misaligned.o 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=MISALIGNED
+; RUN: not test -e %t/misaligned.o
+
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm \
+; RUN:   %t/calling-convention.ll -o %t/calling-convention.s 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=CALLING-CONVENTION
+; RUN: test ! -s %t/calling-convention.s
+
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/object-gate.ll -o %t/object-gate.o 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=OBJECT
+; RUN: test ! -s %t/object-gate.o
+
+; A malformed local symbol-plus-addend reaches the ordinary direct-call
+; assembler diagnostic. It is not reclassified as a request for a linker
+; stub merely because the ELF path supports unresolved calls.
+; MISALIGNED: error: MMIX direct call target is not instruction aligned
+
+; Unsupported ABI-level call forms are rejected before they can be mistaken
+; for a relocation strategy.
+; CALLING-CONVENTION: LLVM ERROR: MMIX supports only the C calling convention in function 'owner'
+
+; The preparatory gate does not make llc object emission public.
+; OBJECT: llc: error: target does not support generation of this file type
+
+;--- misaligned.ll
+target triple = "mmix-unknown-elf"
+
+define internal void @callee() {
+  ret void
+}
+
+define void @owner() {
+  call void getelementptr (i8, ptr @callee, i64 2)()
+  ret void
+}
+
+;--- calling-convention.ll
+target triple = "mmix-unknown-elf"
+
+declare fastcc void @callee()
+
+define void @owner() {
+  call fastcc void @callee()
+  ret void
+}
+
+;--- object-gate.ll
+target triple = "mmix-unknown-elf"
+
+declare void @callee()
+
+define void @owner() {
+  call void @callee()
+  ret void
+}
