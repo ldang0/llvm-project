@@ -4,16 +4,28 @@
 ; RUN:   %t/symbolic-i24.ll -o %t/symbolic-i24.s 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=I24
 ; RUN: not test -e %t/symbolic-i24.s
+; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/symbolic-i24.ll -o %t/symbolic-i24.o 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=I24
+; RUN: not test -e %t/symbolic-i24.o
 
 ; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   %t/symbolic-i7-aggregate.ll -o %t/symbolic-i7-aggregate.s 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=I7
 ; RUN: not test -e %t/symbolic-i7-aggregate.s
+; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/symbolic-i7-aggregate.ll -o %t/symbolic-i7-aggregate.o 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=I7
+; RUN: not test -e %t/symbolic-i7-aggregate.o
 
 ; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   %t/symbolic-i48-aggregate.ll -o %t/symbolic-i48-aggregate.s 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=I48
 ; RUN: not test -e %t/symbolic-i48-aggregate.s
+; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/symbolic-i48-aggregate.ll -o %t/symbolic-i48-aggregate.o 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=I48
+; RUN: not test -e %t/symbolic-i48-aggregate.o
 
 ; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   --output-asm-variant=1 %t/mmixal-symbolic-i24.ll \
