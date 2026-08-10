@@ -22,6 +22,8 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -39,6 +41,68 @@
 using namespace llvm;
 
 namespace {
+
+bool isReviewedSymbolicIntegerWidth(unsigned BitWidth) {
+  switch (BitWidth) {
+  case 8:
+  case 16:
+  case 32:
+  case 64:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool constantReferencesSymbol(const Constant &C,
+                              SmallPtrSetImpl<const Constant *> &Visited) {
+  if (isa<GlobalValue, BlockAddress>(C))
+    return true;
+  if (!Visited.insert(&C).second)
+    return false;
+
+  for (const Value *Operand : C.operands())
+    if (const auto *Nested = dyn_cast<Constant>(Operand);
+        Nested && constantReferencesSymbol(*Nested, Visited))
+      return true;
+  return false;
+}
+
+Error validateSymbolicInitializerStorage(
+    const Constant &C, const GlobalVariable &Global,
+    SmallPtrSetImpl<const Constant *> &Visited) {
+  if (!Visited.insert(&C).second || isa<GlobalValue, BlockAddress>(C))
+    return Error::success();
+
+  if (const auto *Integer = dyn_cast<IntegerType>(C.getType());
+      Integer && !isReviewedSymbolicIntegerWidth(Integer->getBitWidth())) {
+    SmallPtrSet<const Constant *, 8> SymbolVisited;
+    if (constantReferencesSymbol(C, SymbolVisited))
+      return createStringError(
+          Twine("MMIX symbolic initializer for global '") + Global.getName() +
+          "' uses unreviewed i" + Twine(Integer->getBitWidth()) +
+          " storage; supported integer widths are i8, i16, i32, and i64");
+  }
+
+  for (const Value *Operand : C.operands())
+    if (const auto *Nested = dyn_cast<Constant>(Operand))
+      if (Error Err =
+              validateSymbolicInitializerStorage(*Nested, Global, Visited))
+        return Err;
+  return Error::success();
+}
+
+Error validateSymbolicInitializerStorage(const Module &M) {
+  for (const GlobalVariable &Global : M.globals()) {
+    if (!Global.hasInitializer())
+      continue;
+    SmallPtrSet<const Constant *, 8> Visited;
+    if (Error Err = validateSymbolicInitializerStorage(*Global.getInitializer(),
+                                                       Global, Visited))
+      return Err;
+  }
+  return Error::success();
+}
 
 class MMIXAsmPrinter final : public AsmPrinter {
   MMIXALAsmStreamer *MMIXALStreamer;
@@ -144,6 +208,11 @@ public:
   StringRef getPassName() const override { return "MMIX Assembly Printer"; }
 
   void emitStartOfAsmFile(Module &M) override {
+    if (Error Err = validateSymbolicInitializerStorage(M)) {
+      std::string Message = toString(std::move(Err));
+      report_fatal_error(StringRef(Message));
+    }
+
     if (!MMIXALStreamer)
       return;
 
