@@ -71,18 +71,23 @@ protected:
           Fixup, "MMIX 24-bit backward PC-relative instruction relocation "
                  "is not implemented");
     case MMIX::fixup_mmix_addr19:
-    case MMIX::fixup_mmix_addr27:
+    case MMIX::fixup_mmix_addr27: {
+      const char *Field = Fixup.getKind() == MMIX::fixup_mmix_addr19
+                              ? "19-bit"
+                              : "27-bit";
       if (!IsPCRel)
         return rejectRelocation(
-            Fixup, "MMIX terminal control relocation must be PC-relative");
+            Fixup, Twine("MMIX ") + Field +
+                       " terminal control relocation must be PC-relative");
       if (Target.getSubSym())
         return rejectRelocation(
-            Fixup,
-            "MMIX terminal control relocations do not support symbol "
-            "differences");
+            Fixup, Twine("MMIX ") + Field +
+                       " terminal control relocation does not support symbol "
+                       "differences");
       return Fixup.getKind() == MMIX::fixup_mmix_addr19
                  ? ELF::R_MMIX_ADDR19
                  : ELF::R_MMIX_ADDR27;
+    }
     case MMIX::fixup_mmix_geta:
       if (Target.getSubSym())
         return rejectRelocation(

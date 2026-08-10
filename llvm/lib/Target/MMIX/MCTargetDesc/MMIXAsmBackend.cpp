@@ -160,16 +160,36 @@ public:
     const unsigned Width = Uses16BitDisplacement ? 16 : 24;
     const int64_t Min = IsBackward ? -(int64_t(1) << Width) : 0;
     const int64_t Max = IsBackward ? -1 : (int64_t(1) << Width) - 1;
+    const char *TerminalField = Uses16BitDisplacement ? "19-bit" : "27-bit";
 
     if ((Delta & 3) != 0) {
-      getContext().reportError(
-          Fixup.getLoc(), "MMIX PC-relative fixup is not instruction aligned");
+      if (IsTerminal)
+        getContext().reportError(
+            Fixup.getLoc(), Twine("MMIX ") + TerminalField +
+                                " terminal target is not instruction aligned");
+      else
+        getContext().reportError(
+            Fixup.getLoc(),
+            "MMIX PC-relative fixup is not instruction aligned");
       return;
     }
     Delta /= 4;
+    if (IsTerminal && ((IsBackward && Delta >= 0) ||
+                       (!IsBackward && Delta < 0))) {
+      getContext().reportError(
+          Fixup.getLoc(), Twine("MMIX ") + TerminalField +
+                              " terminal target direction does not match "
+                              "instruction");
+      return;
+    }
     if (Delta < Min || Delta > Max) {
-      getContext().reportError(Fixup.getLoc(),
-                               "MMIX PC-relative fixup is out of range");
+      if (IsTerminal)
+        getContext().reportError(
+            Fixup.getLoc(), Twine("MMIX ") + TerminalField +
+                                " terminal target is out of range");
+      else
+        getContext().reportError(Fixup.getLoc(),
+                                 "MMIX PC-relative fixup is out of range");
       return;
     }
 
