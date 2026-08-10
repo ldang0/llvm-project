@@ -47,6 +47,7 @@ enum NodeType : unsigned {
   UNCACHED_STORE,
   VIRTUAL_TRANSLATION_SEARCH,
   CALL,
+  DIRECT_CALL,
   RET_GLUE,
   RET_VALUE_GLUE,
 };

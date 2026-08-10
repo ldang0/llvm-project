@@ -12,6 +12,7 @@
 namespace llvm {
 
 class AsmPrinter;
+enum class MMIXEmissionMode;
 class MCContext;
 class MCExpr;
 class MCInst;
@@ -23,14 +24,16 @@ class MachineOperand;
 class MMIXMCInstLower {
   MCContext &Ctx;
   AsmPrinter &Printer;
+  MMIXEmissionMode EmissionMode;
 
   const MCExpr *lowerSymbolOperand(const MachineOperand &MO,
                                    MCSymbol *Symbol) const;
   MCOperand lowerOperand(const MachineOperand &MO) const;
 
 public:
-  MMIXMCInstLower(MCContext &Ctx, AsmPrinter &Printer)
-      : Ctx(Ctx), Printer(Printer) {}
+  MMIXMCInstLower(MCContext &Ctx, AsmPrinter &Printer,
+                  MMIXEmissionMode EmissionMode)
+      : Ctx(Ctx), Printer(Printer), EmissionMode(EmissionMode) {}
 
   const MCExpr *lowerAddressOperand(const MachineOperand &MO) const;
   void lower(const MachineInstr &MI, MCInst &OutMI) const;

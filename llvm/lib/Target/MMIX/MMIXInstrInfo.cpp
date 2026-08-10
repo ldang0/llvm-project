@@ -38,6 +38,22 @@ static int getSingleWydeIndex(uint64_t Value) {
   return Index == -1 ? 0 : Index;
 }
 
+static bool isRedundantCallStateOperand(const MachineOperand &MO) {
+  if (!MO.isReg() || !MO.isImplicit())
+    return false;
+  return MO.getReg() == MMIX::RJ || MO.getReg() == MMIX::RL ||
+         MO.getReg() == MMIX::RO || MO.getReg() == MMIX::R254 ||
+         MO.getReg() == MMIX::RG;
+}
+
+static void copyCallStateOperands(MachineInstrBuilder &MIB,
+                                  const MachineInstr &MI,
+                                  unsigned FirstOperand) {
+  for (unsigned I = FirstOperand; I != MI.getNumOperands(); ++I)
+    if (!isRedundantCallStateOperand(MI.getOperand(I)))
+      MIB.add(MI.getOperand(I));
+}
+
 void MMIXInstrInfo::loadImmediate(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator MBBI,
                                   const DebugLoc &DL, Register DstReg,
@@ -170,15 +186,19 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
                 .addReg(MMIX::R31)
                 .add(MI.getOperand(0));
     }
-    for (unsigned I = 1; I != MI.getNumOperands(); ++I) {
-      const MachineOperand &MO = MI.getOperand(I);
-      if (MO.isReg() && MO.isImplicit() &&
-          (MO.getReg() == MMIX::RJ || MO.getReg() == MMIX::RL ||
-           MO.getReg() == MMIX::RO || MO.getReg() == MMIX::R254 ||
-           MO.getReg() == MMIX::RG))
-        continue;
-      MIB.add(MO);
-    }
+    copyCallStateOperands(MIB, MI, 1);
+    MI.eraseFromParent();
+    return true;
+  }
+
+  if (MI.getOpcode() == MMIX::DIRECT_CALL_STATE) {
+    MachineInstrBuilder MIB =
+        BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+                get(MMIX::PseudoDirectCall))
+            .addReg(MMIX::R31)
+            .add(MI.getOperand(0))
+            .add(MI.getOperand(1));
+    copyCallStateOperands(MIB, MI, 2);
     MI.eraseFromParent();
     return true;
   }
@@ -188,22 +208,6 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
             get(MMIX::PUTI))
         .addDef(MMIX::RD)
         .addImm(0);
-    MI.eraseFromParent();
-    return true;
-  }
-
-  if (MI.getOpcode() == MMIX::LOAD_CALL_ADDR) {
-    static constexpr unsigned Opcodes[] = {MMIX::SETH, MMIX::INCMH, MMIX::INCML,
-                                           MMIX::INCL};
-    static constexpr unsigned Flags[] = {MMIXII::MO_ABS_HI, MMIXII::MO_ABS_MH,
-                                         MMIXII::MO_ABS_ML, MMIXII::MO_ABS_LO};
-    for (auto [Opcode, Flag] : zip_equal(Opcodes, Flags)) {
-      MachineInstrBuilder MIB =
-          BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
-                  get(Opcode), MI.getOperand(0).getReg());
-      MIB.add(MI.getOperand(1));
-      MIB->getOperand(1).setTargetFlags(Flag);
-    }
     MI.eraseFromParent();
     return true;
   }

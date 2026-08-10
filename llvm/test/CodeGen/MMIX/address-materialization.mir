@@ -46,10 +46,7 @@ body: |
     ; CHECK:      $r0 = LOAD_ADDR %const.0
     ; CHECK-NEXT: $r1 = LOAD_ADDR %jump-table.0
     ; CHECK-NEXT: $r2 = LOAD_ADDR &external_name
-    ; CHECK-NEXT: $r3 = SETH target-flags(mmix-abs-hi) &external_callee
-    ; CHECK-NEXT: $r3 = INCMH target-flags(mmix-abs-mh) &external_callee
-    ; CHECK-NEXT: $r3 = INCML target-flags(mmix-abs-ml) &external_callee
-    ; CHECK-NEXT: $r3 = INCL target-flags(mmix-abs-lo) &external_callee
+    ; CHECK-NEXT: $r3 = LOAD_CALL_ADDR &external_callee
     $r0 = LOAD_ADDR %const.0
     $r1 = LOAD_ADDR %jump-table.0
     $r2 = LOAD_ADDR &external_name

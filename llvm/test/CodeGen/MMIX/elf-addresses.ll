@@ -81,12 +81,16 @@ target:
   ret ptr blockaddress(@block_address, %target)
 }
 
-; Unresolved direct calls use LOAD_CALL_ADDR before post-RA and therefore
-; remain outside the static-address GETA path.
+; Unresolved direct calls preserve both their symbolic callee and the scratch
+; register used by the unchanged text fallback.
 ; MIR-LABEL: name: direct_call
 ; MIR-NOT:   LOAD_ADDR
-; MIR:       $r{{[0-9]+}} = SETH target-flags(mmix-abs-hi) @external_function
-; MIR:       PseudoPUSHGO
+; MIR:       [[CALL_SCRATCH:\$r[0-9]+]] = LOAD_CALL_ADDR @external_function
+; MIR-NEXT:  PseudoDirectCall $r31, @external_function, killed [[CALL_SCRATCH]], csr_mmix
+; ASM-LABEL: direct_call:
+; ASM:       SETH [[CALL_TARGET:r[0-9]+]], (external_function>>48)&65535
+; ASM:       PUSHGO r31, [[CALL_TARGET]], 0
+; ASM-NOT:   PUSHJ
 define void @direct_call() {
   call void @external_function()
   ret void
@@ -95,6 +99,7 @@ define void @direct_call() {
 ; Indirect calls already hold their target in a register.
 ; MIR-LABEL: name: indirect_call
 ; MIR-NOT:   LOAD_ADDR
+; MIR-NOT:   LOAD_CALL_ADDR
 ; MIR:       PseudoPUSHGO
 define void @indirect_call(ptr %callee) {
   call void %callee()

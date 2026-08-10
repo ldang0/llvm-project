@@ -1154,9 +1154,10 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   SDValue Callee = CLI.Callee;
+  SDValue DirectCallee;
   if (auto *GA = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    SDValue Target = DAG.getTargetGlobalAddress(
-        GA->getGlobal(), CLI.DL, MVT::i64, GA->getOffset());
+    SDValue Target = DAG.getTargetGlobalAddress(GA->getGlobal(), CLI.DL,
+                                                MVT::i64, GA->getOffset());
     const auto *TargetFunction = dyn_cast<Function>(GA->getGlobal());
     const Function &SourceFunction = MF.getFunction();
     bool HasStableTextLayout =
@@ -1168,18 +1169,23 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
         TargetFunction == &SourceFunction ||
         (TargetFunction &&
          (TargetFunction->hasLocalLinkage() || TargetFunction->isDSOLocal()));
-    Callee = HasStableTextLayout && IsLocalTarget
-                 ? Target
-                 : DAG.getNode(MMIXISD::LOAD_CALL_ADDR, CLI.DL, MVT::i64,
-                               Target);
+    if (HasStableTextLayout && IsLocalTarget) {
+      Callee = Target;
+    } else {
+      DirectCallee = Target;
+      Callee = DAG.getNode(MMIXISD::LOAD_CALL_ADDR, CLI.DL, MVT::i64, Target);
+    }
   } else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    SDValue Target =
-        DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
+    DirectCallee = DAG.getTargetExternalSymbol(ES->getSymbol(), MVT::i64);
     Callee =
-        DAG.getNode(MMIXISD::LOAD_CALL_ADDR, CLI.DL, MVT::i64, Target);
+        DAG.getNode(MMIXISD::LOAD_CALL_ADDR, CLI.DL, MVT::i64, DirectCallee);
   }
 
-  SmallVector<SDValue, 20> CallOps = {Chain, Callee};
+  SmallVector<SDValue, 20> CallOps = {Chain};
+  if (DirectCallee)
+    CallOps.append({DirectCallee, Callee});
+  else
+    CallOps.push_back(Callee);
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   const uint32_t *Mask = TRI->getCallPreservedMask(MF, CLI.CallConv);
   if (!Mask)
@@ -1190,8 +1196,8 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (Glue)
     CallOps.push_back(Glue);
 
-  Chain = DAG.getNode(MMIXISD::CALL, CLI.DL,
-                      DAG.getVTList(MVT::Other, MVT::Glue), CallOps);
+  Chain = DAG.getNode(DirectCallee ? MMIXISD::DIRECT_CALL : MMIXISD::CALL,
+                      CLI.DL, DAG.getVTList(MVT::Other, MVT::Glue), CallOps);
   Glue = Chain.getValue(1);
   Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
   Glue = Chain.getValue(1);

@@ -20,6 +20,9 @@ def SDT_MMIXCall : SDTypeProfile<0, -1, [SDTCisVT<0, i64>]>;
 def MMIXcall
     : SDNode<"MMIXISD::CALL", SDT_MMIXCall,
              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+def MMIXdirect_call
+    : SDNode<"MMIXISD::DIRECT_CALL", SDT_MMIXCall,
+             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def SDT_MMIXLoadStackArg
     : SDTypeProfile<1, 1, [SDTCisVT<1, i64>]>;
 def MMIXload_stack_arg
@@ -2225,10 +2228,15 @@ def : Pat<(atomic_fence timm, timm), (SYNC 3)>;
 // the register-stack operand.
 def MMIXCallTarget : Operand<i64>;
 let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
-    Defs = [RJ, RL, RO] in
-def CALL_STATE
-    : MMIXPseudoInstruction<(outs), (ins MMIXCallTarget:$callee),
-                            "# CALL_STATE $callee">;
+    Defs = [RJ, RL, RO] in {
+  def CALL_STATE
+      : MMIXPseudoInstruction<(outs), (ins MMIXCallTarget:$callee),
+                              "# CALL_STATE $callee">;
+  def DIRECT_CALL_STATE
+      : MMIXPseudoInstruction<
+            (outs), (ins MMIXCallTarget:$callee, GPR64Op:$scratch),
+            "# DIRECT_CALL_STATE $callee, $scratch">;
+}
 
 // Direction is a layout property, so direct calls remain neutral until MC
 // lowering. Indirect calls use the immediate-zero PUSHGO form.
@@ -2244,6 +2252,12 @@ let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
       : MMIXPseudoInstruction<(outs),
                               (ins GPR64Op:$count, GPR64Op:$callee,
                                    MMIXUImm8:$offset), ""> {
+    let Size = 4;
+  }
+  def PseudoDirectCall
+      : MMIXPseudoInstruction<
+            (outs), (ins GPR64Op:$count, MMIXBranchTarget:$callee,
+                         GPR64Op:$scratch), ""> {
     let Size = 4;
   }
 }

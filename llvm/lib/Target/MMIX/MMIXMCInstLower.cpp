@@ -9,6 +9,7 @@
 #include "MMIXMCInstLower.h"
 #include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIXCallEmission.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -156,6 +157,27 @@ MMIXMCInstLower::lowerAddressOperand(const MachineOperand &MO) const {
 void MMIXMCInstLower::lower(const MachineInstr &MI, MCInst &OutMI) const {
   unsigned Opcode = MI.getOpcode();
   unsigned PredicateOperand = ~0U;
+  if (Opcode == MMIX::PseudoDirectCall) {
+    MCOperand Callee = lowerOperand(MI.getOperand(1));
+    assert(Callee.isExpr() &&
+           "direct call did not lower to a callee expression");
+    if (std::optional<MCInst> Direct = createMMIXUnresolvedDirectCall(
+            EmissionMode, MI.getOperand(0).getReg(), Callee.getExpr())) {
+      OutMI = std::move(*Direct);
+    } else {
+      OutMI.setOpcode(MMIX::PUSHGOI);
+      OutMI.addOperand(lowerOperand(MI.getOperand(0)));
+      OutMI.addOperand(lowerOperand(MI.getOperand(2)));
+      OutMI.addOperand(MCOperand::createImm(0));
+    }
+    for (unsigned I = 3; I != MI.getNumOperands(); ++I) {
+      MCOperand MCOp = lowerOperand(MI.getOperand(I));
+      if (MCOp.isValid())
+        OutMI.addOperand(MCOp);
+    }
+    return;
+  }
+
   if (Opcode == MMIX::PseudoB) {
     static constexpr unsigned BranchOpcodes[][2] = {
         {MMIX::BN, MMIX::BNB},     {MMIX::BZ, MMIX::BZB},

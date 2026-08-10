@@ -8,14 +8,15 @@ declare i64 @i64_callee(i64)
 declare signext i8 @sext_callee(i8 signext)
 declare zeroext i32 @zext_callee(i32 zeroext)
 declare float @f32_callee(float)
+declare extern_weak void @weak_callee()
 declare double @many_callee(i64, i64, i64, i64, i64, i64, i64, i64,
                             i64, i64, i64, i64, i64, i64, i64, i64,
                             i64, double)
 
 ; ISEL-LABEL: name: call_void
 ; ISEL:       ADJCALLSTACKDOWN 0, 0
-; ISEL-NEXT:  [[VOID_CALLEE:%[0-9]+]]:gpr64codegen = LOAD_CALL_ADDR @void_callee
-; ISEL-NEXT:  CALL_STATE killed [[VOID_CALLEE]], csr_mmix{{.*}}implicit $r254
+; ISEL-NEXT:  [[VOID_SCRATCH:%[0-9]+]]:{{[^ ]+}} = LOAD_CALL_ADDR @void_callee
+; ISEL-NEXT:  DIRECT_CALL_STATE @void_callee, killed [[VOID_SCRATCH]], csr_mmix{{.*}}implicit $r254
 ; ISEL-NEXT:  ADJCALLSTACKUP 0, 0
 define void @call_void() {
   call void @void_callee()
@@ -26,7 +27,7 @@ define void @call_void() {
 ; from the same documented result register after it.
 ; ISEL-LABEL: name: call_i64
 ; ISEL:       $r231 = COPY %{{[0-9]+}}
-; ISEL-NEXT:  CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
+; ISEL-NEXT:  DIRECT_CALL_STATE @i64_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 ; ISEL-NEXT:  ADJCALLSTACKUP 0, 0
 ; ISEL-NEXT:  %{{[0-9]+}}:gpr64codegen = COPY $r231
 define i64 @call_i64(i64 %value) {
@@ -40,7 +41,7 @@ define i64 @call_i64(i64 %value) {
 ; ISEL:       [[SHIFTED:%[0-9]+]]:{{[^ ]+}} = SLUI {{.*}}, 56
 ; ISEL-NEXT:  [[SEXT:%[0-9]+]]:{{[^ ]+}} = SRI killed [[SHIFTED]], 56
 ; ISEL:       $r231 = COPY [[SEXT]]
-; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
+; ISEL:       DIRECT_CALL_STATE @sext_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 define i64 @call_signext(i64 %value) {
   %narrow = trunc i64 %value to i8
   %result = call signext i8 @sext_callee(i8 signext %narrow)
@@ -51,7 +52,7 @@ define i64 @call_signext(i64 %value) {
 ; ISEL-LABEL: name: call_zeroext
 ; ISEL:       [[ZEXT:%[0-9]+]]:{{[^ ]+}} = AND
 ; ISEL:       $r231 = COPY [[ZEXT]]
-; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
+; ISEL:       DIRECT_CALL_STATE @zext_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 define i64 @call_zeroext(i64 %value) {
   %narrow = trunc i64 %value to i32
   %result = call zeroext i32 @zext_callee(i32 zeroext %narrow)
@@ -62,7 +63,7 @@ define i64 @call_zeroext(i64 %value) {
 ; f32 call slots carry the short-float bit representation in an i64 location.
 ; ISEL-LABEL: name: call_f32
 ; ISEL:       $r231 = COPY %{{[0-9]+}}
-; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
+; ISEL:       DIRECT_CALL_STATE @f32_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
 ; ISEL:       %{{[0-9]+}}:gpr64codegen = COPY $r231
 define float @call_f32(float %value) {
   %result = call float @f32_callee(float %value)
@@ -75,14 +76,14 @@ define float @call_f32(float %value) {
 ; ISEL:       ADJCALLSTACKDOWN 16, 0
 ; ISEL:       STOUI {{.*}}, 8 :: (store (s64) into stack + 8)
 ; ISEL:       STOUI {{.*}}, 0 :: (store (s64) into stack)
-; ISEL:       CALL_STATE {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231, implicit $r232, implicit $r233, implicit $r234, implicit $r235, implicit $r236, implicit $r237, implicit $r238, implicit $r239, implicit $r240, implicit $r241, implicit $r242, implicit $r243, implicit $r244, implicit $r245, implicit $r246
+; ISEL:       DIRECT_CALL_STATE @many_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231, implicit $r232, implicit $r233, implicit $r234, implicit $r235, implicit $r236, implicit $r237, implicit $r238, implicit $r239, implicit $r240, implicit $r241, implicit $r242, implicit $r243, implicit $r244, implicit $r245, implicit $r246
 ; ISEL-NEXT:  ADJCALLSTACKUP 16, 0
 ; PEI-LABEL: name: call_with_stack_arguments
 ; PEI:       stackSize: 16
 ; PEI:       maxCallFrameSize: 16
 ; PEI:       $r254 = frame-setup SUBUI $r254, 16
 ; PEI-NOT:   ADJCALLSTACK
-; PEI:       CALL_STATE {{.*}}, csr_mmix
+; PEI:       DIRECT_CALL_STATE @many_callee, {{.*}}, csr_mmix
 define double @call_with_stack_arguments() {
   %result = call double @many_callee(
       i64 0, i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7,
@@ -104,8 +105,55 @@ define i64 @call_indirect(ptr %callee, i64 %value) {
 ; Tail-call optimization is deliberately disabled for the provisional ABI.
 ; ISEL-LABEL: name: tail_call_disabled
 ; ISEL:       hasTailCall: false
-; ISEL:       CALL_STATE {{.*}}csr_mmix
+; ISEL:       DIRECT_CALL_STATE @i64_callee, {{.*}}csr_mmix
 define i64 @tail_call_disabled(i64 %value) {
   %result = tail call i64 @i64_callee(i64 %value)
   ret i64 %result
+}
+
+; Weak, explicitly sectioned, and externally visible preemptable definitions
+; retain both their callee identity and the text fallback scratch register.
+; ISEL-LABEL: name: call_weak
+; ISEL:       [[WEAK_SCRATCH:%[0-9]+]]:{{[^ ]+}} = LOAD_CALL_ADDR @weak_callee
+; ISEL:       DIRECT_CALL_STATE @weak_callee, killed [[WEAK_SCRATCH]], csr_mmix
+define void @call_weak() {
+  call void @weak_callee()
+  ret void
+}
+
+define internal void @section_callee() section ".calls" {
+  ret void
+}
+
+; ISEL-LABEL: name: call_other_section
+; ISEL:       [[SECTION_SCRATCH:%[0-9]+]]:{{[^ ]+}} = LOAD_CALL_ADDR @section_callee
+; ISEL:       DIRECT_CALL_STATE @section_callee, killed [[SECTION_SCRATCH]], csr_mmix
+define void @call_other_section() {
+  call void @section_callee()
+  ret void
+}
+
+define dso_preemptable void @visible_callee() {
+  ret void
+}
+
+; ISEL-LABEL: name: call_visible
+; ISEL:       [[VISIBLE_SCRATCH:%[0-9]+]]:{{[^ ]+}} = LOAD_CALL_ADDR @visible_callee
+; ISEL:       DIRECT_CALL_STATE @visible_callee, killed [[VISIBLE_SCRATCH]], csr_mmix
+define void @call_visible() {
+  call void @visible_callee()
+  ret void
+}
+
+define internal void @stable_callee() {
+  ret void
+}
+
+; A stable same-section local target remains a direct layout-selected call.
+; ISEL-LABEL: name: call_stable
+; ISEL-NOT:   LOAD_CALL_ADDR
+; ISEL:       CALL_STATE @stable_callee, csr_mmix
+define void @call_stable() {
+  call void @stable_callee()
+  ret void
 }

@@ -279,7 +279,8 @@ private:
       return;
     }
 
-    if (Node->getOpcode() == MMIXISD::CALL) {
+    if (Node->getOpcode() == MMIXISD::CALL ||
+        Node->getOpcode() == MMIXISD::DIRECT_CALL) {
       SmallVector<SDValue, 20> Ops;
       bool HasGlue =
           Node->getNumOperands() > 1 &&
@@ -291,7 +292,10 @@ private:
       Ops.push_back(Node->getOperand(0));
       if (HasGlue)
         Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
-      CurDAG->SelectNodeTo(Node, MMIX::CALL_STATE, MVT::Other, MVT::Glue, Ops);
+      unsigned Opcode = Node->getOpcode() == MMIXISD::DIRECT_CALL
+                            ? MMIX::DIRECT_CALL_STATE
+                            : MMIX::CALL_STATE;
+      CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, MVT::Glue, Ops);
       return;
     }
 

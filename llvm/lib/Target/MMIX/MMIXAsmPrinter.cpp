@@ -285,10 +285,23 @@ public:
   }
 
   void emitInstruction(const MachineInstr *MI) override {
+    if (MI->getOpcode() == MMIX::LOAD_CALL_ADDR) {
+      if (EmissionMode == MMIXEmissionMode::ELFObject)
+        return;
+      if (!MI->getOperand(0).isReg())
+        report_fatal_error("MMIX call address has no destination register");
+      MMIXMCInstLower Lower(OutContext, *this, EmissionMode);
+      const MCExpr *Address = Lower.lowerAddressOperand(MI->getOperand(1));
+      for (const MCInst &Inst : createMMIXStaticAddressSequence(
+               EmissionMode, MI->getOperand(0).getReg(), Address, OutContext))
+        emitCheckedMCInstruction(Inst);
+      return;
+    }
+
     if (MI->getOpcode() == MMIX::LOAD_ADDR) {
       if (!MI->getOperand(0).isReg())
         report_fatal_error("MMIX static address has no destination register");
-      MMIXMCInstLower Lower(OutContext, *this);
+      MMIXMCInstLower Lower(OutContext, *this, EmissionMode);
       const MCExpr *Address = Lower.lowerAddressOperand(MI->getOperand(1));
       for (const MCInst &Inst : createMMIXStaticAddressSequence(
                EmissionMode, MI->getOperand(0).getReg(), Address, OutContext))
@@ -299,12 +312,13 @@ public:
     if (MI->isPseudo() && MI->getOpcode() != MMIX::PseudoB &&
         MI->getOpcode() != MMIX::PseudoJMP &&
         MI->getOpcode() != MMIX::PseudoPUSHJ &&
-        MI->getOpcode() != MMIX::PseudoPUSHGO)
+        MI->getOpcode() != MMIX::PseudoPUSHGO &&
+        MI->getOpcode() != MMIX::PseudoDirectCall)
       report_fatal_error(
           "MMIX CodeGen pseudo reached canonical assembly emission");
 
     MCInst OutMI;
-    MMIXMCInstLower(OutContext, *this).lower(*MI, OutMI);
+    MMIXMCInstLower(OutContext, *this, EmissionMode).lower(*MI, OutMI);
     emitCheckedMCInstruction(OutMI);
   }
 };

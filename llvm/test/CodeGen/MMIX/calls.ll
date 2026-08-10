@@ -44,8 +44,8 @@ define internal void @later() {
   ret void
 }
 
-; Unresolved direct symbols use the conservative address-materialization plus
-; PUSHGO sequence while ELF call relocations are unavailable.
+; Canonical text keeps the conservative address-materialization plus PUSHGO
+; sequence for unresolved direct symbols.
 ; CHECK-LABEL: call_external:
 ; CHECK:       GET r30, rJ
 ; CHECK:       SETH [[TARGET:r[0-9]+]], {{.*}}external_callee
