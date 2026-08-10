@@ -1,5 +1,11 @@
 # RUN: llc -mtriple=mmix -start-after=block-placement -verify-machineinstrs \
 # RUN:   -filetype=asm -o - %s | FileCheck %s
+# RUN: llc -mtriple=mmix -start-after=block-placement -verify-machineinstrs \
+# RUN:   -filetype=obj -o %t.o %s
+# RUN: llvm-readobj --relocations --expand-relocs %t.o \
+# RUN:   | FileCheck %s --check-prefix=OBJ
+# RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
+# RUN:   | FileCheck %s --check-prefix=DIS --implicit-check-not='<unknown>'
 
 # CHECK-LABEL: branch_directions:
 # CHECK:       [[START:.LBB[0-9]+_0]]:
@@ -10,6 +16,17 @@
 # CHECK-NEXT:  BNZB r1, [[BACKWARD]]
 # CHECK:       [[SELF:.LBB[0-9]+_3]]:
 # CHECK-NEXT:  JMP [[SELF]]
+
+# All local targets resolve during object layout. Exact instruction addresses
+# and displacements cover four-byte scaling, alignment, and both directions.
+# OBJ:      Relocations [
+# OBJ-NEXT: ]
+# DIS-LABEL: <branch_directions>:
+# DIS-NEXT:  {{ *}}0: f0 00 00 02{{.*}}JMP 2
+# DIS-NEXT:  {{ *}}4: f1 ff ff ff{{.*}}JMPB -1
+# DIS-NEXT:  {{ *}}8: 4b 01 ff ff{{.*}}BNZB r1, -1
+# DIS-NEXT:  {{ *}}c: f1 ff ff fd{{.*}}JMPB -3
+# DIS-NEXT:  {{ *}}10: f0 00 00 00{{.*}}JMP 0
 
 --- |
   define void @branch_directions() {

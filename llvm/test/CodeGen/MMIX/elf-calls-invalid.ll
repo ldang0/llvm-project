@@ -1,16 +1,14 @@
 ; RUN: split-file %s %t
 
-; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
-; RUN:   %t/misaligned.ll -o %t/misaligned.s
-; RUN: not llvm-mc -triple=mmix-unknown-elf -filetype=obj \
-; RUN:   %t/misaligned.s -o %t/misaligned.o 2>&1 \
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/misaligned.ll -o %t/misaligned.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=MISALIGNED
 ; RUN: not test -e %t/misaligned.o
 
-; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm \
-; RUN:   %t/calling-convention.ll -o %t/calling-convention.s 2>&1 \
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN:   %t/calling-convention.ll -o %t/calling-convention.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=CALLING-CONVENTION
-; RUN: test ! -s %t/calling-convention.s
+; RUN: not test -e %t/calling-convention.o
 
 ; A malformed local symbol-plus-addend reaches the ordinary direct-call
 ; assembler diagnostic. It is not reclassified as a request for a linker

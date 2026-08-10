@@ -4,6 +4,91 @@
 ; RUN:   -stop-after=postrapseudos %s -o - | FileCheck %s --check-prefix=POSTRA
 ; RUN: llc -mtriple=mmix-unknown-elf -verify-machineinstrs -filetype=asm \
 ; RUN:   %s -o - | FileCheck %s --check-prefix=ASM
+; RUN: llc -mtriple=mmix-unknown-elf -verify-machineinstrs -filetype=obj \
+; RUN:   %s -o %t.o
+; RUN: llvm-readobj --relocations --expand-relocs %t.o \
+; RUN:   | FileCheck %s --check-prefix=RELOCS --implicit-check-not=R_MMIX_
+; RUN: llvm-readobj --symbols %t.o \
+; RUN:   | FileCheck %s --check-prefix=SYMBOLS
+; RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
+; RUN:   | FileCheck %s --check-prefix=OBJ --implicit-check-not='<unknown>'
+
+; RELOCS:      Section {{.*}} .rela.text {
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x2C
+; RELOCS-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+; RELOCS-NEXT:     Symbol: .text.separate
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x3C
+; RELOCS-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+; RELOCS-NEXT:     Symbol: declared
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x50
+; RELOCS-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+; RELOCS-NEXT:     Symbol: visible_target
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x60
+; RELOCS-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+; RELOCS-NEXT:     Symbol: weak_declared
+; RELOCS-NEXT:     Addend: 0x0
+; RELOCS-NEXT:   }
+; RELOCS-NEXT:   Relocation {
+; RELOCS-NEXT:     Offset: 0x70
+; RELOCS-NEXT:     Type: R_MMIX_PUSHJ_STUBBABLE (36)
+; RELOCS-NEXT:     Symbol: declared
+; RELOCS-NEXT:     Addend: 0xFFFFFFFFFFFFFFF4
+; RELOCS-NEXT:   }
+; RELOCS-NEXT: }
+
+; SYMBOLS:      Name: .text.separate
+; SYMBOLS:      Binding: Local
+; SYMBOLS-NEXT: Type: Section
+; SYMBOLS:      Section: .text.separate
+; SYMBOLS:      Name: declared
+; SYMBOLS:      Binding: Global
+; SYMBOLS-NEXT: Type: None
+; SYMBOLS:      Section: Undefined
+; SYMBOLS:      Name: visible_target
+; SYMBOLS:      Binding: Global
+; SYMBOLS-NEXT: Type: Function
+; SYMBOLS:      Section: .text
+; SYMBOLS:      Name: weak_declared
+; SYMBOLS:      Binding: Weak
+; SYMBOLS-NEXT: Type: None
+; SYMBOLS:      Section: Undefined
+
+; Same-section calls resolve after object layout, retaining the selected
+; direction without a relocation.
+; OBJ-LABEL: <call_backward>:
+; OBJ:       {{.*}} PUSHJB r31, -2
+; OBJ-LABEL: <call_forward>:
+; OBJ:       {{.*}} PUSHJ r31, 3
+
+; OBJ-LABEL: <call_other_section>:
+; OBJ:       {{.*}} PUSHJ r31, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE .text.separate
+; OBJ-LABEL: <call_declaration>:
+; OBJ:       {{.*}} PUSHJ r31, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE declared
+; OBJ-LABEL: <call_visible>:
+; OBJ:       {{.*}} PUSHJ r31, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE visible_target
+; OBJ-LABEL: <call_weak>:
+; OBJ:       {{.*}} PUSHJ r31, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE weak_declared
+; OBJ-LABEL: <call_with_addend>:
+; OBJ:       {{.*}} PUSHJ r31, 0
+; OBJ-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE declared-0xc
+
+; Register-indirect calls remain outside the symbolic relocation path.
+; OBJ-LABEL: <call_indirect>:
+; OBJ:       {{.*}} PUSHGO r31, r231, 0
 
 target triple = "mmix-unknown-elf"
 
