@@ -107,7 +107,7 @@ Error validateSymbolicInitializerStorage(const Module &M) {
 
 class MMIXAsmPrinter final : public AsmPrinter {
   MMIXALAsmStreamer *MMIXALStreamer;
-  MMIXStaticAddressOutput StaticAddressOutput;
+  MMIXEmissionMode EmissionMode;
   const Function *MMIXALRawEntry = nullptr;
 
   void reportSymbolRegistrationError(Error Err) {
@@ -204,10 +204,10 @@ class MMIXAsmPrinter final : public AsmPrinter {
 public:
   explicit MMIXAsmPrinter(TargetMachine &TM,
                           std::unique_ptr<MCStreamer> Streamer,
-                          MMIXStaticAddressOutput StaticAddressOutput,
+                          MMIXEmissionMode EmissionMode,
                           MMIXALAsmStreamer *MMIXALStreamer = nullptr)
       : AsmPrinter(TM, std::move(Streamer)), MMIXALStreamer(MMIXALStreamer),
-        StaticAddressOutput(StaticAddressOutput) {}
+        EmissionMode(EmissionMode) {}
 
   StringRef getPassName() const override { return "MMIX Assembly Printer"; }
 
@@ -291,8 +291,7 @@ public:
       MMIXMCInstLower Lower(OutContext, *this);
       const MCExpr *Address = Lower.lowerAddressOperand(MI->getOperand(1));
       for (const MCInst &Inst : createMMIXStaticAddressSequence(
-               StaticAddressOutput, MI->getOperand(0).getReg(), Address,
-               OutContext))
+               EmissionMode, MI->getOperand(0).getReg(), Address, OutContext))
         emitCheckedMCInstruction(Inst);
       return;
     }
@@ -320,13 +319,12 @@ createMMIXAsmPrinter(TargetMachine &TM,
     auto *MMIXALStreamer = static_cast<MMIXALAsmStreamer *>(Streamer.get());
     MMIXALStreamer->beginModuleEmission();
     return new MMIXAsmPrinter(TM, std::move(Streamer),
-                              MMIXStaticAddressOutput::MMIXALAssembly,
-                              MMIXALStreamer);
+                              MMIXEmissionMode::MMIXALAssembly, MMIXALStreamer);
   }
-  const MMIXStaticAddressOutput Output =
-      Streamer->hasRawTextSupport() ? MMIXStaticAddressOutput::CanonicalAssembly
-                                    : MMIXStaticAddressOutput::ELFObject;
-  return new MMIXAsmPrinter(TM, std::move(Streamer), Output);
+  const MMIXEmissionMode Mode = Streamer->hasRawTextSupport()
+                                    ? MMIXEmissionMode::CanonicalAssembly
+                                    : MMIXEmissionMode::ELFObject;
+  return new MMIXAsmPrinter(TM, std::move(Streamer), Mode);
 }
 
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void

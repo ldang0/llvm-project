@@ -54,17 +54,16 @@ protected:
 };
 
 TEST_F(MMIXAddressEmissionTest, TextOutputsUseCanonicalSplitSequence) {
-  static constexpr std::array Outputs = {
-      MMIXStaticAddressOutput::CanonicalAssembly,
-      MMIXStaticAddressOutput::MMIXALAssembly};
+  static constexpr std::array Outputs = {MMIXEmissionMode::CanonicalAssembly,
+                                         MMIXEmissionMode::MMIXALAssembly};
   static constexpr std::array<unsigned, 4> Opcodes = {MMIX::SETH, MMIX::INCMH,
                                                       MMIX::INCML, MMIX::INCL};
   static constexpr std::array<unsigned, 4> Shifts = {48, 32, 16, 0};
   const MCExpr *Address = symbol("target");
 
-  for (MMIXStaticAddressOutput Output : Outputs) {
+  for (MMIXEmissionMode Mode : Outputs) {
     SmallVector<MCInst, 4> Sequence =
-        createMMIXStaticAddressSequence(Output, MMIX::R7, Address, Ctx);
+        createMMIXStaticAddressSequence(Mode, MMIX::R7, Address, Ctx);
     ASSERT_EQ(Sequence.size(), Opcodes.size());
     for (unsigned I = 0; I != Sequence.size(); ++I) {
       const MCInst &Inst = Sequence[I];
@@ -94,7 +93,7 @@ TEST_F(MMIXAddressEmissionTest, ELFObjectUsesGETAReservationContract) {
   const MCExpr *Address = MCBinaryExpr::createAdd(
       symbol("target"), MCConstantExpr::create(-16, Ctx), Ctx);
   SmallVector<MCInst, 4> Sequence = createMMIXStaticAddressSequence(
-      MMIXStaticAddressOutput::ELFObject, MMIX::R9, Address, Ctx);
+      MMIXEmissionMode::ELFObject, MMIX::R9, Address, Ctx);
 
   ASSERT_EQ(Sequence.size(), 1u);
   const MCInst &Inst = Sequence.front();

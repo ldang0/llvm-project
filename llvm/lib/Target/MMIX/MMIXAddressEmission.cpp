@@ -27,13 +27,13 @@ static const MCExpr *createWydeExpression(const MCExpr *Address, unsigned Shift,
 }
 
 SmallVector<MCInst, 4>
-llvm::createMMIXStaticAddressSequence(MMIXStaticAddressOutput Output,
+llvm::createMMIXStaticAddressSequence(MMIXEmissionMode Mode,
                                       MCRegister Destination,
                                       const MCExpr *Address, MCContext &Ctx) {
   SmallVector<MCInst, 4> Sequence;
-  switch (Output) {
-  case MMIXStaticAddressOutput::CanonicalAssembly:
-  case MMIXStaticAddressOutput::MMIXALAssembly: {
+  switch (Mode) {
+  case MMIXEmissionMode::CanonicalAssembly:
+  case MMIXEmissionMode::MMIXALAssembly: {
     static constexpr std::array<unsigned, 4> Opcodes = {
         MMIX::SETH, MMIX::INCMH, MMIX::INCML, MMIX::INCL};
     static constexpr std::array<unsigned, 4> Shifts = {48, 32, 16, 0};
@@ -47,7 +47,7 @@ llvm::createMMIXStaticAddressSequence(MMIXStaticAddressOutput Output,
     }
     return Sequence;
   }
-  case MMIXStaticAddressOutput::ELFObject: {
+  case MMIXEmissionMode::ELFObject: {
     MCInst Inst;
     Inst.setOpcode(MMIX::GETA);
     Inst.addOperand(MCOperand::createReg(Destination));
@@ -58,5 +58,5 @@ llvm::createMMIXStaticAddressSequence(MMIXStaticAddressOutput Output,
     return Sequence;
   }
   }
-  llvm_unreachable("invalid MMIX static-address output kind");
+  llvm_unreachable("invalid MMIX emission mode");
 }

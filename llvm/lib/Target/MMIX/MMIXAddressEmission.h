@@ -9,6 +9,7 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MMIXADDRESSEMISSION_H
 #define LLVM_LIB_TARGET_MMIX_MMIXADDRESSEMISSION_H
 
+#include "MMIXEmissionMode.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInst.h"
 
@@ -17,16 +18,10 @@ namespace llvm {
 class MCContext;
 class MCExpr;
 
-enum class MMIXStaticAddressOutput {
-  CanonicalAssembly,
-  MMIXALAssembly,
-  ELFObject,
-};
-
-SmallVector<MCInst, 4>
-createMMIXStaticAddressSequence(MMIXStaticAddressOutput Output,
-                                MCRegister Destination, const MCExpr *Address,
-                                MCContext &Ctx);
+SmallVector<MCInst, 4> createMMIXStaticAddressSequence(MMIXEmissionMode Mode,
+                                                       MCRegister Destination,
+                                                       const MCExpr *Address,
+                                                       MCContext &Ctx);
 
 } // namespace llvm
 
