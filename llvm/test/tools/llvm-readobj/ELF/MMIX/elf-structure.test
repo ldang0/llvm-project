@@ -1,0 +1,267 @@
+## Test the ELF container and symbol structure used around MMIX relocations.
+## The synthetic object makes layout properties stable without extending the
+## target's producer surface.
+
+# RUN: yaml2obj %s -o %t.o
+# RUN: llvm-readobj --file-headers %t.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=HEADER --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+# RUN: llvm-readobj --sections %t.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=SECTIONS --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+# RUN: llvm-readobj --symbols %t.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=SYMBOLS --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+# RUN: llvm-readobj --relocations --expand-relocs %t.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=RELOCS --implicit-check-not=warning: \
+# RUN:     --implicit-check-not=error:
+
+# HEADER:      Format: elf64-mmix
+# HEADER-NEXT: Arch: mmix
+# HEADER-NEXT: AddressSize: 64bit
+# HEADER:      Class: 64-bit (0x2)
+# HEADER-NEXT: DataEncoding: BigEndian (0x2)
+# HEADER-NEXT: FileVersion: 1
+# HEADER-NEXT: OS/ABI: SystemV (0x0)
+# HEADER-NEXT: ABIVersion: 0
+# HEADER:      Type: Relocatable (0x1)
+# HEADER-NEXT: Machine: EM_MMIX (0x50)
+# HEADER-NEXT: Version: 1
+# HEADER-NEXT: Entry: 0x0
+# HEADER-NEXT: ProgramHeaderOffset: 0x0
+# HEADER:      Flags [ (0x0)
+# HEADER-NEXT: ]
+# HEADER:      HeaderSize: 64
+# HEADER-NEXT: ProgramHeaderEntrySize: 0
+# HEADER-NEXT: ProgramHeaderCount: 0
+# HEADER-NEXT: SectionHeaderEntrySize: 64
+# HEADER-NEXT: SectionHeaderCount: 9
+# HEADER-NEXT: StringTableSectionIndex: 8
+
+# SECTIONS-LABEL: Name: .text
+# SECTIONS-NEXT:  Type: SHT_PROGBITS (0x1)
+# SECTIONS-NEXT:  Flags [ (0x6)
+# SECTIONS-NEXT:    SHF_ALLOC (0x2)
+# SECTIONS-NEXT:    SHF_EXECINSTR (0x4)
+# SECTIONS-NEXT:  ]
+# SECTIONS:       Size: 4
+# SECTIONS-NEXT:  Link: 0
+# SECTIONS-NEXT:  Info: 0
+# SECTIONS-NEXT:  AddressAlignment: 4
+# SECTIONS-NEXT:  EntrySize: 0
+
+# SECTIONS-LABEL: Name: .data
+# SECTIONS-NEXT:  Type: SHT_PROGBITS (0x1)
+# SECTIONS-NEXT:  Flags [ (0x3)
+# SECTIONS-NEXT:    SHF_ALLOC (0x2)
+# SECTIONS-NEXT:    SHF_WRITE (0x1)
+# SECTIONS-NEXT:  ]
+# SECTIONS:       Size: 16
+# SECTIONS-NEXT:  Link: 0
+# SECTIONS-NEXT:  Info: 0
+# SECTIONS-NEXT:  AddressAlignment: 8
+# SECTIONS-NEXT:  EntrySize: 0
+
+# SECTIONS-LABEL: Name: .rodata
+# SECTIONS-NEXT:  Type: SHT_PROGBITS (0x1)
+# SECTIONS-NEXT:  Flags [ (0x2)
+# SECTIONS-NEXT:    SHF_ALLOC (0x2)
+# SECTIONS-NEXT:  ]
+# SECTIONS:       Size: 8
+# SECTIONS-NEXT:  Link: 0
+# SECTIONS-NEXT:  Info: 0
+# SECTIONS-NEXT:  AddressAlignment: 4
+# SECTIONS-NEXT:  EntrySize: 0
+
+# SECTIONS-LABEL: Name: .bss
+# SECTIONS-NEXT:  Type: SHT_NOBITS (0x8)
+# SECTIONS-NEXT:  Flags [ (0x3)
+# SECTIONS-NEXT:    SHF_ALLOC (0x2)
+# SECTIONS-NEXT:    SHF_WRITE (0x1)
+# SECTIONS-NEXT:  ]
+# SECTIONS:       Size: 16
+# SECTIONS-NEXT:  Link: 0
+# SECTIONS-NEXT:  Info: 0
+# SECTIONS-NEXT:  AddressAlignment: 8
+# SECTIONS-NEXT:  EntrySize: 0
+
+# SECTIONS-LABEL: Name: .rela.text
+# SECTIONS-NEXT:  Type: SHT_RELA (0x4)
+# SECTIONS-NEXT:  Flags [ (0x0)
+# SECTIONS-NEXT:  ]
+# SECTIONS:       Size: 24
+# SECTIONS-NEXT:  Link: 6
+# SECTIONS-NEXT:  Info: 1
+# SECTIONS-NEXT:  AddressAlignment: 8
+# SECTIONS-NEXT:  EntrySize: 24
+
+# SECTIONS-LABEL: Name: .symtab
+# SECTIONS-NEXT:  Type: SHT_SYMTAB (0x2)
+# SECTIONS:       Size: 192
+# SECTIONS-NEXT:  Link: 7
+# SECTIONS-NEXT:  Info: 3
+# SECTIONS-NEXT:  AddressAlignment: 8
+# SECTIONS-NEXT:  EntrySize: 24
+
+# SECTIONS-LABEL: Name: .strtab
+# SECTIONS-NEXT:  Type: SHT_STRTAB (0x3)
+# SECTIONS:       Size: 75
+# SECTIONS-NEXT:  Link: 0
+# SECTIONS-NEXT:  Info: 0
+# SECTIONS-NEXT:  AddressAlignment: 1
+# SECTIONS-NEXT:  EntrySize: 0
+
+# SECTIONS-LABEL: Name: .shstrtab
+# SECTIONS-NEXT:  Type: SHT_STRTAB (0x3)
+# SECTIONS:       Size: 57
+# SECTIONS-NEXT:  Link: 0
+# SECTIONS-NEXT:  Info: 0
+# SECTIONS-NEXT:  AddressAlignment: 1
+# SECTIONS-NEXT:  EntrySize: 0
+
+# SYMBOLS-LABEL: Name: .text (0)
+# SYMBOLS-NEXT:  Value: 0x0
+# SYMBOLS-NEXT:  Size: 0
+# SYMBOLS-NEXT:  Binding: Local (0x0)
+# SYMBOLS-NEXT:  Type: Section (0x3)
+# SYMBOLS-NEXT:  Other: 0
+# SYMBOLS-NEXT:  Section: .text (0x1)
+
+# SYMBOLS-LABEL: Name: local_func
+# SYMBOLS-NEXT:  Value: 0x0
+# SYMBOLS-NEXT:  Size: 4
+# SYMBOLS-NEXT:  Binding: Local (0x0)
+# SYMBOLS-NEXT:  Type: Function (0x2)
+# SYMBOLS-NEXT:  Other: 0
+# SYMBOLS-NEXT:  Section: .text (0x1)
+
+# SYMBOLS-LABEL: Name: global_func
+# SYMBOLS-NEXT:  Value: 0x0
+# SYMBOLS-NEXT:  Size: 4
+# SYMBOLS-NEXT:  Binding: Global (0x1)
+# SYMBOLS-NEXT:  Type: Function (0x2)
+# SYMBOLS-NEXT:  Other: 0
+# SYMBOLS-NEXT:  Section: .text (0x1)
+
+# SYMBOLS-LABEL: Name: global_data
+# SYMBOLS-NEXT:  Value: 0x0
+# SYMBOLS-NEXT:  Size: 8
+# SYMBOLS-NEXT:  Binding: Global (0x1)
+# SYMBOLS-NEXT:  Type: Object (0x1)
+# SYMBOLS-NEXT:  Other [ (0x2)
+# SYMBOLS-NEXT:    STV_HIDDEN (0x2)
+# SYMBOLS-NEXT:  ]
+# SYMBOLS-NEXT:  Section: .data (0x2)
+
+# SYMBOLS-LABEL: Name: protected_data
+# SYMBOLS-NEXT:  Value: 0x8
+# SYMBOLS-NEXT:  Size: 8
+# SYMBOLS-NEXT:  Binding: Global (0x1)
+# SYMBOLS-NEXT:  Type: Object (0x1)
+# SYMBOLS-NEXT:  Other [ (0x3)
+# SYMBOLS-NEXT:    STV_PROTECTED (0x3)
+# SYMBOLS-NEXT:  ]
+# SYMBOLS-NEXT:  Section: .data (0x2)
+
+# SYMBOLS-LABEL: Name: weak_func
+# SYMBOLS-NEXT:  Value: 0x0
+# SYMBOLS-NEXT:  Size: 4
+# SYMBOLS-NEXT:  Binding: Weak (0x2)
+# SYMBOLS-NEXT:  Type: Function (0x2)
+# SYMBOLS-NEXT:  Other: 0
+# SYMBOLS-NEXT:  Section: .text (0x1)
+
+# SYMBOLS-LABEL: Name: external_func
+# SYMBOLS-NEXT:  Value: 0x0
+# SYMBOLS-NEXT:  Size: 0
+# SYMBOLS-NEXT:  Binding: Global (0x1)
+# SYMBOLS-NEXT:  Type: Function (0x2)
+# SYMBOLS-NEXT:  Other: 0
+# SYMBOLS-NEXT:  Section: Undefined (0x0)
+
+# RELOCS:      Section (5) .rela.text {
+# RELOCS-NEXT:   Relocation {
+# RELOCS-NEXT:     Offset: 0x0
+# RELOCS-NEXT:     Type: R_MMIX_ADDR27 (31)
+# RELOCS-NEXT:     Symbol: external_func (7)
+# RELOCS-NEXT:     Addend: 0x4
+# RELOCS-NEXT:   }
+# RELOCS-NEXT: }
+
+--- !ELF
+FileHeader:
+  Class:      ELFCLASS64
+  Data:       ELFDATA2MSB
+  OSABI:      ELFOSABI_NONE
+  ABIVersion: 0
+  Type:       ET_REL
+  Machine:    EM_MMIX
+Sections:
+  - Name:         .text
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC, SHF_EXECINSTR ]
+    AddressAlign: 4
+    Content:      "fd000000"
+  - Name:         .data
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_WRITE, SHF_ALLOC ]
+    AddressAlign: 8
+    Content:      "000102030405060708090a0b0c0d0e0f"
+  - Name:         .rodata
+    Type:         SHT_PROGBITS
+    Flags:        [ SHF_ALLOC ]
+    AddressAlign: 4
+    Content:      "1011121314151617"
+  - Name:         .bss
+    Type:         SHT_NOBITS
+    Flags:        [ SHF_WRITE, SHF_ALLOC ]
+    AddressAlign: 8
+    Size:         16
+  - Name:         .rela.text
+    Type:         SHT_RELA
+    Link:         .symtab
+    Info:         .text
+    AddressAlign: 8
+    Relocations:
+      - Offset: 0
+        Symbol: external_func
+        Type:   R_MMIX_ADDR27
+        Addend: 4
+Symbols:
+  - Name:    ""
+    Type:    STT_SECTION
+    Section: .text
+  - Name:    local_func
+    Type:    STT_FUNC
+    Section: .text
+    Value:   0
+    Size:    4
+  - Name:    global_func
+    Type:    STT_FUNC
+    Binding: STB_GLOBAL
+    Section: .text
+    Value:   0
+    Size:    4
+  - Name:    global_data
+    Type:    STT_OBJECT
+    Binding: STB_GLOBAL
+    Other:   [ STV_HIDDEN ]
+    Section: .data
+    Value:   0
+    Size:    8
+  - Name:    protected_data
+    Type:    STT_OBJECT
+    Binding: STB_GLOBAL
+    Other:   [ STV_PROTECTED ]
+    Section: .data
+    Value:   8
+    Size:    8
+  - Name:    weak_func
+    Type:    STT_FUNC
+    Binding: STB_WEAK
+    Section: .text
+    Value:   0
+    Size:    4
+  - Name:    external_func
+    Type:    STT_FUNC
+    Binding: STB_GLOBAL
