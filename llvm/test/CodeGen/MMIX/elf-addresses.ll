@@ -2,9 +2,6 @@
 ; RUN:   -stop-after=postrapseudos %s -o - | FileCheck %s --check-prefix=MIR
 ; RUN: llc -mtriple=mmix-unknown-elf -verify-machineinstrs -filetype=asm \
 ; RUN:   %s -o - | FileCheck %s --check-prefix=ASM
-; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj %s -o %t.o 2>&1 \
-; RUN:   | FileCheck %s --check-prefix=OBJECT
-; RUN: test ! -s %t.o
 
 target triple = "mmix-unknown-elf"
 
@@ -105,5 +102,3 @@ define void @indirect_call(ptr %callee) {
   call void %callee()
   ret void
 }
-
-; OBJECT: llc: error: target does not support generation of this file type

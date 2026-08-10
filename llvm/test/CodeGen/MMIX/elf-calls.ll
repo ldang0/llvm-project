@@ -4,9 +4,6 @@
 ; RUN:   -stop-after=postrapseudos %s -o - | FileCheck %s --check-prefix=POSTRA
 ; RUN: llc -mtriple=mmix-unknown-elf -verify-machineinstrs -filetype=asm \
 ; RUN:   %s -o - | FileCheck %s --check-prefix=ASM
-; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj %s -o %t.o 2>&1 \
-; RUN:   | FileCheck %s --check-prefix=OBJECT
-; RUN: test ! -s %t.o
 
 target triple = "mmix-unknown-elf"
 
@@ -133,7 +130,3 @@ define void @call_indirect(ptr %callee) {
   call void %callee()
   ret void
 }
-
-; Object emission remains deliberately gated until the complete CodeGen ELF
-; contract is assembled in the next milestone.
-; OBJECT: llc: error: target does not support generation of this file type

@@ -60,7 +60,8 @@ bool MMIXTargetMachine::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &Out, raw_pwrite_stream *DwoOut,
     CodeGenFileType FileType, bool DisableVerify,
     MachineModuleInfoWrapperPass *MMIWP) {
-  if (FileType == CodeGenFileType::ObjectFile)
+  if (FileType == CodeGenFileType::ObjectFile &&
+      getMCAsmInfo().getOutputAssemblerDialect() == MMIXII::MMIXALAsmVariant)
     return true;
   return CodeGenTargetMachineImpl::addPassesToEmitFile(
       PM, Out, DwoOut, FileType, DisableVerify, MMIWP);
