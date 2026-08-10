@@ -35,18 +35,23 @@ protected:
   unsigned getRelocType(const MCFixup &Fixup, const MCValue &,
                         bool IsPCRel) const override {
     unsigned Width;
+    unsigned AbsoluteType;
     switch (Fixup.getKind()) {
     case FK_Data_1:
       Width = 8;
+      AbsoluteType = ELF::R_MMIX_8;
       break;
     case FK_Data_2:
       Width = 16;
+      AbsoluteType = ELF::R_MMIX_16;
       break;
     case FK_Data_4:
       Width = 32;
+      AbsoluteType = ELF::R_MMIX_32;
       break;
     case FK_Data_8:
       Width = 64;
+      AbsoluteType = ELF::R_MMIX_64;
       break;
     case MMIX::fixup_mmix_branch_forward:
       return rejectRelocation(
@@ -68,9 +73,11 @@ protected:
       return rejectRelocation(Fixup, "MMIX ELF relocation is not implemented");
     }
 
-    return rejectRelocation(Fixup, Twine("MMIX ") + Twine(Width) + "-bit " +
-                                       (IsPCRel ? "PC-relative" : "absolute") +
-                                       " data relocation is not implemented");
+    if (!IsPCRel)
+      return AbsoluteType;
+    return rejectRelocation(
+        Fixup, Twine("MMIX ") + Twine(Width) +
+                   "-bit PC-relative data relocation is not implemented");
   }
 };
 
