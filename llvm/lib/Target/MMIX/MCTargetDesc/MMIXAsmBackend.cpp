@@ -9,6 +9,8 @@
 #include "MMIXBaseInfo.h"
 #include "MMIXFixupKinds.h"
 #include "MMIXMCTargetDesc.h"
+#include "llvm/ADT/StringSwitch.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
@@ -50,12 +52,81 @@ public:
   std::optional<MCFixupKind> getFixupKind(StringRef Name) const override {
     if (Name == "R_MMIX_GETA")
       return static_cast<MCFixupKind>(MMIX::fixup_mmix_geta);
+
+    const unsigned Type = StringSwitch<unsigned>(Name)
+                              .Case("R_MMIX_GETA_1", ELF::R_MMIX_GETA_1)
+                              .Case("R_MMIX_GETA_2", ELF::R_MMIX_GETA_2)
+                              .Case("R_MMIX_GETA_3", ELF::R_MMIX_GETA_3)
+                              .Case("R_MMIX_CBRANCH", ELF::R_MMIX_CBRANCH)
+                              .Case("R_MMIX_CBRANCH_J", ELF::R_MMIX_CBRANCH_J)
+                              .Case("R_MMIX_CBRANCH_1", ELF::R_MMIX_CBRANCH_1)
+                              .Case("R_MMIX_CBRANCH_2", ELF::R_MMIX_CBRANCH_2)
+                              .Case("R_MMIX_CBRANCH_3", ELF::R_MMIX_CBRANCH_3)
+                              .Case("R_MMIX_PUSHJ", ELF::R_MMIX_PUSHJ)
+                              .Case("R_MMIX_PUSHJ_1", ELF::R_MMIX_PUSHJ_1)
+                              .Case("R_MMIX_PUSHJ_2", ELF::R_MMIX_PUSHJ_2)
+                              .Case("R_MMIX_PUSHJ_3", ELF::R_MMIX_PUSHJ_3)
+                              .Case("R_MMIX_JMP", ELF::R_MMIX_JMP)
+                              .Case("R_MMIX_JMP_1", ELF::R_MMIX_JMP_1)
+                              .Case("R_MMIX_JMP_2", ELF::R_MMIX_JMP_2)
+                              .Case("R_MMIX_JMP_3", ELF::R_MMIX_JMP_3)
+                              .Default(-1u);
+    if (Type != -1u)
+      return static_cast<MCFixupKind>(FirstLiteralRelocationKind + Type);
     return MCAsmBackend::getFixupKind(Name);
   }
 
   void applyFixup(const MCFragment &F, const MCFixup &Fixup,
                   const MCValue &Target, uint8_t *Data, uint64_t Value,
                   bool IsResolved) override {
+    if (mc::isRelocRelocation(Fixup.getKind())) {
+      const unsigned Type = Fixup.getKind() - FirstLiteralRelocationKind;
+      switch (Type) {
+      case ELF::R_MMIX_GETA:
+        getContext().reportError(
+            Fixup.getLoc(),
+            "R_MMIX_GETA requires an assembler-owned 16-byte reservation");
+        return;
+      case ELF::R_MMIX_CBRANCH:
+        getContext().reportError(
+            Fixup.getLoc(),
+            "R_MMIX_CBRANCH requires an assembler-owned 24-byte reservation");
+        return;
+      case ELF::R_MMIX_PUSHJ:
+        getContext().reportError(
+            Fixup.getLoc(),
+            "R_MMIX_PUSHJ requires an assembler-owned 20-byte reservation");
+        return;
+      case ELF::R_MMIX_JMP:
+        getContext().reportError(
+            Fixup.getLoc(),
+            "R_MMIX_JMP requires an assembler-owned 20-byte reservation");
+        return;
+      case ELF::R_MMIX_GETA_1:
+      case ELF::R_MMIX_GETA_2:
+      case ELF::R_MMIX_GETA_3:
+      case ELF::R_MMIX_CBRANCH_J:
+      case ELF::R_MMIX_CBRANCH_1:
+      case ELF::R_MMIX_CBRANCH_2:
+      case ELF::R_MMIX_CBRANCH_3:
+      case ELF::R_MMIX_PUSHJ_1:
+      case ELF::R_MMIX_PUSHJ_2:
+      case ELF::R_MMIX_PUSHJ_3:
+      case ELF::R_MMIX_JMP_1:
+      case ELF::R_MMIX_JMP_2:
+      case ELF::R_MMIX_JMP_3:
+        getContext().reportError(
+            Fixup.getLoc(),
+            "GNU MMIX intermediate relaxation relocations cannot be emitted "
+            "directly");
+        return;
+      default:
+        getContext().reportError(Fixup.getLoc(),
+                                 "raw MMIX relocation is not supported");
+        return;
+      }
+    }
+
     if (Fixup.getKind() == MMIX::fixup_mmix_geta) {
       if (!Fixup.isPCRel()) {
         getContext().reportError(
@@ -219,6 +290,8 @@ public:
         {"fixup_mmix_geta", 0, 16, 0},
     };
 
+    if (mc::isRelocRelocation(Kind))
+      return {};
     if (Kind < FirstTargetFixupKind)
       return MCAsmBackend::getFixupKindInfo(Kind);
     return Infos[Kind - FirstTargetFixupKind];

@@ -29,9 +29,9 @@
 # EXPRESSION: expression.s:5:10: error: expanding GETA requires one symbol plus an optional addend
 # EXPRESSION: expression.s:6:10: error: expanding GETA requires one symbol plus an optional addend
 
-# INTERMEDIATE: intermediate.s:1:11: error: unknown relocation name
-# INTERMEDIATE: intermediate.s:2:11: error: unknown relocation name
-# INTERMEDIATE: intermediate.s:3:11: error: unknown relocation name
+# INTERMEDIATE: intermediate.s:1:26: error: GNU MMIX intermediate relaxation relocations cannot be emitted directly
+# INTERMEDIATE: intermediate.s:2:26: error: GNU MMIX intermediate relaxation relocations cannot be emitted directly
+# INTERMEDIATE: intermediate.s:3:26: error: GNU MMIX intermediate relaxation relocations cannot be emitted directly
 
 #--- reservation.s
 .reloc ., R_MMIX_GETA, external
