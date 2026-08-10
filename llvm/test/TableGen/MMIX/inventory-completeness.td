@@ -14,6 +14,9 @@ defvar MMIXUnclassifiedRecords =
 defvar MMIXUnclassifiedForms =
     !filter(Record, MMIXInventoryRecords,
             !eq(Record.MMIXInventoryForm, "unclassified"));
+defvar MMIXUnclassifiedCanonicalMnemonics =
+    !filter(Record, MMIXInventoryRecords,
+            !eq(Record.MMIXCanonicalMnemonic, "unclassified"));
 defvar MMIXReviewedFormRecords =
     !filter(Record, MMIXInventoryRecords,
             !or(!eq(Record.MMIXInventoryForm, "imm8-imm16"),
@@ -101,10 +104,24 @@ assert !eq(!size(MMIXUnclassifiedRecords), 0),
        "MMIX architectural instruction has no inventory family";
 assert !eq(!size(MMIXUnclassifiedForms), 0),
        "MMIX architectural instruction has no operand form";
+assert !eq(!size(MMIXUnclassifiedCanonicalMnemonics), 0),
+       "MMIX architectural instruction has no canonical mnemonic";
 assert !eq(!size(MMIXReviewedFormRecords), 256),
        "MMIX architectural instruction has an unreviewed operand form";
 assert !eq(!size(MMIXUnmodeledRecords), 0),
        "MMIX architectural instruction is not marked modeled";
+
+// These records prevent canonical spelling from being inferred from the
+// record name, MMIXAL spelling, or the first whitespace-delimited AsmString
+// token. External compliance tooling checks all 256 exact values.
+assert !eq(FLOT.MMIXCanonicalMnemonic, "FLOT"),
+       "FLOT canonical mnemonic is incorrect";
+assert !eq(FLOTI.MMIXCanonicalMnemonic, "FLOT"),
+       "FLOTI canonical mnemonic is incorrect";
+assert !eq(BNB.MMIXCanonicalMnemonic, "BNB"),
+       "backward branch canonical mnemonic is incorrect";
+assert !eq(SAVE.MMIXCanonicalMnemonic, "SAVE"),
+       "SAVE canonical mnemonic is incorrect";
 
 defvar MMIXIntegerRecords =
     !filter(Record, MMIXInventoryRecords,
