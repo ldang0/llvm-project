@@ -25,8 +25,27 @@ class LLVM_LIBRARY_VISIBILITY MMIXTargetInfo final : public TargetInfo {
 public:
   MMIXTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
+    BoolWidth = BoolAlign = 8;
+    ShortWidth = ShortAlign = 16;
+    IntWidth = IntAlign = 32;
     LongWidth = LongAlign = 64;
+    LongLongWidth = LongLongAlign = 64;
+    Int128Align = 64;
+    FloatWidth = FloatAlign = 32;
+    DoubleWidth = DoubleAlign = 64;
+    LongDoubleWidth = LongDoubleAlign = 64;
     PointerWidth = PointerAlign = 64;
+    SuitableAlign = 64;
+    DefaultAlignForAttributeAligned = 64;
+
+    SizeType = UnsignedLong;
+    PtrDiffType = IntPtrType = SignedLong;
+    IntMaxType = Int64Type = SignedLong;
+    Int16Type = SignedShort;
+    WCharType = SignedInt;
+    WIntType = UnsignedInt;
+
+    LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     resetDataLayout();
   }
 
