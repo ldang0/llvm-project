@@ -711,6 +711,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i64, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_VOID, MVT::Other, Custom);
+  setOperationAction(ISD::VASTART, MVT::Other, Custom);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
   RejectOperation(ISD::STACKRESTORE, MVT::Other);
 }
@@ -851,6 +852,18 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
       return DAG.getTruncStore(Store->getChain(), DL, Bits, Store->getBasePtr(),
                                MVT::i32, Store->getMemOperand());
     }
+  }
+  if (Op.getOpcode() == ISD::VASTART) {
+    MachineFunction &MF = DAG.getMachineFunction();
+    const auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
+    if (!MMFI->hasVarArgsFrameIndex())
+      report_fatal_error("MMIX va_start used outside a variadic function");
+    SDValue FI = DAG.getFrameIndex(MMFI->getVarArgsFrameIndex(),
+                                   getPointerTy(MF.getDataLayout()));
+    const Value *SourceValue =
+        cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+    return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
+                        MachinePointerInfo(SourceValue));
   }
   if (Op.getOpcode() == ISD::FP_EXTEND &&
       Op.getOperand(0).getValueType() == MVT::f32) {
@@ -1669,9 +1682,6 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
           reportFatalUsageError(
               Twine("MMIX does not support nonlocal control transfer in ") +
               "function '" + F.getName() + "'");
-        if (ID == Intrinsic::vastart)
-          reportFatalUsageError(Twine("MMIX does not support va_start in ") +
-                                "function '" + F.getName() + "'");
       }
     }
   }
@@ -1778,6 +1788,7 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
   if (ArgLocs.size() != ArgMappings.size())
     report_fatal_error("MMIX formal assignment lost an ABI argument");
 
+  SmallVector<SDValue, 16> VarArgStores;
   if (IsVarArg) {
     static constexpr MCPhysReg ArgRegs[] = {
         MMIX::R231, MMIX::R232, MMIX::R233, MMIX::R234, MMIX::R235, MMIX::R236,
@@ -1798,6 +1809,23 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
                                    /*IsImmutable=*/SaveSize == 0);
     MF.getInfo<MMIXMachineFunctionInfo>()->setVarArgsInfo(
         NamedSlots, FirstRegister, SaveSize, FI);
+
+    if (SaveSize != 0) {
+      SDValue SaveArea =
+          DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      for (unsigned I = FirstRegister; I != std::size(ArgRegs); ++I) {
+        Register VReg =
+            MRI.createVirtualRegister(&MMIX::GPR64CodeGenRegClass);
+        MRI.addLiveIn(ArgRegs[I], VReg);
+        SDValue Value = DAG.getCopyFromReg(Chain, DL, VReg, MVT::i64);
+        uint64_t Offset = (I - FirstRegister) * SlotSize;
+        SDValue Address = DAG.getMemBasePlusOffset(
+            SaveArea, TypeSize::getFixed(Offset), DL);
+        VarArgStores.push_back(DAG.getStore(
+            Value.getValue(1), DL, Value, Address,
+            MachinePointerInfo::getFixedStack(MF, FI, Offset), Align(8)));
+      }
+    }
   }
 
   for (unsigned I = 0; I != ArgLocs.size(); ++I) {
@@ -1850,6 +1878,11 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
       report_fatal_error("MMIX does not support this argument extension");
     }
     InVals.push_back(Arg);
+  }
+
+  if (!VarArgStores.empty()) {
+    VarArgStores.push_back(Chain);
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, VarArgStores);
   }
 
   return Chain;
