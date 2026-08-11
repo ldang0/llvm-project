@@ -284,6 +284,28 @@ public:
     return true;
   }
 
+  bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
+                             const char *ExtraCode, raw_ostream &OS) override {
+    if (ExtraCode && ExtraCode[0])
+      return true;
+    if (OpNo + 1 >= MI->getNumOperands())
+      return true;
+
+    const MachineOperand &Base = MI->getOperand(OpNo);
+    const MachineOperand &Offset = MI->getOperand(OpNo + 1);
+    if (!Base.isReg() || !Base.getReg())
+      return true;
+    if ((!Offset.isReg() || !Offset.getReg()) && !Offset.isImm())
+      return true;
+
+    OS << MMIXInstPrinter::getRegisterName(Base.getReg()) << ", ";
+    if (Offset.isReg())
+      OS << MMIXInstPrinter::getRegisterName(Offset.getReg());
+    else
+      OS << Offset.getImm();
+    return false;
+  }
+
   void emitInstruction(const MachineInstr *MI) override {
     if (MI->getOpcode() == MMIX::LOAD_CALL_ADDR) {
       if (EmissionMode == MMIXEmissionMode::ELFObject)

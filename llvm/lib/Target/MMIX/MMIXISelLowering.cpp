@@ -134,8 +134,8 @@ static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
 }
 
 static StringRef getMMIXModuleOnlyMnemonic(StringRef Token) {
-  for (StringRef Mnemonic :
-       {"TRAP", "TRIP", "RESUME", "SAVE", "UNSAVE", "GO"})
+  for (StringRef Mnemonic : {"TRAP", "TRIP", "RESUME", "SAVE", "UNSAVE",
+                             "PUSHJ", "PUSHGO", "GO", "POP"})
     if (Token.equals_insensitive(Mnemonic))
       return Mnemonic;
   return {};
@@ -420,7 +420,38 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
 
   AsmOperandInfoVector Operands =
       TargetLowering::ParseConstraints(DL, TRI, Call);
-  for (const AsmOperandInfo &Operand : Operands) {
+  for (AsmOperandInfo &Operand : Operands) {
+    bool HadNonOffsettableMemory = false;
+    Operand.Codes.erase(std::remove_if(Operand.Codes.begin(),
+                                       Operand.Codes.end(),
+                                       [&](const std::string &Code) {
+                                         if (Code != "V")
+                                           return false;
+                                         HadNonOffsettableMemory = true;
+                                         return true;
+                                       }),
+                        Operand.Codes.end());
+    if (HadNonOffsettableMemory && Operand.Codes.empty()) {
+      Call.getContext().emitError(
+          &Call, "MMIX has no non-offsettable inline assembly memory operand");
+      return {};
+    }
+
+    const auto *PointerTy =
+        Operand.CallOperandVal
+            ? dyn_cast<PointerType>(Operand.CallOperandVal->getType())
+            : nullptr;
+    if (PointerTy && PointerTy->getAddressSpace() != 0 &&
+        std::any_of(Operand.Codes.begin(), Operand.Codes.end(),
+                    [](const std::string &Code) {
+                      return Code == "m" || Code == "o" || Code == "p";
+                    })) {
+      Call.getContext().emitError(
+          &Call, "MMIX inline assembly does not support memory or address "
+                 "operands in nonzero address spaces");
+      return {};
+    }
+
     if (Operand.Type != InlineAsm::isClobber)
       continue;
     for (StringRef Code : Operand.Codes) {
@@ -450,13 +481,23 @@ MMIXTargetLowering::getConstraintType(StringRef Constraint) const {
     case 'm':
     case 'o':
     case 'V':
+      return C_Memory;
     case 'p':
-      return C_Unknown;
+      return C_Address;
     default:
       break;
     }
   }
   return TargetLowering::getConstraintType(Constraint);
+}
+
+InlineAsm::ConstraintCode
+MMIXTargetLowering::getInlineAsmMemConstraint(StringRef ConstraintCode) const {
+  // InlineAsm has no uppercase V code. Its lowercase v code carries the same
+  // non-offsettable-memory semantics for target selectors.
+  if (ConstraintCode == "V")
+    return InlineAsm::ConstraintCode::v;
+  return TargetLowering::getInlineAsmMemConstraint(ConstraintCode);
 }
 
 MMIXTargetLowering::ConstraintWeight

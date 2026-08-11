@@ -146,6 +146,28 @@ private:
     return HasImmediate;
   }
 
+  bool SelectInlineAsmMemoryOperand(const SDValue &Op,
+                                    InlineAsm::ConstraintCode ConstraintID,
+                                    std::vector<SDValue> &OutOps) override {
+    switch (ConstraintID) {
+    case InlineAsm::ConstraintCode::m:
+    case InlineAsm::ConstraintCode::o:
+    case InlineAsm::ConstraintCode::p: {
+      SDValue Base;
+      SDValue Offset;
+      selectAddress(Op, Base, Offset, SDLoc(Op));
+      OutOps.push_back(Base);
+      OutOps.push_back(Offset);
+      return false;
+    }
+    case InlineAsm::ConstraintCode::v:
+      // MMIX has no non-offsettable ordinary CodeGen address shape.
+      return true;
+    default:
+      llvm_unreachable("unexpected MMIX inline assembly memory constraint");
+    }
+  }
+
   void selectCacheOperation(SDNode *Node) {
     static constexpr unsigned RegisterOpcodes[] = {
         MMIX::PRELD, MMIX::PREGO, MMIX::PREST, MMIX::SYNCD, MMIX::SYNCID};

@@ -64,6 +64,8 @@ public:
                                         const TargetRegisterInfo *TRI,
                                         const CallBase &Call) const override;
   ConstraintType getConstraintType(StringRef Constraint) const override;
+  InlineAsm::ConstraintCode
+  getInlineAsmMemConstraint(StringRef ConstraintCode) const override;
   ConstraintWeight
   getSingleConstraintMatchWeight(AsmOperandInfo &Info,
                                  const char *Constraint) const override;
