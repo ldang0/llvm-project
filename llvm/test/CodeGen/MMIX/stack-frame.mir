@@ -48,6 +48,23 @@
 # CHECK-NEXT: $rj = frame-destroy PUT $r30
 # CHECK-NEXT: POP 0, 0
 
+# CHECK-LABEL: name: frame_pointer_call
+# CHECK: stackSize: 32
+# CHECK: maxCallFrameSize: 16
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r30 = frame-setup GET $rj
+# CHECK-NEXT: $r254 = frame-setup SUBUI $r254, 32
+# CHECK-NEXT: STOUI killed $r253, $r254, 24
+# CHECK-NEXT: $r253 = frame-setup ADDUI $r254, 32
+# CHECK-NOT: ADJCALLSTACK
+# CHECK: CALL_STATE @callee, csr_mmix
+# CHECK: $r255 = NEGUI 0, 8
+# CHECK-NEXT: $r253 = LDOU $r253, killed $r255
+# CHECK-NEXT: $r254 = frame-destroy ADDUI $r254, 32
+# CHECK-NEXT: $rj = frame-destroy PUT $r30
+# CHECK-NEXT: POP 0, 0
+
 # CHECK-LABEL: name: local_register
 # CHECK: stackSize: 0
 # CHECK: stack: []
@@ -56,7 +73,25 @@
 # CHECK-NEXT: $r0 = SETL 1
 # CHECK-NEXT: POP 0, 0
 
+# CHECK-LABEL: name: aligned_locals
+# CHECK: stackSize: 16
+# CHECK-DAG: { id: 0, {{.*}}offset: -1, size: 1, alignment: 1,
+# CHECK-DAG: { id: 1, {{.*}}offset: -4, size: 2, alignment: 2,
+# CHECK-DAG: { id: 2, {{.*}}offset: -8, size: 4, alignment: 4,
+# CHECK-DAG: { id: 3, {{.*}}offset: -16, size: 8, alignment: 8,
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r254 = frame-setup SUBUI $r254, 16
+# CHECK-DAG: STBUI $r250, $r254, 15
+# CHECK-DAG: STWUI $r250, $r254, 12
+# CHECK-DAG: STTUI $r250, $r254, 8
+# CHECK-DAG: STOUI $r250, $r254, 0
+# CHECK: $r254 = frame-destroy ADDUI $r254, 16
+# CHECK-NEXT: POP 0, 0
+
 --- |
+  declare void @callee()
+
   define void @small_frame() {
     ret void
   }
@@ -73,7 +108,15 @@
     ret void
   }
 
+  define void @frame_pointer_call() {
+    ret void
+  }
+
   define void @local_register() {
+    ret void
+  }
+
+  define void @aligned_locals() {
     ret void
   }
 ...
@@ -132,10 +175,45 @@ body:             |
     POP 0, 0
 ...
 ---
+name:            frame_pointer_call
+tracksRegLiveness: true
+frameInfo:
+  isFrameAddressTaken: true
+  hasCalls: true
+  adjustsStack: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body:             |
+  bb.0:
+    ADJCALLSTACKDOWN 16, 0, implicit-def $r254, implicit $r254
+    CALL_STATE @callee, csr_mmix
+    ADJCALLSTACKUP 16, 0, implicit-def $r254, implicit $r254
+    $r250 = SETL 1
+    STOUI $r250, %stack.0, 0
+    POP 0, 0
+...
+---
 name:            local_register
 tracksRegLiveness: true
 body:             |
   bb.0:
     $r0 = SETL 1
+    POP 0, 0
+...
+---
+name:            aligned_locals
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 1, alignment: 1 }
+  - { id: 1, size: 2, alignment: 2 }
+  - { id: 2, size: 4, alignment: 4 }
+  - { id: 3, size: 8, alignment: 8 }
+body:             |
+  bb.0:
+    $r250 = SETL 1
+    STBUI $r250, %stack.0, 0
+    STWUI $r250, %stack.1, 0
+    STTUI $r250, %stack.2, 0
+    STOUI $r250, %stack.3, 0
     POP 0, 0
 ...
