@@ -572,6 +572,13 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setMinimumJumpTableEntries(std::numeric_limits<unsigned>::max());
   setTargetDAGCombine(ISD::STORE);
 
+  // Keep small object operations inline when generic lowering needs at most
+  // eight stores, or four when optimizing for size. Larger and dynamic-sized
+  // operations use the C helpers selected by MMIXSubtarget.
+  MaxStoresPerMemset = MaxStoresPerMemcpy = MaxStoresPerMemmove = 8;
+  MaxStoresPerMemsetOptSize = MaxStoresPerMemcpyOptSize =
+      MaxStoresPerMemmoveOptSize = 4;
+
   auto RejectOperation = [this](unsigned Opcode, MVT VT) {
     setOperationAction(Opcode, VT, Custom);
   };

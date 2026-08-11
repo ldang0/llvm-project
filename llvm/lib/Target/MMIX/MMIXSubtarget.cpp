@@ -37,6 +37,9 @@ MMIXSubtarget::MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       TLInfo(TM, *this) {}
 
 void MMIXSubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
+  Info.setLibcallImpl(RTLIB::MEMCPY, RTLIB::impl_memcpy);
+  Info.setLibcallImpl(RTLIB::MEMMOVE, RTLIB::impl_memmove);
+  Info.setLibcallImpl(RTLIB::MEMSET, RTLIB::impl_memset);
   Info.setLibcallImpl(RTLIB::REM_F32, RTLIB::impl_fmodf);
   Info.setLibcallImpl(RTLIB::REM_F64, RTLIB::impl_fmod);
   Info.setLibcallImpl(RTLIB::FMA_F32, RTLIB::impl_fmaf);
