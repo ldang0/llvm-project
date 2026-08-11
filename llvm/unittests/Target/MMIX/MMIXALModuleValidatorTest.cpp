@@ -299,6 +299,76 @@ TEST_F(MMIXALModuleValidatorTest, AcceptsClosedModuleDefinitions) {
   EXPECT_EQ(Entry->getName(), "Main");
 }
 
+TEST_F(MMIXALModuleValidatorTest, KeepsCallerCopyAggregateABIIsolated) {
+  EXPECT_NE(expectModule(R"(
+    %pair = type { i64, i64 }
+
+    define void @Main() {
+      br label %loop
+    loop:
+      br label %loop
+    }
+
+    define void @owner(ptr %source) {
+      call void @target(ptr byval(%pair) align 8 %source)
+      ret void
+    }
+
+    define void @target(ptr byval(%pair) align 8 %value) {
+      ret void
+    }
+  )"),
+            nullptr);
+}
+
+TEST_F(MMIXALModuleValidatorTest, RejectsUnreviewedAggregateABIForms) {
+  expectModuleError(R"(
+    %small = type { i32 }
+    define void @Main() { unreachable }
+    define void @direct_argument(%small %value) { ret void }
+  )",
+                    "MMIXAL output variant 1 does not support direct aggregate "
+                    "arguments in function 'direct_argument'");
+
+  expectModuleError(R"(
+    %small = type { i32 }
+    define void @Main() { unreachable }
+    define %small @direct_result() { ret %small zeroinitializer }
+  )",
+                    "MMIXAL output variant 1 does not support direct aggregate "
+                    "results in function 'direct_result'");
+
+  expectModuleError(R"(
+    %large = type { i64, i64 }
+    define void @Main() { unreachable }
+    define void @indirect_result(ptr sret(%large) align 8 %out) { ret void }
+  )",
+                    "MMIXAL output variant 1 does not support indirect "
+                    "aggregate results in function 'indirect_result'");
+
+  expectModuleError(R"(
+    %small = type { i32 }
+    define void @Main() { unreachable }
+    define void @indirect_argument_call(ptr %callee) {
+      call void %callee(%small zeroinitializer)
+      ret void
+    }
+  )",
+                    "MMIXAL output variant 1 does not support direct aggregate "
+                    "call arguments in function 'indirect_argument_call'");
+
+  expectModuleError(R"(
+    %large = type { i64, i64 }
+    define void @Main() { unreachable }
+    define void @indirect_sret_call(ptr %callee, ptr %out) {
+      call void %callee(ptr sret(%large) align 8 %out)
+      ret void
+    }
+  )",
+                    "MMIXAL output variant 1 does not support indirect "
+                    "aggregate call results in function 'indirect_sret_call'");
+}
+
 TEST_F(MMIXALModuleValidatorTest, RejectsReferencedDeclarations) {
   for (auto [Reference, Symbol] : {
            std::pair{R"(

@@ -9,6 +9,16 @@
 ; RUN:   | FileCheck %s --check-prefix=WIDE
 ; RUN: test ! -s %t/wide-call.mms
 ; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/direct-aggregate-call.ll \
+; RUN:   -o %t/direct-aggregate-call.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=DIRECT-AGGREGATE
+; RUN: test ! -s %t/direct-aggregate-call.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
+; RUN:   --output-asm-variant=1 %t/sret-call.ll \
+; RUN:   -o %t/sret-call.mms 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=SRET
+; RUN: test ! -s %t/sret-call.mms
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
 ; RUN:   --output-asm-variant=1 %t/alternate-cc.ll \
 ; RUN:   -o %t/alternate-cc.mms 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=ALTERNATE-CC
@@ -40,6 +50,8 @@
 
 ; VARIADIC: LLVM ERROR: MMIX does not support variadic calls in function 'variadic_owner'
 ; WIDE: LLVM ERROR: MMIX does not support aggregate or special call arguments in function 'wide_owner'
+; DIRECT-AGGREGATE: LLVM ERROR: MMIXAL output variant 1 does not support direct aggregate call arguments in function 'direct_aggregate_owner'
+; SRET: LLVM ERROR: MMIXAL output variant 1 does not support indirect aggregate call results in function 'sret_owner'
 ; ALTERNATE-CC: LLVM ERROR: MMIX supports only the C calling convention in function 'alternate_cc_owner'
 ; MUSTTAIL: LLVM ERROR: MMIX does not support required tail calls in function 'musttail_owner'
 ; DYNAMIC-ALLOCA: LLVM ERROR: MMIX does not support dynamic stack allocation in function 'dynamic_owner'
@@ -100,6 +112,38 @@ loop:
 
 define fastcc void @alternate_cc_target() {
   ret void
+}
+
+;--- direct-aggregate-call.ll
+target triple = "mmix-unknown-elf"
+
+%small = type { i32 }
+
+define void @direct_aggregate_owner(ptr %callee) {
+  call void %callee(%small zeroinitializer)
+  ret void
+}
+
+define void @Main() {
+  br label %loop
+loop:
+  br label %loop
+}
+
+;--- sret-call.ll
+target triple = "mmix-unknown-elf"
+
+%large = type { i64, i64 }
+
+define void @sret_owner(ptr %callee, ptr %out) {
+  call void %callee(ptr sret(%large) align 8 %out)
+  ret void
+}
+
+define void @Main() {
+  br label %loop
+loop:
+  br label %loop
 }
 
 ;--- musttail.ll

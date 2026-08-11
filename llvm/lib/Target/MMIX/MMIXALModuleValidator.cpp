@@ -203,6 +203,46 @@ bool isMMIXALExceptionInstruction(const Instruction &I) {
          I.isEHPad();
 }
 
+Error validateMMIXALAggregateABI(const Function &F) {
+  if (F.getReturnType()->isAggregateType())
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support direct aggregate ") +
+        "results in function '" + F.getName() + "'");
+
+  for (const Argument &Arg : F.args()) {
+    if (Arg.hasStructRetAttr())
+      return createStringError(
+          Twine(
+              "MMIXAL output variant 1 does not support indirect aggregate ") +
+          "results in function '" + F.getName() + "'");
+    if (Arg.getType()->isAggregateType())
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support direct aggregate ") +
+          "arguments in function '" + F.getName() + "'");
+  }
+  return Error::success();
+}
+
+Error validateMMIXALAggregateABI(const CallBase &Call, const Function &F) {
+  if (Call.getType()->isAggregateType())
+    return createStringError(
+        Twine("MMIXAL output variant 1 does not support direct aggregate ") +
+        "call results in function '" + F.getName() + "'");
+
+  for (unsigned I = 0; I != Call.arg_size(); ++I) {
+    if (Call.paramHasAttr(I, Attribute::StructRet))
+      return createStringError(
+          Twine(
+              "MMIXAL output variant 1 does not support indirect aggregate ") +
+          "call results in function '" + F.getName() + "'");
+    if (Call.getArgOperand(I)->getType()->isAggregateType())
+      return createStringError(
+          Twine("MMIXAL output variant 1 does not support direct aggregate ") +
+          "call arguments in function '" + F.getName() + "'");
+  }
+  return Error::success();
+}
+
 Error validateMMIXALSymbolSemantics(const GlobalValue &GV) {
   if (isa<GlobalIFunc>(GV))
     return createStringError(
@@ -367,6 +407,8 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
   for (const Function &F : M) {
     if (F.isIntrinsic())
       continue;
+    if (Error Err = validateMMIXALAggregateABI(F))
+      return std::move(Err);
     if (F.hasPersonalityFn())
       return createStringError(
           Twine("MMIXAL output variant 1 does not support an exception ") +
@@ -422,7 +464,9 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
               Twine("MMIXAL output variant 1 does not support exception ") +
               "instruction '" + I.getOpcodeName() + "' in function '" +
               F.getName() + "'");
-        if (const auto *Call = dyn_cast<CallBase>(&I))
+        if (const auto *Call = dyn_cast<CallBase>(&I)) {
+          if (Error Err = validateMMIXALAggregateABI(*Call, F))
+            return std::move(Err);
           if (const Function *Callee = Call->getCalledFunction()) {
             Intrinsic::ID ID = Callee->getIntrinsicID();
             if (ID == Intrinsic::thread_pointer ||
@@ -440,6 +484,7 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
                   "metadata intrinsic '" + Intrinsic::getBaseName(ID) +
                   "' in function '" + F.getName() + "'");
           }
+        }
         if (instructionUsesNonzeroAddressSpace(I))
           return createStringError(
               Twine(
