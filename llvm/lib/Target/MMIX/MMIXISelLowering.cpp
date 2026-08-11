@@ -1280,6 +1280,14 @@ static bool isSupportedCallValueType(EVT VT) {
          VT == MVT::i64 || VT == MVT::f32 || VT == MVT::f64;
 }
 
+static ISD::ArgFlagsTy getMMIXOrdinaryPointerArgFlags() {
+  ISD::ArgFlagsTy Flags;
+  Flags.setPointer();
+  Flags.setPointerAddrSpace(0);
+  Flags.setOrigAlign(Align(8));
+  return Flags;
+}
+
 static SDValue convertMMIXCallBits(SDValue Value, EVT ResultVT, const SDLoc &DL,
                                    SelectionDAG &DAG) {
   if (Value.getValueType() == MVT::f32 && ResultVT == MVT::i64)
@@ -1310,6 +1318,8 @@ static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
 SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                       SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = CLI.DAG.getMachineFunction();
+  SelectionDAG &DAG = CLI.DAG;
+  SDValue Chain = CLI.Chain;
   if (CLI.CB && CLI.CB->isMustTailCall())
     reportFatalUsageError(
         Twine("MMIX does not support required tail calls in ") + "function '" +
@@ -1354,10 +1364,33 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
           "MMIX does not support nonzero-address-space call arguments");
     if (!isSupportedCallValueType(Arg.VT) || !Classification.isValid() ||
         (Classification.isAggregate() &&
-         Classification.Kind != MMIXAggregateABIKind::DirectArgument))
+         Classification.Kind != MMIXAggregateABIKind::DirectArgument &&
+         Classification.Kind != MMIXAggregateABIKind::CallerCopyArgument))
       reportFatalUsageError(
           Twine("MMIX does not support aggregate or special call arguments ") +
           "in function '" + MF.getName() + "'");
+
+    if (Classification.Kind == MMIXAggregateABIKind::CallerCopyArgument) {
+      uint64_t Size = Arg.Flags.getByValSize();
+      Align Alignment = Arg.Flags.getNonZeroByValAlign();
+      int FI = MF.getFrameInfo().CreateStackObject(Size, Alignment,
+                                                   /*isSS=*/false);
+      SDValue CopyAddress =
+          DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue SizeNode = DAG.getConstant(Size, CLI.DL, MVT::i64);
+      Chain = DAG.getMemcpy(
+          Chain, CLI.DL, CopyAddress, CLI.OutVals[I], SizeNode, Alignment,
+          Alignment, /*isVol=*/false, /*AlwaysInline=*/false, /*CI=*/nullptr,
+          std::nullopt, MachinePointerInfo(), MachinePointerInfo());
+
+      ISD::ArgFlagsTy PointerFlags = getMMIXOrdinaryPointerArgFlags();
+      Type *PointerTy = PointerType::getUnqual(*DAG.getContext());
+      ABIOuts.emplace_back(PointerFlags, MVT::i64, MVT::i64, PointerTy,
+                           Arg.OrigArgIndex, 0);
+      ABIOutVals.push_back(CopyAddress);
+      ++I;
+      continue;
+    }
 
     if (Classification.Kind != MMIXAggregateABIKind::DirectArgument) {
       ABIOuts.push_back(Arg);
@@ -1415,8 +1448,6 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   CLI.IsTailCall = false;
-  SelectionDAG &DAG = CLI.DAG;
-  SDValue Chain = CLI.Chain;
 
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
@@ -1605,11 +1636,23 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
           "MMIX does not support nonzero-address-space formal arguments");
     if (!Classification.isValid() ||
         (Classification.isAggregate() &&
-         Classification.Kind != MMIXAggregateABIKind::DirectArgument))
+         Classification.Kind != MMIXAggregateABIKind::DirectArgument &&
+         Classification.Kind != MMIXAggregateABIKind::CallerCopyArgument))
       reportFatalUsageError(
           Twine("MMIX does not support aggregate or special formal "
                 "arguments in function '") +
           F.getName() + "'");
+
+    if (Classification.Kind == MMIXAggregateABIKind::CallerCopyArgument) {
+      ISD::ArgFlagsTy PointerFlags = getMMIXOrdinaryPointerArgFlags();
+      Type *PointerTy = PointerType::getUnqual(*DAG.getContext());
+      ABIIns.emplace_back(PointerFlags, MVT::i64, MVT::i64, PointerTy, Arg.Used,
+                          Arg.getOrigArgIndex(), 0);
+      MMIXFormalArgMapping &Mapping = ArgMappings.emplace_back();
+      Mapping.OriginalParts.push_back(I);
+      ++I;
+      continue;
+    }
 
     if (Classification.Kind != MMIXAggregateABIKind::DirectArgument) {
       ABIIns.push_back(Arg);

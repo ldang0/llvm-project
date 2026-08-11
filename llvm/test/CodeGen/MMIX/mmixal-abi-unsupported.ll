@@ -1,10 +1,5 @@
 ; RUN: split-file %s %t
 ; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
-; RUN:   --output-asm-variant=1 %t/aggregate-call.ll \
-; RUN:   -o %t/aggregate-call.mms 2>&1 \
-; RUN:   | FileCheck %s --check-prefix=AGGREGATE
-; RUN: test ! -s %t/aggregate-call.mms
-; RUN: not llc -mtriple=mmix-unknown-elf -filetype=asm -O0 \
 ; RUN:   --output-asm-variant=1 %t/variadic-call.ll \
 ; RUN:   -o %t/variadic-call.mms 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=VARIADIC
@@ -43,7 +38,6 @@
 ; RUN:   | FileCheck %s --check-prefix=NONLOCAL-STACK
 ; RUN: test ! -s %t/nonlocal-stack.mms
 
-; AGGREGATE: LLVM ERROR: MMIX does not support aggregate or special call arguments in function 'aggregate_owner'
 ; VARIADIC: LLVM ERROR: MMIX does not support variadic calls in function 'variadic_owner'
 ; WIDE: LLVM ERROR: MMIX does not support aggregate or special call arguments in function 'wide_owner'
 ; ALTERNATE-CC: LLVM ERROR: MMIX supports only the C calling convention in function 'alternate_cc_owner'
@@ -52,26 +46,6 @@
 ; STACK-REALIGNMENT: LLVM ERROR: MMIX does not support stack realignment in function 'realignment_owner'
 ; COROUTINE: LLVM ERROR: MMIX does not support coroutines in function 'coroutine_owner'
 ; NONLOCAL-STACK: LLVM ERROR: MMIX does not support nonlocal stack state in function 'stack_owner'
-
-;--- aggregate-call.ll
-target triple = "mmix-unknown-elf"
-
-%pair = type { i64, i64 }
-
-define void @aggregate_owner(ptr %value) {
-  call void @aggregate_target(ptr byval(%pair) %value)
-  ret void
-}
-
-define void @Main() {
-  br label %loop
-loop:
-  br label %loop
-}
-
-define void @aggregate_target(ptr byval(%pair) %value) {
-  ret void
-}
 
 ;--- variadic-call.ll
 target triple = "mmix-unknown-elf"
