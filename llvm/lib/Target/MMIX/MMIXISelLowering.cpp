@@ -9,6 +9,7 @@
 #include "MMIXISelLowering.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXAggregateABI.h"
+#include "MMIXMachineFunctionInfo.h"
 #include "MMIXSubtarget.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -27,6 +28,7 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <string>
 
@@ -1661,11 +1663,16 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
         reportFatalUsageError(
             Twine("MMIX supports only the C calling convention in function '") +
             F.getName() + "'");
-      if (const Function *Callee = Call->getCalledFunction();
-          Callee && isMMIXNonlocalControlIntrinsic(Callee->getIntrinsicID()))
-        reportFatalUsageError(
-            Twine("MMIX does not support nonlocal control transfer in ") +
-            "function '" + F.getName() + "'");
+      if (const Function *Callee = Call->getCalledFunction()) {
+        Intrinsic::ID ID = Callee->getIntrinsicID();
+        if (isMMIXNonlocalControlIntrinsic(ID))
+          reportFatalUsageError(
+              Twine("MMIX does not support nonlocal control transfer in ") +
+              "function '" + F.getName() + "'");
+        if (ID == Intrinsic::vastart)
+          reportFatalUsageError(Twine("MMIX does not support va_start in ") +
+                                "function '" + F.getName() + "'");
+      }
     }
   }
   if (F.hasPersonalityFn())
@@ -1676,11 +1683,6 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     reportFatalUsageError(
         Twine("MMIX supports only the C calling convention in function '") +
         F.getName() + "'");
-  if (IsVarArg)
-    reportFatalUsageError(
-        Twine("MMIX does not support variadic functions in function '") +
-        F.getName() + "'");
-
   SmallVector<ISD::InputArg, 16> ABIIns;
   SmallVector<MMIXFormalArgMapping, 16> ArgMappings;
   for (unsigned I = 0; I != Ins.size();) {
@@ -1775,6 +1777,28 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(ABIIns, CC_MMIX);
   if (ArgLocs.size() != ArgMappings.size())
     report_fatal_error("MMIX formal assignment lost an ABI argument");
+
+  if (IsVarArg) {
+    static constexpr MCPhysReg ArgRegs[] = {
+        MMIX::R231, MMIX::R232, MMIX::R233, MMIX::R234, MMIX::R235, MMIX::R236,
+        MMIX::R237, MMIX::R238, MMIX::R239, MMIX::R240, MMIX::R241, MMIX::R242,
+        MMIX::R243, MMIX::R244, MMIX::R245, MMIX::R246};
+    constexpr unsigned SlotSize = 8;
+    unsigned FirstRegister = CCInfo.getFirstUnallocated(ArgRegs);
+    unsigned NamedStackSize = CCInfo.getStackSize();
+    if (NamedStackSize % SlotSize != 0)
+      report_fatal_error("MMIX variadic named arguments lost slot alignment");
+
+    unsigned NamedSlots = FirstRegister + NamedStackSize / SlotSize;
+    unsigned SaveSize = (std::size(ArgRegs) - FirstRegister) * SlotSize;
+    int FirstUnnamedOffset = SaveSize != 0 ? -static_cast<int>(SaveSize)
+                                           : static_cast<int>(NamedStackSize);
+    int FI = MFI.CreateFixedObject(SaveSize != 0 ? SaveSize : SlotSize,
+                                   FirstUnnamedOffset,
+                                   /*IsImmutable=*/SaveSize == 0);
+    MF.getInfo<MMIXMachineFunctionInfo>()->setVarArgsInfo(
+        NamedSlots, FirstRegister, SaveSize, FI);
+  }
 
   for (unsigned I = 0; I != ArgLocs.size(); ++I) {
     const CCValAssign &VA = ArgLocs[I];
@@ -1894,10 +1918,6 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   if (CallConv != CallingConv::C)
     reportFatalUsageError(
         Twine("MMIX supports only the C calling convention in function '") +
-        F.getName() + "'");
-  if (IsVarArg)
-    reportFatalUsageError(
-        Twine("MMIX does not support variadic functions in function '") +
         F.getName() + "'");
 
   if (Outs.size() != OutVals.size())

@@ -10,6 +10,7 @@
 #include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MMIX.h"
 #include "MMIXALModuleValidator.h"
+#include "MMIXMachineFunctionInfo.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/CodeGen/AtomicExpand.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -102,4 +103,11 @@ public:
 
 TargetPassConfig *MMIXTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new MMIXPassConfig(*this, PM);
+}
+
+MachineFunctionInfo *MMIXTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return MMIXMachineFunctionInfo::create<MMIXMachineFunctionInfo>(Allocator, F,
+                                                                  STI);
 }

@@ -25,6 +25,7 @@ add_llvm_target(MMIXCodeGen
   MMIXInstrInfo.cpp
   MMIXISelDAGToDAG.cpp
   MMIXISelLowering.cpp
+  MMIXMachineFunctionInfo.cpp
   MMIXRegisterInfo.cpp
   MMIXSelectionDAGInfo.cpp
   MMIXMCInstLower.cpp
