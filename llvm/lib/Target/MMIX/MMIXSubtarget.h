@@ -58,6 +58,8 @@ public:
   const MMIXSelectionDAGInfo *getSelectionDAGInfo() const override {
     return &TSInfo;
   }
+
+  void initLibcallLoweringInfo(LibcallLoweringInfo &Info) const override;
 };
 
 } // namespace llvm

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXSubtarget.h"
+#include "llvm/CodeGen/LibcallLoweringInfo.h"
 
 using namespace llvm;
 
@@ -34,3 +35,14 @@ MMIXSubtarget::MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
                            /*TuneCPU=*/CPU.empty() ? "generic" : CPU, FS),
       InstrInfo(initializeSubtargetDependencies(CPU, FS)), FrameLowering(),
       TLInfo(TM, *this) {}
+
+void MMIXSubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
+  Info.setLibcallImpl(RTLIB::REM_F32, RTLIB::impl_fmodf);
+  Info.setLibcallImpl(RTLIB::REM_F64, RTLIB::impl_fmod);
+  Info.setLibcallImpl(RTLIB::FMA_F32, RTLIB::impl_fmaf);
+  Info.setLibcallImpl(RTLIB::FMA_F64, RTLIB::impl_fma);
+  Info.setLibcallImpl(RTLIB::ROUND_F32, RTLIB::impl_roundf);
+  Info.setLibcallImpl(RTLIB::ROUND_F64, RTLIB::impl_round);
+  Info.setLibcallImpl(RTLIB::NEARBYINT_F32, RTLIB::impl_nearbyintf);
+  Info.setLibcallImpl(RTLIB::NEARBYINT_F64, RTLIB::impl_nearbyint);
+}

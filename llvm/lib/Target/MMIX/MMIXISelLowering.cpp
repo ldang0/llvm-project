@@ -636,10 +636,10 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT, MVT::f64, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::f64, Expand);
 
-  static constexpr unsigned UnsupportedFloatingOperations[] = {
+  static constexpr unsigned FloatingLibcallOperations[] = {
       ISD::FREM, ISD::FMA, ISD::FROUND, ISD::FNEARBYINT};
-  for (unsigned Opcode : UnsupportedFloatingOperations)
-    RejectOperation(Opcode, MVT::f64);
+  for (unsigned Opcode : FloatingLibcallOperations)
+    setOperationAction(Opcode, {MVT::f32, MVT::f64}, LibCall);
 
   static constexpr unsigned StrictFloatingOperations[] = {
       ISD::STRICT_FADD,       ISD::STRICT_FSUB,       ISD::STRICT_FMUL,
@@ -884,20 +884,6 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   if (Op.getOpcode() == ISD::TRAP)
     report_fatal_error(
         "MMIX does not define an LLVM trap convention for this environment");
-  if (Op.getOpcode() == ISD::FREM)
-    report_fatal_error(
-        "MMIX cannot directly lower LLVM frem: MMIX FREM implements IEEE "
-        "remainder instead of truncating-quotient fmod semantics");
-  if (Op.getOpcode() == ISD::FMA)
-    report_fatal_error(
-        "MMIX cannot lower fused f64 multiply-add without a runtime helper");
-  if (Op.getOpcode() == ISD::FROUND)
-    report_fatal_error(
-        "MMIX cannot lower round-to-nearest-ties-away without a runtime "
-        "helper");
-  if (Op.getOpcode() == ISD::FNEARBYINT)
-    report_fatal_error(
-        "MMIX FINT cannot lower nearbyint because it may raise inexact");
   if (Op->isStrictFPOpcode())
     report_fatal_error(
         "MMIX constrained floating-point lowering is not implemented");
