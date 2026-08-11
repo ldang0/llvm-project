@@ -1,12 +1,15 @@
 ; RUN: split-file %s %t
-; RUN: rm -f %t/formal.s %t/call.s
 ; RUN: not llc -mtriple=mmix -filetype=asm %t/formal.ll -o %t/formal.s 2>&1 | FileCheck %s --check-prefix=FORMAL
 ; RUN: test ! -s %t/formal.s
+; RUN: not llc -mtriple=mmix -filetype=obj %t/formal.ll -o %t/formal.o 2>&1 | FileCheck %s --check-prefix=FORMAL
+; RUN: test ! -s %t/formal.o
 ; RUN: not llc -mtriple=mmix -filetype=asm %t/call.ll -o %t/call.s 2>&1 | FileCheck %s --check-prefix=CALL
 ; RUN: test ! -s %t/call.s
+; RUN: not llc -mtriple=mmix -filetype=obj %t/call.ll -o %t/call.o 2>&1 | FileCheck %s --check-prefix=CALL
+; RUN: test ! -s %t/call.o
 
-; FORMAL: MMIX does not support aggregate or special formal arguments in function 'wide'
-; CALL: MMIX does not support aggregate or special call arguments in function 'call_wide'
+; FORMAL: MMIX does not support multi-register formal arguments in function 'wide'
+; CALL: MMIX does not support multi-register call arguments in function 'call_wide'
 
 ;--- formal.ll
 target triple = "mmix"

@@ -17,7 +17,7 @@ module asm "UNSAVE r255"
 
 declare void @callee()
 
-; Ordinary frames, calls, and returns retain the provisional ABI and cannot
+; Ordinary frames, calls, and returns retain the MMIX C ABI and cannot
 ; acquire whole-context operations.
 define i64 @ordinary_function_context() {
 ; CHECK-LABEL: ordinary_function_context:

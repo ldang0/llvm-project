@@ -18,7 +18,7 @@ define zeroext i8 @narrow_add(i8 zeroext %lhs, i8 zeroext %rhs) {
 }
 
 ; Internal wide integer operations split into reviewed i64 operations. Wide
-; values remain unsupported at the provisional ABI boundary.
+; values remain unsupported at the MMIX C ABI boundary.
 define i64 @wide_add_high_half(i64 %low, i64 %high) {
 ; CHECK-LABEL: wide_add_high_half:
 ; CHECK-DAG:   CMPU

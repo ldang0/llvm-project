@@ -15,11 +15,11 @@
 ; RUN:   | FileCheck %s --check-prefixes=CODE-MODEL,COMMON
 ; RUN: test ! -s %t/large.o
 
-; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
 ; RUN:   %t/tls.ll -o %t/tls.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefixes=TLS,COMMON
 ; RUN: test ! -s %t/tls.o
-; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=obj \
+; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
 ; RUN:   %t/address-space.ll -o %t/address-space.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefixes=ADDRESS-SPACE,COMMON
 ; RUN: test ! -s %t/address-space.o
@@ -64,8 +64,8 @@
 ; COMMON-NOT: target does not support generation of this file type
 ; RELOCATION: LLVM ERROR: MMIX supports only the static relocation model
 ; CODE-MODEL: LLVM ERROR: MMIX supports only the small code model
-; TLS: LLVM ERROR: MMIX does not support thread-local storage
-; ADDRESS-SPACE: LLVM ERROR: MMIX does not support nonzero address spaces
+; TLS: LLVM ERROR: MMIX does not support thread-local storage in function 'owner'
+; ADDRESS-SPACE: LLVM ERROR: MMIX does not support nonzero address spaces in function 'owner'
 ; CALLING-CONVENTION: LLVM ERROR: MMIX supports only the C calling convention in function 'owner'
 ; SYMBOLIC-I24: LLVM ERROR: MMIX symbolic initializer for global 'symbolic_i24'
 ; SYMBOLIC-I24-SAME: uses unreviewed i24 storage;

@@ -26,7 +26,7 @@ def GPR64 : RegisterClass<"MMIX", [i64], 64,
 def FPR64 : RegisterClass<"MMIX", [f64], 64,
                           (sequence "R%u", 0, 255)>;
 
-// CodeGen uses only registers whose roles are fixed by the provisional ABI.
+// CodeGen uses only registers whose roles are fixed by the MMIX C ABI.
 // Caller-clobbered globals precede hardware-preserved locals in allocation
 // order. The architectural classes above remain complete for MC operands.
 def GPR64CodeGen : RegisterClass<"MMIX", [i64], 64,

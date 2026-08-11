@@ -4,7 +4,7 @@
 
 target triple = "mmix"
 
-; Writes that alter the provisional ABI or floating environment require a
+; Writes that alter the MMIX C ABI or floating environment require a
 ; complete module-level assembly routine that owns the affected state.
 module asm ".text"
 module asm "mmix_special_state_owner:"

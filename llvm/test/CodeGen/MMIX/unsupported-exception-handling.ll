@@ -1,6 +1,9 @@
-; RUN: not llc -mtriple=mmix %s -o /dev/null 2>&1 | FileCheck %s
+; RUN: not llc -mtriple=mmix -filetype=asm %s -o %t.s 2>&1 | FileCheck %s
+; RUN: test ! -s %t.s
+; RUN: not llc -mtriple=mmix -filetype=obj %s -o %t.o 2>&1 | FileCheck %s
+; RUN: test ! -s %t.o
 
-; CHECK: LLVM ERROR: MMIX does not support exception handling
+; CHECK: LLVM ERROR: MMIX does not support exception handling in function 'invoke_callee'
 
 declare void @callee()
 declare i32 @__gxx_personality_v0(...)

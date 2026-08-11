@@ -49,7 +49,7 @@
 ; RUN: test ! -s %t/nonlocal-stack.mms
 
 ; VARIADIC: LLVM ERROR: MMIXAL output variant 1 does not support variadic calls in function 'variadic_owner'
-; WIDE: LLVM ERROR: MMIX does not support aggregate or special call arguments in function 'wide_owner'
+; WIDE: LLVM ERROR: MMIX does not support ABI type 'i128' for call arguments in function 'wide_owner'
 ; DIRECT-AGGREGATE: LLVM ERROR: MMIXAL output variant 1 does not support direct aggregate call arguments in function 'direct_aggregate_owner'
 ; SRET: LLVM ERROR: MMIXAL output variant 1 does not support indirect aggregate call results in function 'sret_owner'
 ; ALTERNATE-CC: LLVM ERROR: MMIX supports only the C calling convention in function 'alternate_cc_owner'

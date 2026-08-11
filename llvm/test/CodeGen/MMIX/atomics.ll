@@ -3,6 +3,9 @@
 
 target triple = "mmix"
 
+; These raw LLVM IR operations test a backend capability. They do not define
+; or imply a source-level C _Atomic ABI.
+
 ; CHECK-LABEL: cmp_monotonic:
 ; CHECK-NOT:   SYNC
 ; CHECK:       PUT rP, r232

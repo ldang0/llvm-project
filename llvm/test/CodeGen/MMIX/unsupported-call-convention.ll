@@ -1,7 +1,9 @@
-; RUN: not llc -mtriple=mmix -stop-after=mmix-isel \
-; RUN:   -o /dev/null %s 2>&1 | FileCheck %s
+; RUN: not llc -mtriple=mmix -filetype=asm %s -o %t.s 2>&1 | FileCheck %s
+; RUN: test ! -s %t.s
+; RUN: not llc -mtriple=mmix -filetype=obj %s -o %t.o 2>&1 | FileCheck %s
+; RUN: test ! -s %t.o
 
-; CHECK: MMIX supports only the C calling convention
+; CHECK: MMIX supports only the C calling convention in function 'call_fast'
 
 declare fastcc i64 @fast_callee(i64)
 

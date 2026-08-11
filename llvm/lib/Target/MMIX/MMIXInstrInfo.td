@@ -1355,7 +1355,7 @@ def POP : MMIXPop {
   let isBarrier = true;
 }
 
-// The provisional ABI always returns global results with POP 0,0. Keep these
+// The MMIX C ABI always returns global results with POP 0,0. Keep these
 // fixed CodeGen forms separate from the general architectural POP instruction.
 class MMIXReturn<list<Register> ResultUses>
     : MMIXInstruction<(outs), (ins), "POP 0, 0"> {

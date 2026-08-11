@@ -1,6 +1,9 @@
-; RUN: not --crash llc -mtriple=mmix %s -o /dev/null 2>&1 | FileCheck %s
+; RUN: not llc -mtriple=mmix -filetype=asm %s -o %t.s 2>&1 | FileCheck %s
+; RUN: test ! -s %t.s
+; RUN: not llc -mtriple=mmix -filetype=obj %s -o %t.o 2>&1 | FileCheck %s
+; RUN: test ! -s %t.o
 
-; CHECK: LLVM ERROR: MMIX does not support nonzero address spaces
+; CHECK: LLVM ERROR: MMIX does not support nonzero address spaces in function 'load_nonzero_address_space'
 
 @value = addrspace(1) global i64 0
 

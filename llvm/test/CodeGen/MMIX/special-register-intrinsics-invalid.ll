@@ -7,9 +7,9 @@
 ; COMMON-DAG: error: llvm.mmix.put: register 'rN' is architecturally read-only
 ; COMMON-DAG: error: llvm.mmix.put: register 'rO' is architecturally read-only
 ; COMMON-DAG: error: llvm.mmix.put: register 'rS' is architecturally read-only
-; COMMON-DAG: error: llvm.mmix.put: register 'rJ' is reserved by the provisional ABI
-; COMMON-DAG: error: llvm.mmix.put: register 'rG' is reserved by the provisional ABI
-; COMMON-DAG: error: llvm.mmix.put: register 'rL' is reserved by the provisional ABI
+; COMMON-DAG: error: llvm.mmix.put: register 'rJ' is reserved by the MMIX C ABI
+; COMMON-DAG: error: llvm.mmix.put: register 'rG' is reserved by the MMIX C ABI
+; COMMON-DAG: error: llvm.mmix.put: register 'rL' is reserved by the MMIX C ABI
 ; COMMON: error: llvm.mmix.put: register 'rA' requires explicit floating-environment modeling
 ; SYSTEM: error: llvm.mmix.put: register 'rC' requires the system target feature
 ; VM: error: llvm.mmix.put: register 'rV' requires the virtual-memory target feature
