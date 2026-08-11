@@ -8,6 +8,7 @@
 
 #include "MMIXISelLowering.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIXAggregateABI.h"
 #include "MMIXSubtarget.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -24,6 +25,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
+#include <algorithm>
 #include <limits>
 #include <string>
 
@@ -1111,15 +1113,50 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   }
 }
 
-static bool hasUnsupportedArgumentFlags(const ISD::ArgFlagsTy &Flags) {
-  return Flags.isInReg() || Flags.isSRet() || Flags.isByVal() ||
-         Flags.isByRef() || Flags.isNest() || Flags.isInAlloca() ||
-         Flags.isPreallocated() || Flags.isSwiftSelf() ||
+static bool hasUnsupportedABIFlags(const ISD::ArgFlagsTy &Flags) {
+  return Flags.isInReg() || Flags.isByRef() || Flags.isNest() ||
+         Flags.isInAlloca() || Flags.isPreallocated() || Flags.isSwiftSelf() ||
          Flags.isSwiftAsync() || Flags.isSwiftError() ||
          Flags.isCFGuardTarget() || Flags.isHva() || Flags.isHvaStart() ||
          Flags.isSecArgPass() || Flags.isReturned() ||
-         Flags.isInConsecutiveRegs() || Flags.isCopyElisionCandidate() ||
-         Flags.isSplit();
+         Flags.isCopyElisionCandidate();
+}
+
+static MMIXAggregateABIClassification classifyMMIXABIValue(
+    MMIXAggregateABIRole Role, const ISD::ArgFlagsTy &Flags,
+    const DataLayout &DL, Type *AggregateTy = nullptr,
+    unsigned NumParts = 1) {
+  MMIXAggregateABIValue Value;
+  Value.Role = Flags.isSRet() ? MMIXAggregateABIRole::Result : Role;
+  Value.IsAggregate = AggregateTy && AggregateTy->isAggregateType();
+  Value.IsByVal = Flags.isByVal();
+  Value.IsSRet = Flags.isSRet();
+  Value.IsSplit = Flags.isSplit() || Flags.isSplitEnd();
+  Value.IsInConsecutiveRegs = Flags.isInConsecutiveRegs() ||
+                              Flags.isInConsecutiveRegsLast();
+  Value.HasUnsupportedFlags = hasUnsupportedABIFlags(Flags);
+  Value.AddressSpace =
+      Flags.isPointer() ? Flags.getPointerAddrSpace() : 0;
+  Value.NumParts = NumParts;
+
+  if (Flags.isByVal()) {
+    Value.Size = Flags.getByValSize();
+    Value.Alignment = Flags.getNonZeroByValAlign();
+  } else if (AggregateTy && AggregateTy->isAggregateType()) {
+    Align FlagAlignment = Flags.isSRet() ? Flags.getNonZeroMemAlign()
+                                         : Flags.getNonZeroOrigAlign();
+    Value.Alignment = FlagAlignment;
+    if (AggregateTy->isSized()) {
+      TypeSize Size = DL.getTypeAllocSize(AggregateTy);
+      if (!Size.isScalable()) {
+        Value.Size = Size.getFixedValue();
+        Value.Alignment =
+            std::max(FlagAlignment, DL.getABITypeAlign(AggregateTy));
+      }
+    }
+  }
+
+  return classifyMMIXAggregateABI(Value);
 }
 
 static bool isSupportedCallValueType(EVT VT) {
@@ -1168,7 +1205,13 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (CLI.IsVarArg)
     reportFatalUsageError(Twine("MMIX does not support variadic calls in ") +
                           "function '" + MF.getName() + "'");
-  if (CLI.OrigRetTy && CLI.OrigRetTy->isAggregateType())
+  ISD::ArgFlagsTy ResultFlags;
+  if (!CLI.Ins.empty())
+    ResultFlags = CLI.Ins.front().Flags;
+  MMIXAggregateABIClassification ResultClassification = classifyMMIXABIValue(
+      MMIXAggregateABIRole::Result, ResultFlags, CLI.DAG.getDataLayout(),
+      CLI.OrigRetTy, CLI.Ins.size());
+  if (!ResultClassification.isValid() || ResultClassification.isAggregate())
     reportFatalUsageError(
         Twine("MMIX does not support aggregate call results in ") +
         "function '" + MF.getName() + "'");
@@ -1176,28 +1219,43 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     report_fatal_error("MMIX call operand lowering received mismatched values");
 
   for (const ISD::OutputArg &Arg : CLI.Outs) {
-    if (!isSupportedCallValueType(Arg.VT) ||
-        hasUnsupportedArgumentFlags(Arg.Flags))
+    Type *AggregateTy = nullptr;
+    if (Arg.OrigArgIndex < CLI.Args.size()) {
+      const ArgListEntry &OriginalArg = CLI.Args[Arg.OrigArgIndex];
+      AggregateTy = OriginalArg.IndirectType
+                        ? OriginalArg.IndirectType
+                        : OriginalArg.OrigTy;
+    }
+    MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
+        MMIXAggregateABIRole::Argument, Arg.Flags, CLI.DAG.getDataLayout(),
+        AggregateTy);
+    if (Classification.Error ==
+        MMIXAggregateABIError::NonZeroAddressSpace)
+      report_fatal_error(
+          "MMIX does not support nonzero-address-space call arguments");
+    if (!isSupportedCallValueType(Arg.VT) || !Classification.isValid() ||
+        Classification.isAggregate())
       reportFatalUsageError(
           Twine("MMIX does not support aggregate or special call arguments ") +
           "in function '" + MF.getName() + "'");
-    if (Arg.Flags.isPointer() && Arg.Flags.getPointerAddrSpace() != 0)
-      report_fatal_error(
-          "MMIX does not support nonzero-address-space call arguments");
   }
   if (CLI.Ins.size() > 1)
     reportFatalUsageError(
         Twine("MMIX supports at most one scalar call result in ") +
         "function '" + MF.getName() + "'");
   for (const ISD::InputArg &Result : CLI.Ins) {
-    if (!isSupportedCallValueType(Result.VT) ||
-        hasUnsupportedArgumentFlags(Result.Flags))
+    MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
+        MMIXAggregateABIRole::Result, Result.Flags, CLI.DAG.getDataLayout(),
+        CLI.OrigRetTy, CLI.Ins.size());
+    if (Classification.Error ==
+        MMIXAggregateABIError::NonZeroAddressSpace)
+      report_fatal_error(
+          "MMIX does not support nonzero-address-space call results");
+    if (!isSupportedCallValueType(Result.VT) || !Classification.isValid() ||
+        Classification.isAggregate())
       reportFatalUsageError("MMIX does not support aggregate or special call "
                             "results in function '" +
                             MF.getName() + "'");
-    if (Result.Flags.isPointer() && Result.Flags.getPointerAddrSpace() != 0)
-      report_fatal_error(
-          "MMIX does not support nonzero-address-space call results");
   }
 
   CLI.IsTailCall = false;
@@ -1366,14 +1424,28 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
         Twine("MMIX does not support variadic functions in function '") +
         F.getName() + "'");
   for (const ISD::InputArg &Arg : Ins) {
-    if (hasUnsupportedArgumentFlags(Arg.Flags))
+    Type *AggregateTy = nullptr;
+    if (Arg.isOrigArg()) {
+      const Argument &OriginalArg = *F.getArg(Arg.getOrigArgIndex());
+      if (Arg.Flags.isByVal())
+        AggregateTy = OriginalArg.getParamByValType();
+      else if (Arg.Flags.isSRet())
+        AggregateTy = OriginalArg.getParamStructRetType();
+      else
+        AggregateTy = OriginalArg.getType();
+    }
+    MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
+        MMIXAggregateABIRole::Argument, Arg.Flags, DAG.getDataLayout(),
+        AggregateTy);
+    if (Classification.Error ==
+        MMIXAggregateABIError::NonZeroAddressSpace)
+      report_fatal_error(
+          "MMIX does not support nonzero-address-space formal arguments");
+    if (!Classification.isValid() || Classification.isAggregate())
       reportFatalUsageError(
           Twine(
               "MMIX does not support aggregate or special formal arguments ") +
           "in function '" + F.getName() + "'");
-    if (Arg.Flags.isPointer() && Arg.Flags.getPointerAddrSpace() != 0)
-      report_fatal_error(
-          "MMIX does not support nonzero-address-space formal arguments");
   }
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -1430,11 +1502,18 @@ bool MMIXTargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool IsVarArg,
     const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
     const Type *RetTy) const {
+  ISD::ArgFlagsTy ResultFlags;
+  if (!Outs.empty())
+    ResultFlags = Outs.front().Flags;
+  MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
+      MMIXAggregateABIRole::Result, ResultFlags, MF.getDataLayout(),
+      const_cast<Type *>(RetTy), Outs.size());
   bool SupportedType =
-      RetTy->isVoidTy() ||
-      (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() <= 64) ||
-      (RetTy->isPointerTy() && RetTy->getPointerAddressSpace() == 0) ||
-      RetTy->isFloatTy() || RetTy->isDoubleTy();
+      Classification.isValid() && !Classification.isAggregate() &&
+      (RetTy->isVoidTy() ||
+       (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() <= 64) ||
+       (RetTy->isPointerTy() && RetTy->getPointerAddressSpace() == 0) ||
+       RetTy->isFloatTy() || RetTy->isDoubleTy());
   if (CallConv != CallingConv::C || Outs.size() > 1 || !SupportedType)
     return false;
 

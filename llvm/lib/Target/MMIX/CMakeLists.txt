@@ -17,6 +17,7 @@ add_public_tablegen_target(MMIXCommonTableGen)
 
 add_llvm_target(MMIXCodeGen
   MMIXAddressEmission.cpp
+  MMIXAggregateABI.cpp
   MMIXALModuleValidator.cpp
   MMIXAsmPrinter.cpp
   MMIXCallEmission.cpp
