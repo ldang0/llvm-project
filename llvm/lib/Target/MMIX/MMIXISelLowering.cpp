@@ -712,6 +712,8 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_VOID, MVT::Other, Custom);
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
+  setOperationAction(ISD::VACOPY, MVT::Other, Expand);
+  setOperationAction(ISD::VAEND, MVT::Other, Expand);
   RejectOperation(ISD::STACKSAVE, MVT::Other);
   RejectOperation(ISD::STACKRESTORE, MVT::Other);
 }
@@ -1671,6 +1673,10 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
         Twine("MMIX does not support coroutines in function '") + F.getName() +
         "'");
   for (const Instruction &I : instructions(F)) {
+    if (isa<VAArgInst>(I))
+      reportFatalUsageError(
+          Twine("MMIX does not support raw LLVM va_arg in function '") +
+          F.getName() + "'; expand va_list traversal explicitly");
     if (const auto *Call = dyn_cast<CallBase>(&I)) {
       if (Call->getCallingConv() != CallingConv::C)
         reportFatalUsageError(
