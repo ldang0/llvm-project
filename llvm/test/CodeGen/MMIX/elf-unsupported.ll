@@ -28,10 +28,6 @@
 ; RUN:   %t/calling-convention.ll -o %t/calling-convention.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefixes=CALLING-CONVENTION,COMMON
 ; RUN: test ! -s %t/calling-convention.o
-; RUN: not llc -mtriple=mmix-unknown-elf -filetype=obj \
-; RUN:   %t/vararg-call.ll -o %t/vararg-call.o 2>&1 \
-; RUN:   | FileCheck %s --check-prefixes=VARARG,COMMON
-; RUN: test ! -s %t/vararg-call.o
 ; RUN: not --crash llc -mtriple=mmix-unknown-elf -filetype=obj \
 ; RUN:   %t/symbolic-i24.ll -o %t/symbolic-i24.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefixes=SYMBOLIC-I24,COMMON
@@ -71,7 +67,6 @@
 ; TLS: LLVM ERROR: MMIX does not support thread-local storage
 ; ADDRESS-SPACE: LLVM ERROR: MMIX does not support nonzero address spaces
 ; CALLING-CONVENTION: LLVM ERROR: MMIX supports only the C calling convention in function 'owner'
-; VARARG: LLVM ERROR: MMIX does not support variadic calls in function 'owner'
 ; SYMBOLIC-I24: LLVM ERROR: MMIX symbolic initializer for global 'symbolic_i24'
 ; SYMBOLIC-I24-SAME: uses unreviewed i24 storage;
 ; SPLIT-ADDRESS: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
@@ -112,16 +107,6 @@ define i64 @owner() {
 target triple = "mmix-unknown-elf"
 
 define fastcc void @owner() {
-  ret void
-}
-
-;--- vararg-call.ll
-target triple = "mmix-unknown-elf"
-
-declare void @variadic(i64, ...)
-
-define void @owner(i64 %value) {
-  call void (i64, ...) @variadic(i64 %value, i64 1)
   ret void
 }
 

@@ -243,6 +243,25 @@ Error validateMMIXALAggregateABI(const CallBase &Call, const Function &F) {
   return Error::success();
 }
 
+Error validateMMIXALVariadicABI(const Function &F) {
+  if (!F.isVarArg() || F.isDeclaration())
+    return Error::success();
+  return createStringError(
+      Twine("MMIXAL output variant 1 does not support variadic function '") +
+      F.getName() + "'");
+}
+
+Error validateMMIXALVariadicABI(const CallBase &Call, const Function &F) {
+  if (const Function *Callee = Call.getCalledFunction();
+      Callee && Callee->isIntrinsic())
+    return Error::success();
+  if (!Call.getFunctionType()->isVarArg())
+    return Error::success();
+  return createStringError(
+      Twine("MMIXAL output variant 1 does not support variadic calls in ") +
+      "function '" + F.getName() + "'");
+}
+
 Error validateMMIXALSymbolSemantics(const GlobalValue &GV) {
   if (isa<GlobalIFunc>(GV))
     return createStringError(
@@ -409,6 +428,8 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
       continue;
     if (Error Err = validateMMIXALAggregateABI(F))
       return std::move(Err);
+    if (Error Err = validateMMIXALVariadicABI(F))
+      return std::move(Err);
     if (F.hasPersonalityFn())
       return createStringError(
           Twine("MMIXAL output variant 1 does not support an exception ") +
@@ -466,6 +487,8 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
               F.getName() + "'");
         if (const auto *Call = dyn_cast<CallBase>(&I)) {
           if (Error Err = validateMMIXALAggregateABI(*Call, F))
+            return std::move(Err);
+          if (Error Err = validateMMIXALVariadicABI(*Call, F))
             return std::move(Err);
           if (const Function *Callee = Call->getCalledFunction()) {
             Intrinsic::ID ID = Callee->getIntrinsicID();

@@ -1315,6 +1315,33 @@ static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
   }
 }
 
+static void
+validateMMIXVariadicCallOperands(const TargetLowering::CallLoweringInfo &CLI,
+                                 StringRef FunctionName) {
+  if (!CLI.IsVarArg)
+    return;
+  if (CLI.NumFixedArgs > CLI.Args.size())
+    report_fatal_error("MMIX variadic call has invalid fixed-argument state");
+
+  for (unsigned I = CLI.NumFixedArgs; I != CLI.Args.size(); ++I) {
+    const TargetLowering::ArgListEntry &Arg = CLI.Args[I];
+    Type *Ty = Arg.OrigTy;
+    if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() < 32)
+      reportFatalUsageError(
+          Twine(
+              "MMIX requires variadic integer call arguments narrower than ") +
+          "i32 to be promoted in function '" + FunctionName + "'");
+    if (Ty->isFloatTy())
+      reportFatalUsageError(
+          Twine("MMIX requires variadic float call arguments to be promoted ") +
+          "to double in function '" + FunctionName + "'");
+    if (Ty->isIntegerTy(32) && Arg.IsSExt == Arg.IsZExt)
+      reportFatalUsageError(
+          Twine("MMIX requires variadic i32 call arguments to carry exactly ") +
+          "one of signext or zeroext in function '" + FunctionName + "'");
+  }
+}
+
 SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                       SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = CLI.DAG.getMachineFunction();
@@ -1328,9 +1355,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     reportFatalUsageError(
         Twine("MMIX supports only the C calling convention in ") +
         "function '" + MF.getName() + "'");
-  if (CLI.IsVarArg)
-    reportFatalUsageError(Twine("MMIX does not support variadic calls in ") +
-                          "function '" + MF.getName() + "'");
+  validateMMIXVariadicCallOperands(CLI, MF.getName());
   ISD::ArgFlagsTy ResultFlags;
   if (!CLI.Ins.empty())
     ResultFlags = CLI.Ins.front().Flags;

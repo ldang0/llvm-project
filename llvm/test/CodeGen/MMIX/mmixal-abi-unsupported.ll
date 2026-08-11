@@ -48,7 +48,7 @@
 ; RUN:   | FileCheck %s --check-prefix=NONLOCAL-STACK
 ; RUN: test ! -s %t/nonlocal-stack.mms
 
-; VARIADIC: LLVM ERROR: MMIX does not support variadic calls in function 'variadic_owner'
+; VARIADIC: LLVM ERROR: MMIXAL output variant 1 does not support variadic calls in function 'variadic_owner'
 ; WIDE: LLVM ERROR: MMIX does not support aggregate or special call arguments in function 'wide_owner'
 ; DIRECT-AGGREGATE: LLVM ERROR: MMIXAL output variant 1 does not support direct aggregate call arguments in function 'direct_aggregate_owner'
 ; SRET: LLVM ERROR: MMIXAL output variant 1 does not support indirect aggregate call results in function 'sret_owner'
@@ -62,8 +62,8 @@
 ;--- variadic-call.ll
 target triple = "mmix-unknown-elf"
 
-define void @variadic_owner() {
-  call void (i64, ...) @variadic_target(i64 1, i64 2)
+define void @variadic_owner(ptr %callee) {
+  call void (i64, ...) %callee(i64 1, i64 2)
   ret void
 }
 
@@ -71,10 +71,6 @@ define void @Main() {
   br label %loop
 loop:
   br label %loop
-}
-
-define void @variadic_target(i64 %fixed, ...) {
-  ret void
 }
 
 ;--- wide-call.ll

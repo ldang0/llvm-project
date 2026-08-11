@@ -369,6 +369,25 @@ TEST_F(MMIXALModuleValidatorTest, RejectsUnreviewedAggregateABIForms) {
                     "aggregate call results in function 'indirect_sret_call'");
 }
 
+TEST_F(MMIXALModuleValidatorTest, RejectsVariadicABIForms) {
+  expectModuleError(R"(
+    define void @Main() { unreachable }
+    define void @variadic_target(i64 %fixed, ...) { ret void }
+  )",
+                    "MMIXAL output variant 1 does not support variadic "
+                    "function 'variadic_target'");
+
+  expectModuleError(R"(
+    define void @Main() { unreachable }
+    define void @variadic_owner(ptr %callee) {
+      call void (i64, ...) %callee(i64 0, i64 1)
+      ret void
+    }
+  )",
+                    "MMIXAL output variant 1 does not support variadic calls "
+                    "in function 'variadic_owner'");
+}
+
 TEST_F(MMIXALModuleValidatorTest, RejectsReferencedDeclarations) {
   for (auto [Reference, Symbol] : {
            std::pair{R"(
