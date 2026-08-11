@@ -10,6 +10,7 @@
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXAggregateABI.h"
 #include "MMIXSubtarget.h"
+#include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -1126,25 +1127,28 @@ static MMIXAggregateABIClassification classifyMMIXABIValue(
     MMIXAggregateABIRole Role, const ISD::ArgFlagsTy &Flags,
     const DataLayout &DL, Type *AggregateTy = nullptr,
     unsigned NumParts = 1) {
+  bool IsDirectAggregate = AggregateTy && AggregateTy->isAggregateType() &&
+                           !Flags.isByVal() && !Flags.isSRet();
   MMIXAggregateABIValue Value;
   Value.Role = Flags.isSRet() ? MMIXAggregateABIRole::Result : Role;
   Value.IsAggregate = AggregateTy && AggregateTy->isAggregateType();
   Value.IsByVal = Flags.isByVal();
   Value.IsSRet = Flags.isSRet();
-  Value.IsSplit = Flags.isSplit() || Flags.isSplitEnd();
-  Value.IsInConsecutiveRegs = Flags.isInConsecutiveRegs() ||
-                              Flags.isInConsecutiveRegsLast();
+  Value.IsSplit = !IsDirectAggregate &&
+                  (Flags.isSplit() || Flags.isSplitEnd());
+  Value.IsInConsecutiveRegs =
+      !IsDirectAggregate && (Flags.isInConsecutiveRegs() ||
+                             Flags.isInConsecutiveRegsLast());
   Value.HasUnsupportedFlags = hasUnsupportedABIFlags(Flags);
   Value.AddressSpace =
       Flags.isPointer() ? Flags.getPointerAddrSpace() : 0;
-  Value.NumParts = NumParts;
+  Value.NumParts = IsDirectAggregate ? 1 : NumParts;
 
   if (Flags.isByVal()) {
     Value.Size = Flags.getByValSize();
     Value.Alignment = Flags.getNonZeroByValAlign();
   } else if (AggregateTy && AggregateTy->isAggregateType()) {
-    Align FlagAlignment = Flags.isSRet() ? Flags.getNonZeroMemAlign()
-                                         : Flags.getNonZeroOrigAlign();
+    Align FlagAlignment = Flags.getNonZeroMemAlign();
     Value.Alignment = FlagAlignment;
     if (AggregateTy->isSized()) {
       TypeSize Size = DL.getTypeAllocSize(AggregateTy);
@@ -1158,6 +1162,118 @@ static MMIXAggregateABIClassification classifyMMIXABIValue(
 
   return classifyMMIXAggregateABI(Value);
 }
+
+static SmallVector<uint64_t, 4>
+getMMIXAggregatePartOffsets(Type *AggregateTy, const DataLayout &DL) {
+  SmallVector<Type *, 4> PartTypes;
+  SmallVector<TypeSize, 4> PartOffsets;
+  ComputeValueTypes(DL, AggregateTy, PartTypes, &PartOffsets);
+
+  SmallVector<uint64_t, 4> FixedOffsets;
+  FixedOffsets.reserve(PartOffsets.size());
+  for (TypeSize Offset : PartOffsets) {
+    if (Offset.isScalable())
+      report_fatal_error("MMIX does not support scalable aggregate offsets");
+    FixedOffsets.push_back(Offset.getFixedValue());
+  }
+  return FixedOffsets;
+}
+
+static uint64_t getMMIXAggregateSize(Type *AggregateTy,
+                                     const DataLayout &DL) {
+  TypeSize Size = DL.getTypeAllocSize(AggregateTy);
+  if (Size.isScalable())
+    report_fatal_error("MMIX does not support scalable aggregate sizes");
+  return Size.getFixedValue();
+}
+
+static SDValue getMMIXAggregatePartBits(SDValue Part, EVT PartVT,
+                                        const SDLoc &DL,
+                                        SelectionDAG &DAG) {
+  SDValue Bits;
+  if (PartVT == MVT::f32)
+    Bits = DAG.getNode(MMIXISD::F32_TO_BITS, DL, MVT::i64, Part);
+  else if (PartVT == MVT::f64)
+    Bits = DAG.getNode(ISD::BITCAST, DL, MVT::i64, Part);
+  else if (Part.getValueType() == MVT::i64)
+    Bits = Part;
+  else if (Part.getValueType().isInteger())
+    Bits = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, Part);
+  else
+    report_fatal_error("MMIX cannot pack this direct aggregate field type");
+
+  if (PartVT.isInteger() && PartVT.getSizeInBits() < 64) {
+    uint64_t Mask = maskTrailingOnes<uint64_t>(PartVT.getSizeInBits());
+    Bits = DAG.getNode(ISD::AND, DL, MVT::i64, Bits,
+                       DAG.getConstant(Mask, DL, MVT::i64));
+  }
+  return Bits;
+}
+
+static SDValue packMMIXDirectAggregate(
+    ArrayRef<ISD::OutputArg> Parts, ArrayRef<SDValue> PartValues,
+    ArrayRef<uint64_t> PartOffsets, uint64_t AggregateSize, const SDLoc &DL,
+    SelectionDAG &DAG) {
+  if (Parts.size() != PartValues.size() || Parts.size() != PartOffsets.size())
+    report_fatal_error("MMIX direct aggregate lowering received mismatched "
+                       "field metadata");
+
+  SDValue Packed = DAG.getConstant(0, DL, MVT::i64);
+  for (unsigned I = 0; I != Parts.size(); ++I) {
+    TypeSize PartSize = Parts[I].ArgVT.getStoreSize();
+    if (PartSize.isScalable())
+      report_fatal_error("MMIX does not support scalable aggregate fields");
+    uint64_t FixedPartSize = PartSize.getFixedValue();
+    if (PartOffsets[I] + FixedPartSize > AggregateSize)
+      report_fatal_error("MMIX direct aggregate field exceeds its object");
+
+    SDValue Bits =
+        getMMIXAggregatePartBits(PartValues[I], Parts[I].ArgVT, DL, DAG);
+    // MMIX places object byte zero at the most significant occupied byte and
+    // right-justifies the complete object in its octa-sized ABI slot.
+    unsigned Shift = 8 * (AggregateSize - PartOffsets[I] - FixedPartSize);
+    if (Shift)
+      Bits = DAG.getNode(ISD::SHL, DL, MVT::i64, Bits,
+                         DAG.getConstant(Shift, DL, MVT::i64));
+    Packed = DAG.getNode(ISD::OR, DL, MVT::i64, Packed, Bits);
+  }
+  return Packed;
+}
+
+static SDValue unpackMMIXDirectAggregatePart(
+    SDValue Packed, const ISD::InputArg &Part, uint64_t PartOffset,
+    uint64_t AggregateSize, const SDLoc &DL, SelectionDAG &DAG) {
+  TypeSize PartSize = Part.ArgVT.getStoreSize();
+  if (PartSize.isScalable())
+    report_fatal_error("MMIX does not support scalable aggregate fields");
+  uint64_t FixedPartSize = PartSize.getFixedValue();
+  if (PartOffset + FixedPartSize > AggregateSize)
+    report_fatal_error("MMIX direct aggregate field exceeds its object");
+
+  unsigned Shift = 8 * (AggregateSize - PartOffset - FixedPartSize);
+  SDValue Bits = Packed;
+  if (Shift)
+    Bits = DAG.getNode(ISD::SRL, DL, MVT::i64, Bits,
+                       DAG.getConstant(Shift, DL, MVT::i64));
+
+  if (Part.ArgVT == MVT::f32)
+    return DAG.getNode(MMIXISD::BITS_TO_F32, DL, MVT::f32, Bits);
+  if (Part.ArgVT == MVT::f64)
+    return DAG.getNode(ISD::BITCAST, DL, MVT::f64, Bits);
+  if (!Part.ArgVT.isInteger() && !Part.Flags.isPointer())
+    report_fatal_error("MMIX cannot unpack this direct aggregate field type");
+  if (Part.VT == MVT::i64)
+    return Bits;
+  return DAG.getNode(ISD::TRUNCATE, DL, Part.VT, Bits);
+}
+
+struct MMIXFormalArgMapping {
+  SmallVector<unsigned, 4> OriginalParts;
+  SmallVector<uint64_t, 4> PartOffsets;
+  uint64_t AggregateSize = 0;
+
+  bool isDirectAggregate() const { return !PartOffsets.empty(); }
+};
 
 static bool isSupportedCallValueType(EVT VT) {
   return VT == MVT::i1 || VT == MVT::i8 || VT == MVT::i16 || VT == MVT::i32 ||
@@ -1218,7 +1334,10 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (CLI.Outs.size() != CLI.OutVals.size())
     report_fatal_error("MMIX call operand lowering received mismatched values");
 
-  for (const ISD::OutputArg &Arg : CLI.Outs) {
+  SmallVector<ISD::OutputArg, 16> ABIOuts;
+  SmallVector<SDValue, 16> ABIOutVals;
+  for (unsigned I = 0; I != CLI.Outs.size();) {
+    const ISD::OutputArg &Arg = CLI.Outs[I];
     Type *AggregateTy = nullptr;
     if (Arg.OrigArgIndex < CLI.Args.size()) {
       const ArgListEntry &OriginalArg = CLI.Args[Arg.OrigArgIndex];
@@ -1234,10 +1353,47 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
       report_fatal_error(
           "MMIX does not support nonzero-address-space call arguments");
     if (!isSupportedCallValueType(Arg.VT) || !Classification.isValid() ||
-        Classification.isAggregate())
+        (Classification.isAggregate() &&
+         Classification.Kind != MMIXAggregateABIKind::DirectArgument))
       reportFatalUsageError(
           Twine("MMIX does not support aggregate or special call arguments ") +
           "in function '" + MF.getName() + "'");
+
+    if (Classification.Kind != MMIXAggregateABIKind::DirectArgument) {
+      ABIOuts.push_back(Arg);
+      ABIOutVals.push_back(CLI.OutVals[I]);
+      ++I;
+      continue;
+    }
+
+    unsigned End = I + 1;
+    while (End != CLI.Outs.size() &&
+           CLI.Outs[End].OrigArgIndex == Arg.OrigArgIndex)
+      ++End;
+    for (unsigned Part = I; Part != End; ++Part) {
+      if (!isSupportedCallValueType(CLI.Outs[Part].VT))
+        reportFatalUsageError(
+            Twine("MMIX does not support aggregate or special call arguments ") +
+            "in function '" + MF.getName() + "'");
+    }
+
+    SmallVector<uint64_t, 4> PartOffsets =
+        getMMIXAggregatePartOffsets(AggregateTy, CLI.DAG.getDataLayout());
+    uint64_t AggregateSize =
+        getMMIXAggregateSize(AggregateTy, CLI.DAG.getDataLayout());
+    SDValue Packed = packMMIXDirectAggregate(
+        ArrayRef(CLI.Outs).slice(I, End - I),
+        ArrayRef(CLI.OutVals).slice(I, End - I), PartOffsets, AggregateSize,
+        CLI.DL, CLI.DAG);
+
+    ISD::ArgFlagsTy PackedFlags;
+    PackedFlags.setOrigAlign(CLI.DAG.getDataLayout().getABITypeAlign(
+        AggregateTy));
+    Type *I64Ty = Type::getInt64Ty(*CLI.DAG.getContext());
+    ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty,
+                         Arg.OrigArgIndex, 0);
+    ABIOutVals.push_back(Packed);
+    I = End;
   }
   if (CLI.Ins.size() > 1)
     reportFatalUsageError(
@@ -1264,7 +1420,9 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
-  ArgCCInfo.AnalyzeCallOperands(CLI.Outs, CC_MMIX);
+  ArgCCInfo.AnalyzeCallOperands(ABIOuts, CC_MMIX);
+  if (ArgLocs.size() != ABIOutVals.size())
+    report_fatal_error("MMIX call assignment lost an ABI argument");
   unsigned NumBytes = ArgCCInfo.getStackSize();
   Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
 
@@ -1273,7 +1431,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SDValue StackPointer;
   for (unsigned I = 0; I != ArgLocs.size(); ++I) {
     const CCValAssign &VA = ArgLocs[I];
-    SDValue Value = convertOutgoingValue(CLI.OutVals[I], VA, CLI.DL, DAG);
+    SDValue Value = convertOutgoingValue(ABIOutVals[I], VA, CLI.DL, DAG);
     if (VA.isRegLoc()) {
       RegsToPass.emplace_back(VA.getLocReg(), Value);
       continue;
@@ -1423,7 +1581,11 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     reportFatalUsageError(
         Twine("MMIX does not support variadic functions in function '") +
         F.getName() + "'");
-  for (const ISD::InputArg &Arg : Ins) {
+
+  SmallVector<ISD::InputArg, 16> ABIIns;
+  SmallVector<MMIXFormalArgMapping, 16> ArgMappings;
+  for (unsigned I = 0; I != Ins.size();) {
+    const ISD::InputArg &Arg = Ins[I];
     Type *AggregateTy = nullptr;
     if (Arg.isOrigArg()) {
       const Argument &OriginalArg = *F.getArg(Arg.getOrigArgIndex());
@@ -1441,11 +1603,56 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
         MMIXAggregateABIError::NonZeroAddressSpace)
       report_fatal_error(
           "MMIX does not support nonzero-address-space formal arguments");
-    if (!Classification.isValid() || Classification.isAggregate())
+    if (!Classification.isValid() ||
+        (Classification.isAggregate() &&
+         Classification.Kind != MMIXAggregateABIKind::DirectArgument))
       reportFatalUsageError(
-          Twine(
-              "MMIX does not support aggregate or special formal arguments ") +
-          "in function '" + F.getName() + "'");
+          Twine("MMIX does not support aggregate or special formal "
+                "arguments in function '") +
+          F.getName() + "'");
+
+    if (Classification.Kind != MMIXAggregateABIKind::DirectArgument) {
+      ABIIns.push_back(Arg);
+      MMIXFormalArgMapping &Mapping = ArgMappings.emplace_back();
+      Mapping.OriginalParts.push_back(I);
+      ++I;
+      continue;
+    }
+
+    unsigned End = I + 1;
+    while (End != Ins.size() && Ins[End].isOrigArg() &&
+           Ins[End].getOrigArgIndex() == Arg.getOrigArgIndex())
+      ++End;
+    bool Used = false;
+    for (unsigned Part = I; Part != End; ++Part) {
+      if (!isSupportedCallValueType(Ins[Part].VT))
+        reportFatalUsageError(
+            Twine("MMIX does not support aggregate or special formal "
+                  "arguments in function '") +
+            F.getName() + "'");
+      Used |= Ins[Part].Used;
+    }
+
+    SmallVector<uint64_t, 4> PartOffsets =
+        getMMIXAggregatePartOffsets(AggregateTy, DAG.getDataLayout());
+    if (PartOffsets.size() != End - I)
+      reportFatalUsageError(
+          Twine("MMIX cannot map direct aggregate fields in function '") +
+          F.getName() + "'");
+
+    ISD::ArgFlagsTy PackedFlags;
+    PackedFlags.setOrigAlign(
+        DAG.getDataLayout().getABITypeAlign(AggregateTy));
+    Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+    ABIIns.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, Used,
+                        Arg.getOrigArgIndex(), 0);
+    MMIXFormalArgMapping &Mapping = ArgMappings.emplace_back();
+    for (unsigned Part = I; Part != End; ++Part)
+      Mapping.OriginalParts.push_back(Part);
+    Mapping.PartOffsets = std::move(PartOffsets);
+    Mapping.AggregateSize =
+        getMMIXAggregateSize(AggregateTy, DAG.getDataLayout());
+    I = End;
   }
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -1453,9 +1660,12 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
   MachineRegisterInfo &MRI = MF.getRegInfo();
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
-  CCInfo.AnalyzeFormalArguments(Ins, CC_MMIX);
+  CCInfo.AnalyzeFormalArguments(ABIIns, CC_MMIX);
+  if (ArgLocs.size() != ArgMappings.size())
+    report_fatal_error("MMIX formal assignment lost an ABI argument");
 
-  for (const CCValAssign &VA : ArgLocs) {
+  for (unsigned I = 0; I != ArgLocs.size(); ++I) {
+    const CCValAssign &VA = ArgLocs[I];
     SDValue Arg;
     if (VA.isRegLoc()) {
       Register VReg = MRI.createVirtualRegister(getRegClassFor(VA.getLocVT()));
@@ -1468,6 +1678,17 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
                                      DAG.getVTList(VA.getLocVT(), MVT::Other),
                                      Chain, FrameIndex);
       Arg = StackArg;
+    }
+
+    const MMIXFormalArgMapping &Mapping = ArgMappings[I];
+    if (Mapping.isDirectAggregate()) {
+      for (unsigned Part = 0; Part != Mapping.OriginalParts.size(); ++Part) {
+        const ISD::InputArg &Original = Ins[Mapping.OriginalParts[Part]];
+        InVals.push_back(unpackMMIXDirectAggregatePart(
+            Arg, Original, Mapping.PartOffsets[Part], Mapping.AggregateSize,
+            DL, DAG));
+      }
+      continue;
     }
 
     switch (VA.getLocInfo()) {
