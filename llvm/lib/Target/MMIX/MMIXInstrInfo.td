@@ -53,6 +53,12 @@ def SDT_MMIXShortFloatFromInt
     : SDTypeProfile<1, 1, [SDTCisVT<0, f64>, SDTCisVT<1, i64>]>;
 def MMIXsflot : SDNode<"MMIXISD::SFLOT", SDT_MMIXShortFloatFromInt>;
 def MMIXsflotu : SDNode<"MMIXISD::SFLOTU", SDT_MMIXShortFloatFromInt>;
+def SDT_MMIXF32ToBits
+    : SDTypeProfile<1, 1, [SDTCisVT<0, i64>, SDTCisVT<1, f32>]>;
+def SDT_MMIXBitsToF32
+    : SDTypeProfile<1, 1, [SDTCisVT<0, f32>, SDTCisVT<1, i64>]>;
+def MMIXf32_to_bits : SDNode<"MMIXISD::F32_TO_BITS", SDT_MMIXF32ToBits>;
+def MMIXbits_to_f32 : SDNode<"MMIXISD::BITS_TO_F32", SDT_MMIXBitsToF32>;
 
 // Common operand categories. These records carry the architectural encoding
 // constraints used by later MC emitters and parsers, without installing any
@@ -2381,6 +2387,12 @@ def LOAD_IMM64
 def : Pat<(f64 fpimm:$value),
           (COPY_TO_REGCLASS
               (LOAD_IMM64 (mmix_fpimm_bits f64:$value)), FPR64)>;
+
+// An f32 register value is its raw binary32 encoding in the low tetra, not a
+// numerically promoted binary64 value.
+def : Pat<(f32 fpimm:$value),
+          (COPY_TO_REGCLASS
+              (LOAD_IMM64 (mmix_fpimm_bits f32:$value)), F32BitsCodeGen)>;
 
 class MMIXAddressProducerPseudo<string Use>
     : MMIXPseudoInstruction<(outs GPR64CodeGen:$dst),

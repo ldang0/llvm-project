@@ -98,7 +98,7 @@ define i64 @formal_stack_zeroext(
 ; ISEL:       fixedStack:
 ; ISEL:       offset: 16, size: 8, alignment: 8
 ; ISEL:       [[SHORT:%[0-9]+]]:{{[^ ]+}} = LDOUI %fixed-stack.{{[0-9]+}}, 0
-; ISEL:       $r231 = COPY [[SHORT]]
+; ISEL:       $r231 = COPY %{{[0-9]+}}
 define float @formal_stack_f32(
     i64 %a0, i64 %a1, i64 %a2, i64 %a3,
     i64 %a4, i64 %a5, i64 %a6, i64 %a7,

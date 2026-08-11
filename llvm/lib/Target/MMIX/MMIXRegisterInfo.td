@@ -35,6 +35,11 @@ def GPR64CodeGen : RegisterClass<"MMIX", [i64], 64,
 def FPR64CodeGen : RegisterClass<"MMIX", [f64], 64,
     (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
 
+// Binary32 values held in registers are raw low-tetra encodings. Numerical
+// operations first convert them to FPR64CodeGen through short-float memory.
+def F32BitsCodeGen : RegisterClass<"MMIX", [f32], 64,
+    (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
+
 // MMIX special-register encodings are the values accepted by GET and PUT.
 class MMIXSpecialReg<bits<5> Encoding, string Name> : Register<Name> {
   let Namespace = "MMIX";

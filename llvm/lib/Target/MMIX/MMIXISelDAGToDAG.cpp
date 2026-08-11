@@ -226,6 +226,19 @@ private:
       return;
     }
 
+    if (Node->getOpcode() == MMIXISD::F32_TO_BITS ||
+        Node->getOpcode() == MMIXISD::BITS_TO_F32) {
+      SDLoc DL(Node);
+      unsigned RegClassID = Node->getOpcode() == MMIXISD::F32_TO_BITS
+                                ? MMIX::GPR64CodeGenRegClassID
+                                : MMIX::F32BitsCodeGenRegClassID;
+      SDValue RegClass = CurDAG->getTargetConstant(RegClassID, DL, MVT::i64);
+      CurDAG->SelectNodeTo(Node, TargetOpcode::COPY_TO_REGCLASS,
+                           Node->getValueType(0), Node->getOperand(0),
+                           RegClass);
+      return;
+    }
+
     if (Node->getOpcode() == MMIXISD::CACHE_OPERATION) {
       selectCacheOperation(Node);
       return;

@@ -558,6 +558,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
                                        const MMIXSubtarget &STI)
     : TargetLowering(TM, STI) {
   addRegisterClass(MVT::i64, &MMIX::GPR64CodeGenRegClass);
+  addRegisterClass(MVT::f32, &MMIX::F32BitsCodeGenRegClass);
   addRegisterClass(MVT::f64, &MMIX::FPR64CodeGenRegClass);
   computeRegisterProperties(STI.getRegisterInfo());
 
@@ -575,10 +576,10 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
     setOperationAction(Opcode, VT, Custom);
   };
 
-  // Only i64 and f64 have ABI register classes. Type legalization promotes
-  // narrower scalar values and splits wider scalar and vector values. Keep
-  // legal-width operations unavailable until their dedicated lowering task
-  // defines the exact MMIX semantics.
+  // i64 and f64 are native register values. f32 uses a register class only as
+  // a raw low-tetra bit container; its supported numerical operations promote
+  // through the explicit conversion actions below. Type legalization promotes
+  // narrower integer values and splits wider scalar and vector values.
   static constexpr unsigned IntegerOperations[] = {
       ISD::ROTL, ISD::ROTR, ISD::BSWAP, ISD::CTLZ, ISD::CTTZ};
   for (unsigned Opcode : IntegerOperations)
@@ -615,8 +616,12 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   for (unsigned Opcode :
        {ISD::FADD, ISD::FSUB, ISD::FMUL, ISD::FDIV, ISD::FSQRT})
     setOperationAction(Opcode, MVT::f64, Legal);
+  setOperationPromotedToType(
+      {ISD::FADD, ISD::FSUB, ISD::FMUL, ISD::FDIV, ISD::FSQRT}, MVT::f32,
+      MVT::f64);
   setOperationAction(ISD::ConstantFP, MVT::f64, Legal);
   setOperationAction(ISD::SETCC, MVT::f64, Custom);
+  setOperationPromotedToType(ISD::SETCC, MVT::f32, MVT::f64);
 
   for (unsigned Opcode : {ISD::SINT_TO_FP, ISD::UINT_TO_FP})
     setOperationAction(Opcode, MVT::i64, Legal);
@@ -645,6 +650,8 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
       ISD::STRICT_FROUNDEVEN, ISD::STRICT_FNEARBYINT, ISD::STRICT_FRINT};
   for (unsigned Opcode : StrictFloatingOperations)
     RejectOperation(Opcode, MVT::f64);
+  for (unsigned Opcode : StrictFloatingOperations)
+    RejectOperation(Opcode, MVT::f32);
   for (unsigned Opcode : {ISD::STRICT_SINT_TO_FP, ISD::STRICT_UINT_TO_FP,
                           ISD::STRICT_FP_TO_SINT, ISD::STRICT_FP_TO_UINT})
     RejectOperation(Opcode, MVT::i64);
@@ -672,6 +679,12 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   }
   setOperationAction(ISD::LOAD, MVT::f64, Legal);
   setOperationAction(ISD::STORE, MVT::f64, Legal);
+  setOperationAction(ISD::LOAD, MVT::f32, Custom);
+  setOperationAction(ISD::STORE, MVT::f32, Custom);
+  setOperationAction(ISD::FP_EXTEND, MVT::f64, Custom);
+  setOperationAction(ISD::FP_ROUND, MVT::f32, Custom);
+  RejectOperation(ISD::FP16_TO_FP, MVT::f32);
+  RejectOperation(ISD::FP_TO_FP16, MVT::f32);
   setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Legal);
   setTruncStoreAction(MVT::f64, MVT::f32, Legal);
   setOperationAction(ISD::BR_CC, MVT::i64, Expand);
@@ -808,6 +821,51 @@ SDValue MMIXTargetLowering::PerformDAGCombine(SDNode *N,
 SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
   const Function &F = DAG.getMachineFunction().getFunction();
+  const SDLoc DL(Op);
+  if (Op.getOpcode() == ISD::LOAD && Op.getValueType() == MVT::f32) {
+    auto *Load = cast<LoadSDNode>(Op);
+    SDValue Bits = DAG.getExtLoad(
+        ISD::ZEXTLOAD, DL, MVT::i64, Load->getChain(), Load->getBasePtr(),
+        Load->getPointerInfo(), MVT::i32, Load->getAlign(),
+        Load->getMemOperand()->getFlags(), Load->getAAInfo());
+    SDValue Value = DAG.getNode(MMIXISD::BITS_TO_F32, DL, MVT::f32, Bits);
+    return DAG.getMergeValues({Value, Bits.getValue(1)}, DL);
+  }
+  if (Op.getOpcode() == ISD::STORE) {
+    auto *Store = cast<StoreSDNode>(Op);
+    if (Store->getMemoryVT() == MVT::f32 && !Store->isTruncatingStore()) {
+      SDValue Bits =
+          DAG.getNode(MMIXISD::F32_TO_BITS, DL, MVT::i64, Store->getValue());
+      return DAG.getTruncStore(Store->getChain(), DL, Bits, Store->getBasePtr(),
+                               MVT::i32, Store->getMemOperand());
+    }
+  }
+  if (Op.getOpcode() == ISD::FP_EXTEND &&
+      Op.getOperand(0).getValueType() == MVT::f32) {
+    MachineFunction &MF = DAG.getMachineFunction();
+    SDValue Slot = DAG.CreateStackTemporary(MVT::f32, 4);
+    auto PtrInfo = MachinePointerInfo::getFixedStack(
+        MF, cast<FrameIndexSDNode>(Slot)->getIndex());
+    SDValue Bits =
+        DAG.getNode(MMIXISD::F32_TO_BITS, DL, MVT::i64, Op.getOperand(0));
+    SDValue Chain = DAG.getTruncStore(DAG.getEntryNode(), DL, Bits, Slot,
+                                      PtrInfo, MVT::i32, Align(4));
+    return DAG.getExtLoad(ISD::EXTLOAD, DL, MVT::f64, Chain, Slot, PtrInfo,
+                          MVT::f32, Align(4));
+  }
+  if (Op.getOpcode() == ISD::FP_ROUND && Op.getValueType() == MVT::f32) {
+    MachineFunction &MF = DAG.getMachineFunction();
+    SDValue Slot = DAG.CreateStackTemporary(MVT::f32, 4);
+    auto PtrInfo = MachinePointerInfo::getFixedStack(
+        MF, cast<FrameIndexSDNode>(Slot)->getIndex());
+    SDValue Chain = DAG.getTruncStore(DAG.getEntryNode(), DL, Op.getOperand(0),
+                                      Slot, PtrInfo, MVT::f32, Align(4));
+    SDValue Bits = DAG.getExtLoad(ISD::ZEXTLOAD, DL, MVT::i64, Chain, Slot,
+                                  PtrInfo, MVT::i32, Align(4));
+    return DAG.getNode(MMIXISD::BITS_TO_F32, DL, MVT::f32, Bits);
+  }
+  if (Op.getOpcode() == ISD::FP16_TO_FP || Op.getOpcode() == ISD::FP_TO_FP16)
+    report_fatal_error("unsupported library call operation");
   if (Op.getOpcode() == ISD::DYNAMIC_STACKALLOC)
     reportFatalUsageError(
         Twine("MMIX does not support dynamic stack allocation ") +
@@ -895,7 +953,6 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
     }
   }
 
-  SDLoc DL(Op);
   if (Op.getOpcode() == ISD::SELECT) {
     SDValue TrueBits =
         DAG.getNode(ISD::BITCAST, DL, MVT::i64, Op.getOperand(1));
@@ -1077,6 +1134,15 @@ static bool isSupportedCallValueType(EVT VT) {
          VT == MVT::i64 || VT == MVT::f32 || VT == MVT::f64;
 }
 
+static SDValue convertMMIXCallBits(SDValue Value, EVT ResultVT, const SDLoc &DL,
+                                   SelectionDAG &DAG) {
+  if (Value.getValueType() == MVT::f32 && ResultVT == MVT::i64)
+    return DAG.getNode(MMIXISD::F32_TO_BITS, DL, MVT::i64, Value);
+  if (Value.getValueType() == MVT::i64 && ResultVT == MVT::f32)
+    return DAG.getNode(MMIXISD::BITS_TO_F32, DL, MVT::f32, Value);
+  return DAG.getNode(ISD::BITCAST, DL, ResultVT, Value);
+}
+
 static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
                                     const SDLoc &DL, SelectionDAG &DAG) {
   switch (VA.getLocInfo()) {
@@ -1089,7 +1155,7 @@ static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
   case CCValAssign::AExt:
     return DAG.getNode(ISD::ANY_EXTEND, DL, VA.getLocVT(), Value);
   case CCValAssign::BCvt:
-    return DAG.getNode(ISD::BITCAST, DL, VA.getLocVT(), Value);
+    return convertMMIXCallBits(Value, VA.getLocVT(), DL, DAG);
   default:
     report_fatal_error("MMIX does not support this call operand conversion");
   }
@@ -1261,7 +1327,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
       Value = DAG.getNode(ISD::TRUNCATE, CLI.DL, VA.getValVT(), Value);
       break;
     case CCValAssign::BCvt:
-      Value = DAG.getNode(ISD::BITCAST, CLI.DL, VA.getValVT(), Value);
+      Value = convertMMIXCallBits(Value, VA.getValVT(), CLI.DL, DAG);
       break;
     default:
       report_fatal_error("MMIX does not support this call result conversion");
@@ -1356,7 +1422,7 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
       Arg = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), Arg);
       break;
     case CCValAssign::BCvt:
-      Arg = DAG.getNode(ISD::BITCAST, DL, VA.getValVT(), Arg);
+      Arg = convertMMIXCallBits(Arg, VA.getValVT(), DL, DAG);
       break;
     default:
       report_fatal_error("MMIX does not support this argument extension");
@@ -1423,7 +1489,7 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       Val = DAG.getNode(ISD::ANY_EXTEND, DL, VA.getLocVT(), Val);
       break;
     case CCValAssign::BCvt:
-      Val = DAG.getNode(ISD::BITCAST, DL, VA.getLocVT(), Val);
+      Val = convertMMIXCallBits(Val, VA.getLocVT(), DL, DAG);
       break;
     default:
       report_fatal_error("MMIX does not support this return extension");
