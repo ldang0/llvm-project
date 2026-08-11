@@ -25,6 +25,7 @@
 #include "Targets/Lanai.h"
 #include "Targets/LoongArch.h"
 #include "Targets/M68k.h"
+#include "Targets/MMIX.h"
 #include "Targets/MSP430.h"
 #include "Targets/Mips.h"
 #include "Targets/NVPTX.h"
@@ -283,6 +284,20 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
 
   case llvm::Triple::msp430:
     return std::make_unique<MSP430TargetInfo>(Triple, Opts);
+
+  case llvm::Triple::mmix: {
+    auto IsUnknownComponent = [](StringRef Name) {
+      return Name.empty() || Name == "unknown" || Name == "none";
+    };
+    if (Triple.getVendor() != llvm::Triple::UnknownVendor ||
+        Triple.getOS() != llvm::Triple::UnknownOS ||
+        Triple.getEnvironment() != llvm::Triple::UnknownEnvironment ||
+        !IsUnknownComponent(Triple.getVendorName()) ||
+        !IsUnknownComponent(Triple.getOSName()) ||
+        !IsUnknownComponent(Triple.getEnvironmentName()))
+      return nullptr;
+    return std::make_unique<MMIXTargetInfo>(Triple, Opts);
+  }
 
   case llvm::Triple::mips:
     switch (os) {
