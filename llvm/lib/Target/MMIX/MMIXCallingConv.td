@@ -11,6 +11,7 @@
 // it. Stack and register-stack state is preserved without appearing in the
 // software callee-save list.
 def CC_MMIX : CallingConv<[
+  CCIfSRet<CCIfType<[i64], CCAssignToReg<[R251]>>>,
   CCIfType<[i1, i8, i16, i32], CCPromoteToType<i64>>,
   CCIfType<[f32], CCBitConvertToType<i64>>,
   CCIfType<[i64, f64],

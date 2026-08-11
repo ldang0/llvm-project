@@ -1419,7 +1419,8 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     if (!isSupportedCallValueType(Arg.VT) || !Classification.isValid() ||
         (Classification.isAggregate() &&
          Classification.Kind != MMIXAggregateABIKind::DirectArgument &&
-         Classification.Kind != MMIXAggregateABIKind::CallerCopyArgument))
+         Classification.Kind != MMIXAggregateABIKind::CallerCopyArgument &&
+         Classification.Kind != MMIXAggregateABIKind::IndirectResult))
       reportFatalUsageError(
           Twine("MMIX does not support aggregate or special call arguments ") +
           "in function '" + MF.getName() + "'");
@@ -1679,7 +1680,8 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     if (!Classification.isValid() ||
         (Classification.isAggregate() &&
          Classification.Kind != MMIXAggregateABIKind::DirectArgument &&
-         Classification.Kind != MMIXAggregateABIKind::CallerCopyArgument))
+         Classification.Kind != MMIXAggregateABIKind::CallerCopyArgument &&
+         Classification.Kind != MMIXAggregateABIKind::IndirectResult))
       reportFatalUsageError(
           Twine("MMIX does not support aggregate or special formal "
                 "arguments in function '") +
@@ -1952,10 +1954,22 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     Glue = Chain.getValue(1);
   }
 
+  if (F.hasStructRetAttr()) {
+    MachineRegisterInfo &MRI = DAG.getMachineFunction().getRegInfo();
+    Register SRetVReg = MRI.getLiveInVirtReg(MMIX::R251);
+    if (!SRetVReg)
+      report_fatal_error("MMIX sret function has no $251 live-in");
+    SDValue SRetAddress = DAG.getCopyFromReg(Chain, DL, SRetVReg, MVT::i64);
+    Chain = SRetAddress.getValue(1);
+    Chain = DAG.getCopyToReg(Chain, DL, MMIX::R231, SRetAddress, Glue);
+    Glue = Chain.getValue(1);
+  }
+
   RetOps[0] = Chain;
   if (Glue)
     RetOps.push_back(Glue);
-  unsigned Opcode =
-      RetLocs.empty() ? MMIXISD::RET_GLUE : MMIXISD::RET_VALUE_GLUE;
+  unsigned Opcode = RetLocs.empty() && !F.hasStructRetAttr()
+                        ? MMIXISD::RET_GLUE
+                        : MMIXISD::RET_VALUE_GLUE;
   return DAG.getNode(Opcode, DL, MVT::Other, RetOps);
 }
