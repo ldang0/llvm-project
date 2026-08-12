@@ -1,3 +1,4 @@
+// REQUIRES: mmix-registered-target
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -mrelocation-model static \
 // RUN:   -emit-llvm -disable-llvm-passes -o - %s | FileCheck %s
 

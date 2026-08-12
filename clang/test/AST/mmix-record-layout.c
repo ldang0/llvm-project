@@ -1,3 +1,4 @@
+// REQUIRES: mmix-registered-target
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -fdump-record-layouts-simple \
 // RUN:   -fsyntax-only %s 2>&1 | FileCheck %s
 
