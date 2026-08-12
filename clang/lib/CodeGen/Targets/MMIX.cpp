@@ -196,6 +196,24 @@ static bool diagnoseUnsupportedMMIXAggregateResult(CodeGenModule &CGM,
   return true;
 }
 
+static bool diagnoseUnsupportedMMIXVariadicSignature(CodeGenModule &CGM,
+                                                      SourceLocation Loc,
+                                                      const FunctionDecl *FD) {
+  if (!FD || !FD->isVariadic() || FD->getNumParams() == 0)
+    return false;
+
+  QualType LastNamedType = FD->getParamDecl(FD->getNumParams() - 1)->getType();
+  if (!isEmptyRecord(CGM.getContext(), LastNamedType, /*AllowArrays=*/true))
+    return false;
+
+  unsigned DiagID = CGM.getDiags().getCustomDiagID(
+      DiagnosticsEngine::Error,
+      "MMIX GNU ABI does not support an empty final named parameter in a "
+      "variadic function");
+  CGM.getDiags().Report(Loc, DiagID);
+  return true;
+}
+
 class MMIXABIInfo : public DefaultABIInfo {
 public:
   explicit MMIXABIInfo(CodeGenTypes &CGT) : DefaultABIInfo(CGT) {}
@@ -222,7 +240,7 @@ public:
   void checkFunctionABI(CodeGenModule &CGM,
                         const FunctionDecl *FD) const override;
   void checkFunctionCallABI(CodeGenModule &CGM, SourceLocation CallLoc,
-                            const FunctionDecl *, const FunctionDecl *,
+                            const FunctionDecl *, const FunctionDecl *Callee,
                             const CallArgList &Args,
                             QualType ReturnType) const override;
 };
@@ -273,7 +291,9 @@ ABIArgInfo MMIXABIInfo::classifyAggregateArgument(QualType Ty) const {
     return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
 
   llvm::IntegerType *CoerceTy = llvm::IntegerType::get(getVMContext(), Size);
-  if (llvm::isPowerOf2_64(Size))
+  if (llvm::isPowerOf2_64(Size) && Size < 64)
+    return ABIArgInfo::getNoExtend(CoerceTy);
+  if (Size == 64)
     return ABIArgInfo::getDirect(CoerceTy);
 
   return ABIArgInfo::getTargetSpecific(
@@ -344,6 +364,10 @@ void MMIXABIInfo::computeInfo(CGFunctionInfo &FI) const {
 
 void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
+  if (FD->getNumParams() != 0)
+    diagnoseUnsupportedMMIXVariadicSignature(
+        CGM, FD->getParamDecl(FD->getNumParams() - 1)->getLocation(), FD);
+
   ASTContext &Context = CGM.getContext();
   QualType ReturnType = FD->getReturnType();
   if (!diagnoseUnsupportedMMIXAggregateResult(CGM, FD->getLocation(),
@@ -362,7 +386,10 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
 
 void MMIXTargetCodeGenInfo::checkFunctionCallABI(
     CodeGenModule &CGM, SourceLocation CallLoc, const FunctionDecl *,
-    const FunctionDecl *, const CallArgList &Args, QualType ReturnType) const {
+    const FunctionDecl *Callee, const CallArgList &Args,
+    QualType ReturnType) const {
+  diagnoseUnsupportedMMIXVariadicSignature(CGM, CallLoc, Callee);
+
   ASTContext &Context = CGM.getContext();
   if (!diagnoseUnsupportedMMIXAggregateResult(CGM, CallLoc, ReturnType) &&
       isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))

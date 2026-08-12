@@ -48,10 +48,12 @@ void forward_all(long first, struct Empty empty, union EmptyUnion empty_union,
 }
 
 // CHECK-LABEL: define dso_local void @forward_all(
-// CHECK-SAME: i64 noundef %first, i8 %one.coerce, i16 %two.coerce,
-// CHECK-SAME: i32 %four.coerce, i64 %eight.coerce, i64 %three.target_coerce,
+// CHECK-SAME: i64 noundef %first, i8 noext %one.coerce,
+// CHECK-SAME: i16 noext %two.coerce, i32 noext %four.coerce,
+// CHECK-SAME: i64 %eight.coerce, i64 %three.target_coerce,
 // CHECK-SAME: i64 %five.target_coerce, i64 %nested.target_coerce,
-// CHECK-SAME: i32 %u.coerce, i8 %bits.coerce, i32 %flexible.coerce,
+// CHECK-SAME: i32 noext %u.coerce, i8 noext %bits.coerce,
+// CHECK-SAME: i32 noext %flexible.coerce,
 // CHECK-SAME: i64 noundef %last)
 // CHECK: [[THREE0:%[0-9]+]] = lshr i64 %three.target_coerce, 16
 // CHECK: [[THREEBYTE0:%[0-9]+]] = trunc i64 [[THREE0]] to i8
@@ -61,14 +63,17 @@ void forward_all(long first, struct Empty empty, union EmptyUnion empty_union,
 // CHECK: store i8 [[THREEBYTE1]], ptr %{{[0-9]+}}, align 1
 // CHECK: [[THREEBYTE2:%[0-9]+]] = trunc i64 %three.target_coerce to i8
 // CHECK: store i8 [[THREEBYTE2]], ptr %{{[0-9]+}}, align 1
-// CHECK: call void @take_all(i64 noundef %{{[0-9]+}}, i8 %{{[0-9]+}},
-// CHECK-SAME: i16 %{{[0-9]+}}, i32 %{{[0-9]+}}, i64 %{{[0-9]+}},
+// CHECK: call void @take_all(i64 noundef %{{[0-9]+}},
+// CHECK-SAME: i8 noext %{{[0-9]+}}, i16 noext %{{[0-9]+}},
+// CHECK-SAME: i32 noext %{{[0-9]+}}, i64 %{{[0-9]+}},
 // CHECK-SAME: i64 %{{[0-9]+}}, i64 %{{[0-9]+}}, i64 %{{[0-9]+}},
-// CHECK-SAME: i32 %{{[0-9]+}}, i8 %{{[0-9]+}}, i32 %{{[0-9]+}},
+// CHECK-SAME: i32 noext %{{[0-9]+}}, i8 noext %{{[0-9]+}},
+// CHECK-SAME: i32 noext %{{[0-9]+}},
 // CHECK-SAME: i64 noundef %{{[0-9]+}})
 
-// CHECK: declare dso_local void @take_all(i64 noundef, i8, i16, i32, i64,
-// CHECK-SAME: i64, i64, i64, i32, i8, i32, i64 noundef)
+// CHECK: declare dso_local void @take_all(i64 noundef, i8 noext, i16 noext,
+// CHECK-SAME: i32 noext, i64, i64, i64, i64, i32 noext, i8 noext,
+// CHECK-SAME: i32 noext, i64 noundef)
 
 void make_three(char a, char b, char c) {
   struct PackedThree value = {{a, b, c}};

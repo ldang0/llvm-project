@@ -33,16 +33,16 @@ struct Direct forward_direct(struct Empty empty, struct Direct seed,
 }
 
 // CHECK-LABEL: define dso_local i32 @forward_direct(
-// CHECK-SAME: i32 %seed.coerce,
+// CHECK-SAME: i32 noext %seed.coerce,
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 // CHECK: [[DIRECT:%[a-z0-9.]+]] = call i32 @external_direct(
-// CHECK-SAME: i32 %{{[0-9]+}},
+// CHECK-SAME: i32 noext %{{[0-9]+}},
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 // CHECK: store i32 [[DIRECT]], ptr %coerce.dive2, align 4
 // CHECK: [[DIRECT_VALUE:%[0-9]+]] = load i32, ptr %coerce.dive3, align 4
 // CHECK: ret i32 [[DIRECT_VALUE]]
 // CHECK: declare dso_local i32 @external_direct(
-// CHECK-SAME: i32, ptr noundef byval(%struct.Large) align 8)
+// CHECK-SAME: i32 noext, ptr noundef byval(%struct.Large) align 8)
 
 struct Large recursive_large(long depth, struct Empty empty,
                              struct Direct seed, struct Large copy) {
@@ -53,11 +53,11 @@ struct Large recursive_large(long depth, struct Empty empty,
 
 // CHECK-LABEL: define dso_local void @recursive_large(
 // CHECK-SAME: ptr dead_on_unwind noalias writable sret(%struct.Large) align 8 %agg.result,
-// CHECK-SAME: i64 noundef %depth, i32 %seed.coerce,
+// CHECK-SAME: i64 noundef %depth, i32 noext %seed.coerce,
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 // CHECK: call void @recursive_large(
 // CHECK-SAME: ptr dead_on_unwind writable sret(%struct.Large) align 8 %agg.result,
-// CHECK-SAME: i64 noundef %sub, i32 %{{[0-9]+}},
+// CHECK-SAME: i64 noundef %sub, i32 noext %{{[0-9]+}},
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 
 struct Large call_external(long depth, struct Empty empty, struct Direct seed,
@@ -67,15 +67,16 @@ struct Large call_external(long depth, struct Empty empty, struct Direct seed,
 
 // CHECK-LABEL: define dso_local void @call_external(
 // CHECK-SAME: ptr dead_on_unwind noalias writable sret(%struct.Large) align 8 %agg.result,
-// CHECK-SAME: i64 noundef %depth, i32 %seed.coerce,
+// CHECK-SAME: i64 noundef %depth, i32 noext %seed.coerce,
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 // CHECK: call void @external_large(
 // CHECK-SAME: ptr dead_on_unwind writable sret(%struct.Large) align 8 %agg.result,
-// CHECK-SAME: i64 noundef %{{[0-9]+}}, i32 %{{[0-9]+}},
+// CHECK-SAME: i64 noundef %{{[0-9]+}}, i32 noext %{{[0-9]+}},
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 // CHECK: declare dso_local void @external_large(
 // CHECK-SAME: ptr dead_on_unwind writable sret(%struct.Large) align 8,
-// CHECK-SAME: i64 noundef, i32, ptr noundef byval(%struct.Large) align 8)
+// CHECK-SAME: i64 noundef, i32 noext,
+// CHECK-SAME: ptr noundef byval(%struct.Large) align 8)
 
 struct Large call_indirect(large_transform transform, long depth,
                            struct Empty empty, struct Direct seed,
@@ -85,11 +86,12 @@ struct Large call_indirect(large_transform transform, long depth,
 
 // CHECK-LABEL: define dso_local void @call_indirect(
 // CHECK-SAME: ptr dead_on_unwind noalias writable sret(%struct.Large) align 8 %agg.result,
-// CHECK-SAME: ptr noundef %transform, i64 noundef %depth, i32 %seed.coerce,
+// CHECK-SAME: ptr noundef %transform, i64 noundef %depth,
+// CHECK-SAME: i32 noext %seed.coerce,
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 // CHECK: call void %{{[0-9]+}}(
 // CHECK-SAME: ptr dead_on_unwind writable sret(%struct.Large) align 8 %agg.result,
-// CHECK-SAME: i64 noundef %{{[0-9]+}}, i32 %{{[0-9]+}},
+// CHECK-SAME: i64 noundef %{{[0-9]+}}, i32 noext %{{[0-9]+}},
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy)
 
 struct Large mixed_boundary(
@@ -110,6 +112,6 @@ struct Large mixed_boundary(
 // CHECK-SAME: i64 noundef %a6, i64 noundef %a7, i64 noundef %a8,
 // CHECK-SAME: i64 noundef %a9, i64 noundef %a10, i64 noundef %a11,
 // CHECK-SAME: i64 noundef %a12, i64 noundef %a13, i64 noundef %a14,
-// CHECK-SAME: i32 %direct.coerce,
+// CHECK-SAME: i32 noext %direct.coerce,
 // CHECK-SAME: ptr noundef byval(%struct.Large) align 8 %copy,
 // CHECK-SAME: i64 noundef %tail)

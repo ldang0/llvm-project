@@ -1437,7 +1437,7 @@ validateMMIXVariadicCallOperands(const TargetLowering::CallLoweringInfo &CLI,
   for (unsigned I = CLI.NumFixedArgs; I != CLI.Args.size(); ++I) {
     const TargetLowering::ArgListEntry &Arg = CLI.Args[I];
     Type *Ty = Arg.OrigTy;
-    if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() < 32)
+    if (Ty->isIntegerTy() && Ty->getIntegerBitWidth() < 32 && !Arg.IsNoExt)
       reportFatalUsageError(
           Twine(
               "MMIX requires variadic integer call arguments narrower than ") +
@@ -1446,7 +1446,7 @@ validateMMIXVariadicCallOperands(const TargetLowering::CallLoweringInfo &CLI,
       reportFatalUsageError(
           Twine("MMIX requires variadic float call arguments to be promoted ") +
           "to double in function '" + FunctionName + "'");
-    if (Ty->isIntegerTy(32) && Arg.IsSExt == Arg.IsZExt)
+    if (Ty->isIntegerTy(32) && !Arg.IsNoExt && Arg.IsSExt == Arg.IsZExt)
       reportFatalUsageError(
           Twine("MMIX requires variadic i32 call arguments to carry exactly ") +
           "one of signext or zeroext in function '" + FunctionName + "'");

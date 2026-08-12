@@ -55,6 +55,17 @@ define void @call_no_fixed(i32 %value) {
   ret void
 }
 
+; A frontend-coerced narrow direct aggregate uses noext to distinguish its
+; unextended object bits from a promoted C scalar.
+; ISEL-LABEL: name: call_coerced_direct
+; ISEL:       $r231 = COPY
+; ISEL:       $r232 = COPY
+; ISEL:       DIRECT_CALL_STATE @no_fixed{{.*}}implicit $r231, implicit $r232
+define void @call_coerced_direct(i32 %value) {
+  call void (...) @no_fixed(i8 noext 1, i32 noext %value)
+  ret void
+}
+
 ; Empty unnamed aggregates consume no slot. The promoted i32 following the
 ; empty value therefore uses $232 immediately after the fixed $231 slot.
 ; ISEL-LABEL: name: call_empty
