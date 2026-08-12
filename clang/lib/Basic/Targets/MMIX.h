@@ -91,10 +91,10 @@ public:
 
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override;
 
-  bool validateAsmConstraint(const char *&,
-                             TargetInfo::ConstraintInfo &) const override {
-    return false;
-  }
+  bool validateAsmConstraint(const char *&Name,
+                             TargetInfo::ConstraintInfo &Info) const override;
+
+  std::string convertConstraint(const char *&Constraint) const override;
 
   std::string_view getClobbers() const override { return ""; }
 };

@@ -143,3 +143,36 @@ ArrayRef<const char *> MMIXTargetInfo::getGCCRegNames() const {
 ArrayRef<TargetInfo::GCCRegAlias> MMIXTargetInfo::getGCCRegAliases() const {
   return getMMIXGCCRegisterAliases().Aliases;
 }
+
+bool MMIXTargetInfo::validateAsmConstraint(
+    const char *&Name, TargetInfo::ConstraintInfo &Info) const {
+  switch (*Name) {
+  case 'I':
+    Info.setRequiresImmediate(0, 255);
+    return true;
+  case 'J':
+    Info.setRequiresImmediate(0, 65535);
+    return true;
+  case 'K':
+    Info.setRequiresImmediate(-255, 0);
+    return true;
+  case 'M':
+    Info.setRequiresImmediate(0);
+    return true;
+  case 'O':
+    Info.setRequiresImmediate({3, 5, 9, 17});
+    return true;
+  case 'G':
+    // ConstraintInfo can describe only integer immediate ranges. LLVM checks
+    // that this operand is exactly floating-point zero.
+    return true;
+  default:
+    return false;
+  }
+}
+
+std::string MMIXTargetInfo::convertConstraint(const char *&Constraint) const {
+  if (*Constraint == 'p')
+    return "p";
+  return TargetInfo::convertConstraint(Constraint);
+}
