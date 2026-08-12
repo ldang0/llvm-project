@@ -11,9 +11,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIX.h"
+#include "clang/Basic/MacroBuilder.h"
 
 using namespace clang;
 using namespace clang::targets;
 
 void MMIXTargetInfo::getTargetDefines(const LangOptions &,
-                                      MacroBuilder &) const {}
+                                      MacroBuilder &Builder) const {
+  Builder.defineMacro("__mmix__");
+  Builder.defineMacro("__MMIX__");
+  Builder.defineMacro("__MMIX_ABI_GNU__");
+}
