@@ -15,6 +15,8 @@
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/Support/MathExtras.h"
 
+#include <algorithm>
+
 using namespace clang;
 using namespace clang::CodeGen;
 
@@ -51,6 +53,87 @@ static bool isUnsupportedMMIXScalarType(const ASTContext &Context,
   return !isSupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
 
+enum class MMIXGCCModeKind { Scalar, Block, AlignmentOnlyBlock };
+
+struct MMIXGCCMode {
+  MMIXGCCModeKind Kind;
+  uint64_t SizeInBits;
+  uint64_t AlignInBits;
+  bool IsInteger;
+};
+
+static MMIXGCCMode getMMIXGCCIntegerMode(uint64_t SizeInBits) {
+  if (SizeInBits == 8 || SizeInBits == 16 || SizeInBits == 32 ||
+      SizeInBits == 64 || SizeInBits == 128)
+    return {MMIXGCCModeKind::Scalar, SizeInBits,
+            std::min(SizeInBits, uint64_t(64)), true};
+  return {MMIXGCCModeKind::Block, SizeInBits, 0, false};
+}
+
+// Mirror the part of GCC compute_record_mode that distinguishes scalar record
+// modes from BLKmode for the frozen MMIX C result boundary. AlignmentOnlyBlock
+// represents GCC's TYPE_NO_FORCE_BLK case, which does not force an enclosing
+// record to remain BLKmode.
+static MMIXGCCMode getMMIXGCCTypeMode(const ASTContext &Context, QualType Ty) {
+  if (Ty->isIncompleteType())
+    return {MMIXGCCModeKind::Block, 0, 0, false};
+
+  uint64_t Size = Context.getTypeSize(Ty);
+  if (const auto *RT = Ty->getAsCanonical<RecordType>()) {
+    const RecordDecl *RD = RT->getDecl()->getDefinitionOrSelf();
+    MMIXGCCMode WholeField = {MMIXGCCModeKind::Block, 0, 0, false};
+
+    for (const FieldDecl *Field : RD->fields()) {
+      QualType FieldTy = Field->getType();
+      uint64_t FieldSize;
+      if (Field->isBitField())
+        FieldSize = Field->getBitWidthValue();
+      else if (FieldTy->isIncompleteArrayType())
+        FieldSize = 0;
+      else if (FieldTy->isIncompleteType())
+        return {MMIXGCCModeKind::Block, Size, 0, false};
+      else
+        FieldSize = Context.getTypeSize(FieldTy);
+
+      if (FieldSize == 0)
+        continue;
+
+      MMIXGCCMode FieldMode = getMMIXGCCTypeMode(Context, FieldTy);
+      if (FieldMode.Kind == MMIXGCCModeKind::Block)
+        return {MMIXGCCModeKind::Block, Size, 0, false};
+
+      if (FieldSize == Size && FieldMode.Kind == MMIXGCCModeKind::Scalar &&
+          (!RD->isUnion() || FieldMode.IsInteger) &&
+          FieldMode.SizeInBits > WholeField.SizeInBits)
+        WholeField = FieldMode;
+    }
+
+    MMIXGCCMode Mode = WholeField.Kind == MMIXGCCModeKind::Scalar
+                           ? WholeField
+                           : getMMIXGCCIntegerMode(Size);
+    if (Mode.Kind == MMIXGCCModeKind::Block)
+      return Mode;
+    if (Context.getTypeAlign(Ty) < Mode.AlignInBits)
+      return {MMIXGCCModeKind::AlignmentOnlyBlock, Size, 0, false};
+    return Mode;
+  }
+
+  if (const auto *AT = Context.getAsConstantArrayType(Ty)) {
+    if (AT->getSize().isOne()) {
+      MMIXGCCMode ElementMode =
+          getMMIXGCCTypeMode(Context, AT->getElementType());
+      if (ElementMode.Kind != MMIXGCCModeKind::Scalar)
+        return {MMIXGCCModeKind::Block, Size, 0, false};
+      return ElementMode;
+    }
+    return getMMIXGCCIntegerMode(Size);
+  }
+
+  bool IsInteger = Ty->isIntegralOrEnumerationType() || Ty->isPointerType();
+  return {MMIXGCCModeKind::Scalar, Size, std::min(Size, uint64_t(64)),
+          IsInteger};
+}
+
 static void diagnoseUnsupportedMMIXScalar(CodeGenModule &CGM,
                                           SourceLocation Loc,
                                           StringRef ValueKind, QualType Ty) {
@@ -84,6 +167,35 @@ static bool diagnoseUnsupportedMMIXAggregateArgument(CodeGenModule &CGM,
   return true;
 }
 
+static bool diagnoseUnsupportedMMIXAggregateResult(CodeGenModule &CGM,
+                                                   SourceLocation Loc,
+                                                   QualType Ty) {
+  ASTContext &Context = CGM.getContext();
+  if (!Ty->isRecordType())
+    return false;
+
+  StringRef Reason;
+  if (Ty->isIncompleteType())
+    Reason = "incomplete";
+  else if (Ty->isVariablyModifiedType())
+    Reason = "variable-size";
+  else if (Context.getTypeAlign(Ty) > 64)
+    Reason = "over-aligned";
+  else {
+    MMIXGCCMode Mode = getMMIXGCCTypeMode(Context, Ty);
+    if (Mode.Kind == MMIXGCCModeKind::Scalar && Mode.SizeInBits > 64)
+      Reason = "wide scalar-mode";
+    else
+      return false;
+  }
+
+  unsigned DiagID = CGM.getDiags().getCustomDiagID(
+      DiagnosticsEngine::Error,
+      "MMIX GNU ABI does not support %0 aggregate return type %1");
+  CGM.getDiags().Report(Loc, DiagID) << Reason << Ty;
+  return true;
+}
+
 class MMIXABIInfo : public DefaultABIInfo {
 public:
   explicit MMIXABIInfo(CodeGenTypes &CGT) : DefaultABIInfo(CGT) {}
@@ -96,6 +208,7 @@ public:
 
 private:
   ABIArgInfo classifyAggregateArgument(QualType Ty) const;
+  ABIArgInfo classifyAggregateReturn(QualType Ty) const;
   ABIArgInfo classifyReturnType(QualType Ty) const;
   ABIArgInfo classifyArgumentType(QualType Ty) const;
   void computeInfo(CGFunctionInfo &FI) const override;
@@ -122,8 +235,27 @@ ABIArgInfo MMIXABIInfo::classifyReturnType(QualType Ty) const {
   if (isUnsupportedMMIXScalarType(getContext(), Ty, /*AllowVoid=*/true))
     return ABIArgInfo::getDirect();
   if (isAggregateTypeForABI(Ty))
-    return DefaultABIInfo::classifyReturnType(Ty);
+    return classifyAggregateReturn(Ty);
   return ABIArgInfo::getDirect();
+}
+
+ABIArgInfo MMIXABIInfo::classifyAggregateReturn(QualType Ty) const {
+  if (isEmptyRecord(getContext(), Ty, /*AllowArrays=*/true))
+    return ABIArgInfo::getIgnore();
+
+  MMIXGCCMode Mode = getMMIXGCCTypeMode(getContext(), Ty);
+  if (Mode.Kind != MMIXGCCModeKind::Scalar)
+    return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace(),
+                                   /*ByVal=*/false);
+
+  llvm::IntegerType *CoerceTy =
+      llvm::IntegerType::get(getVMContext(), Mode.SizeInBits);
+  if (llvm::isPowerOf2_64(Mode.SizeInBits))
+    return ABIArgInfo::getDirect(CoerceTy);
+
+  return ABIArgInfo::getTargetSpecific(llvm::Type::getInt64Ty(getVMContext()),
+                                       /*Offset=*/0, /*Padding=*/nullptr,
+                                       /*CanBeFlattened=*/false);
 }
 
 ABIArgInfo MMIXABIInfo::classifyAggregateArgument(QualType Ty) const {
@@ -214,9 +346,10 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
   ASTContext &Context = CGM.getContext();
   QualType ReturnType = FD->getReturnType();
-  if (isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))
-    diagnoseUnsupportedMMIXScalar(CGM, FD->getLocation(), "return",
-                                  ReturnType);
+  if (!diagnoseUnsupportedMMIXAggregateResult(CGM, FD->getLocation(),
+                                              ReturnType) &&
+      isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))
+    diagnoseUnsupportedMMIXScalar(CGM, FD->getLocation(), "return", ReturnType);
 
   for (const ParmVarDecl *Param : FD->parameters()) {
     QualType Ty = Param->getType();
@@ -231,7 +364,8 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
     CodeGenModule &CGM, SourceLocation CallLoc, const FunctionDecl *,
     const FunctionDecl *, const CallArgList &Args, QualType ReturnType) const {
   ASTContext &Context = CGM.getContext();
-  if (isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))
+  if (!diagnoseUnsupportedMMIXAggregateResult(CGM, CallLoc, ReturnType) &&
+      isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))
     diagnoseUnsupportedMMIXScalar(CGM, CallLoc, "return", ReturnType);
 
   for (const CallArg &Arg : Args) {
