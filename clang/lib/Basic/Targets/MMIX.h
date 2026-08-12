@@ -45,6 +45,12 @@ public:
     MinGlobalAlign = 32;
     MaxAlignedAttribute = 32768 * 8;
 
+    HasMustTail = false;
+    TLSSupported = false;
+    VLASupported = false;
+    MaxAtomicPromoteWidth = 0;
+    MaxAtomicInlineWidth = 0;
+
     UseBitFieldTypeAlignment = false;
     UseZeroLengthBitfieldAlignment = true;
     ZeroLengthBitfieldBoundary = 64;
@@ -97,6 +103,10 @@ public:
   std::string convertConstraint(const char *&Constraint) const override;
 
   std::string_view getClobbers() const override { return ""; }
+
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    return CC == CC_C ? CCCR_OK : CCCR_Error;
+  }
 };
 
 } // namespace targets
