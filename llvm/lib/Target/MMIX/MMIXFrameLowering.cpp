@@ -56,6 +56,15 @@ void MMIXFrameLowering::determineCalleeSaves(MachineFunction &MF,
     SavedRegs.set(MMIX::R253);
 }
 
+void MMIXFrameLowering::processFunctionBeforeFrameFinalized(
+    MachineFunction &MF, RegScavenger *) const {
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  for (int FI = 0, End = MFI.getObjectIndexEnd(); FI != End; ++FI) {
+    if (!MFI.isDeadObjectIndex(FI) && MFI.getObjectAlign(FI) < Align(4))
+      MFI.setObjectAlignment(FI, Align(4));
+  }
+}
+
 static void validateFrame(const MachineFunction &MF,
                           const MMIXFrameLowering &TFI) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
