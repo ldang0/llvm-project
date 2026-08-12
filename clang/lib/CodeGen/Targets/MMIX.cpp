@@ -10,7 +10,9 @@
 #include "CGCall.h"
 #include "CodeGenModule.h"
 #include "TargetInfo.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/Decl.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/IR/Constants.h"
@@ -53,6 +55,160 @@ static bool isUnsupportedMMIXScalarType(const ASTContext &Context,
     return false;
   return !isSupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
+
+enum class MMIXUnsupportedObjectKind {
+  None,
+  Atomic,
+  Vector,
+  AddressSpace,
+};
+
+static MMIXUnsupportedObjectKind
+classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
+  Ty = Ty.getCanonicalType();
+  if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)
+    return MMIXUnsupportedObjectKind::AddressSpace;
+  if (Ty->isAtomicType())
+    return MMIXUnsupportedObjectKind::Atomic;
+  if (Ty->isVectorType())
+    return MMIXUnsupportedObjectKind::Vector;
+
+  if (const auto *PT = Ty->getAs<PointerType>()) {
+    if (Context.getTargetAddressSpace(PT->getPointeeType().getAddressSpace()) !=
+        0)
+      return MMIXUnsupportedObjectKind::AddressSpace;
+    return MMIXUnsupportedObjectKind::None;
+  }
+
+  if (const auto *AT = Context.getAsArrayType(Ty))
+    return classifyUnsupportedMMIXObjectType(Context, AT->getElementType());
+
+  if (const auto *RT = Ty->getAs<RecordType>()) {
+    for (const FieldDecl *Field : RT->getDecl()->fields()) {
+      MMIXUnsupportedObjectKind Kind =
+          classifyUnsupportedMMIXObjectType(Context, Field->getType());
+      if (Kind != MMIXUnsupportedObjectKind::None)
+        return Kind;
+    }
+  }
+
+  return MMIXUnsupportedObjectKind::None;
+}
+
+static StringRef
+getMMIXUnsupportedObjectDescription(MMIXUnsupportedObjectKind Kind) {
+  switch (Kind) {
+  case MMIXUnsupportedObjectKind::Atomic:
+    return "atomic value";
+  case MMIXUnsupportedObjectKind::Vector:
+    return "vector value";
+  case MMIXUnsupportedObjectKind::AddressSpace:
+    return "nonzero-address-space value";
+  case MMIXUnsupportedObjectKind::None:
+    llvm_unreachable("expected an unsupported MMIX object kind");
+  }
+  llvm_unreachable("invalid MMIX object kind");
+}
+
+static bool diagnoseUnsupportedMMIXObject(CodeGenModule &CGM,
+                                          SourceLocation Loc, QualType Ty) {
+  MMIXUnsupportedObjectKind Kind =
+      classifyUnsupportedMMIXObjectType(CGM.getContext(), Ty);
+  if (Kind == MMIXUnsupportedObjectKind::None)
+    return false;
+
+  unsigned DiagID = CGM.getDiags().getCustomDiagID(
+      DiagnosticsEngine::Error,
+      "MMIX GNU ABI does not support %0 CodeGen involving type %1");
+  CGM.getDiags().Report(Loc, DiagID)
+      << getMMIXUnsupportedObjectDescription(Kind) << Ty;
+  return true;
+}
+
+static bool isMMIXAtomicBuiltinName(StringRef Name) {
+  return Name.starts_with("__atomic_") || Name.starts_with("__sync_") ||
+         Name.starts_with("__c11_atomic_");
+}
+
+class MMIXCodeGenBoundaryVisitor
+    : public RecursiveASTVisitor<MMIXCodeGenBoundaryVisitor> {
+  CodeGenModule &CGM;
+
+  bool diagnoseType(SourceLocation Loc, StringRef Description, QualType Ty) {
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support %0 CodeGen involving type %1");
+    CGM.getDiags().Report(Loc, DiagID) << Description << Ty;
+    return false;
+  }
+
+  bool diagnoseObjectType(SourceLocation Loc, QualType Ty) {
+    return !diagnoseUnsupportedMMIXObject(CGM, Loc, Ty);
+  }
+
+  bool diagnoseExtendedScalarOperation(SourceLocation Loc, QualType Ty) {
+    if (!Ty->isScalarType() ||
+        !isUnsupportedMMIXScalarType(CGM.getContext(), Ty,
+                                     /*AllowVoid=*/true))
+      return true;
+    return diagnoseType(Loc, "extended scalar operation", Ty);
+  }
+
+public:
+  explicit MMIXCodeGenBoundaryVisitor(CodeGenModule &CGM) : CGM(CGM) {}
+
+  bool VisitVarDecl(VarDecl *VD) {
+    return diagnoseObjectType(VD->getLocation(), VD->getType());
+  }
+
+  bool VisitExpr(Expr *E) {
+    return diagnoseObjectType(E->getExprLoc(), E->getType());
+  }
+
+  bool VisitBinaryOperator(BinaryOperator *E) {
+    return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
+           diagnoseExtendedScalarOperation(E->getExprLoc(),
+                                           E->getLHS()->getType()) &&
+           diagnoseExtendedScalarOperation(E->getExprLoc(),
+                                           E->getRHS()->getType());
+  }
+
+  bool VisitUnaryOperator(UnaryOperator *E) {
+    return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
+           diagnoseExtendedScalarOperation(E->getExprLoc(),
+                                           E->getSubExpr()->getType());
+  }
+
+  bool VisitCastExpr(CastExpr *E) {
+    return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
+           diagnoseExtendedScalarOperation(E->getExprLoc(),
+                                           E->getSubExpr()->getType());
+  }
+
+  bool VisitCallExpr(CallExpr *E) {
+    unsigned BuiltinID = E->getBuiltinCallee();
+    if (!BuiltinID)
+      return true;
+
+    std::string Name = CGM.getContext().BuiltinInfo.getName(BuiltinID);
+    if (!isMMIXAtomicBuiltinName(Name))
+      return true;
+
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support atomic builtin %0");
+    CGM.getDiags().Report(E->getExprLoc(), DiagID) << Name;
+    return false;
+  }
+
+  bool VisitAtomicExpr(AtomicExpr *E) {
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support atomic operation CodeGen");
+    CGM.getDiags().Report(E->getExprLoc(), DiagID);
+    return false;
+  }
+};
 
 enum class MMIXGCCModeKind { Scalar, Block, AlignmentOnlyBlock };
 
@@ -246,9 +402,21 @@ public:
                             const FunctionDecl *, const FunctionDecl *Callee,
                             const CallArgList &Args,
                             QualType ReturnType) const override;
+  void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
+                           CodeGenModule &CGM) const override;
 };
 
 } // namespace
+
+void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
+                                                llvm::GlobalValue *,
+                                                CodeGenModule &CGM) const {
+  const auto *VD = dyn_cast_or_null<VarDecl>(D);
+  if (!VD || !VD->hasGlobalStorage())
+    return;
+
+  diagnoseUnsupportedMMIXObject(CGM, VD->getLocation(), VD->getType());
+}
 
 ABIArgInfo MMIXABIInfo::classifyReturnType(QualType Ty) const {
   if (Ty->isVoidType())
@@ -403,23 +571,49 @@ RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
 void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
+  if (CGM.getLangOpts().CPlusPlus) {
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error, "MMIX does not support C++ CodeGen");
+    CGM.getDiags().Report(FD->getLocation(), DiagID);
+    return;
+  }
+
+  if (FD->hasAttr<NakedAttr>() || FD->hasAttr<TargetAttr>()) {
+    StringRef Attribute = FD->hasAttr<NakedAttr>() ? "naked" : "target";
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX does not support the '%0' function attribute");
+    CGM.getDiags().Report(FD->getLocation(), DiagID) << Attribute;
+    return;
+  }
+
   if (FD->getNumParams() != 0)
     diagnoseUnsupportedMMIXVariadicSignature(
         CGM, FD->getParamDecl(FD->getNumParams() - 1)->getLocation(), FD);
 
   ASTContext &Context = CGM.getContext();
   QualType ReturnType = FD->getReturnType();
-  if (!diagnoseUnsupportedMMIXAggregateResult(CGM, FD->getLocation(),
+  if (!(isDeferredMMIXBoundaryType(ReturnType) &&
+        diagnoseUnsupportedMMIXObject(CGM, FD->getLocation(), ReturnType)) &&
+      !diagnoseUnsupportedMMIXAggregateResult(CGM, FD->getLocation(),
                                               ReturnType) &&
       isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))
     diagnoseUnsupportedMMIXScalar(CGM, FD->getLocation(), "return", ReturnType);
 
   for (const ParmVarDecl *Param : FD->parameters()) {
     QualType Ty = Param->getType();
+    if (isDeferredMMIXBoundaryType(Ty) &&
+        diagnoseUnsupportedMMIXObject(CGM, Param->getLocation(), Ty))
+      continue;
     if (diagnoseUnsupportedMMIXAggregateArgument(CGM, Param->getLocation(), Ty))
       continue;
     if (isUnsupportedMMIXScalarType(Context, Ty, /*AllowVoid=*/false))
       diagnoseUnsupportedMMIXScalar(CGM, Param->getLocation(), "argument", Ty);
+  }
+
+  if (const Stmt *Body = FD->getBody()) {
+    MMIXCodeGenBoundaryVisitor Visitor(CGM);
+    Visitor.TraverseStmt(const_cast<Stmt *>(Body));
   }
 }
 
@@ -430,12 +624,17 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
   diagnoseUnsupportedMMIXVariadicSignature(CGM, CallLoc, Callee);
 
   ASTContext &Context = CGM.getContext();
-  if (!diagnoseUnsupportedMMIXAggregateResult(CGM, CallLoc, ReturnType) &&
+  if (!(isDeferredMMIXBoundaryType(ReturnType) &&
+        diagnoseUnsupportedMMIXObject(CGM, CallLoc, ReturnType)) &&
+      !diagnoseUnsupportedMMIXAggregateResult(CGM, CallLoc, ReturnType) &&
       isUnsupportedMMIXScalarType(Context, ReturnType, /*AllowVoid=*/true))
     diagnoseUnsupportedMMIXScalar(CGM, CallLoc, "return", ReturnType);
 
   for (const CallArg &Arg : Args) {
     QualType Ty = Arg.getType();
+    if (isDeferredMMIXBoundaryType(Ty) &&
+        diagnoseUnsupportedMMIXObject(CGM, CallLoc, Ty))
+      continue;
     if (diagnoseUnsupportedMMIXAggregateArgument(CGM, CallLoc, Ty))
       continue;
     if (isUnsupportedMMIXScalarType(Context, Ty, /*AllowVoid=*/false))
