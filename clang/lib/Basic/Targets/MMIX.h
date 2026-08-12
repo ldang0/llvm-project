@@ -37,6 +37,12 @@ public:
     PointerWidth = PointerAlign = 64;
     SuitableAlign = 64;
     DefaultAlignForAttributeAligned = 64;
+    MinGlobalAlign = 32;
+    MaxAlignedAttribute = 32768 * 8;
+
+    UseBitFieldTypeAlignment = false;
+    UseZeroLengthBitfieldAlignment = true;
+    ZeroLengthBitfieldBoundary = 64;
 
     SizeType = UnsignedLong;
     PtrDiffType = IntPtrType = SignedLong;
