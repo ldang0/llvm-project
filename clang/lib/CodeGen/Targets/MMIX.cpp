@@ -13,6 +13,7 @@
 #include "clang/AST/Decl.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/Diagnostic.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/Support/MathExtras.h"
 
 #include <algorithm>
@@ -230,6 +231,8 @@ private:
   ABIArgInfo classifyReturnType(QualType Ty) const;
   ABIArgInfo classifyArgumentType(QualType Ty) const;
   void computeInfo(CGFunctionInfo &FI) const override;
+  RValue EmitVAArg(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
+                   AggValueSlot Slot) const override;
 };
 
 class MMIXTargetCodeGenInfo : public TargetCodeGenInfo {
@@ -360,6 +363,34 @@ void MMIXABIInfo::computeInfo(CGFunctionInfo &FI) const {
     FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
   for (auto &Arg : FI.arguments())
     Arg.info = classifyArgumentType(Arg.type);
+}
+
+RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
+                              QualType Ty, AggValueSlot Slot) const {
+  if (Ty->isAtomicType() ||
+      isUnsupportedMMIXScalarType(getContext(), Ty, /*AllowVoid=*/false)) {
+    unsigned DiagID = CGF.CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support va_arg type %0");
+    SourceLocation Loc =
+        CGF.CurCodeDecl ? CGF.CurCodeDecl->getLocation() : SourceLocation();
+    CGF.CGM.getDiags().Report(Loc, DiagID) << Ty;
+
+    if (const auto *ComplexTy = Ty->getAs<ComplexType>()) {
+      llvm::Type *ElementTy = CGF.ConvertType(ComplexTy->getElementType());
+      llvm::Value *Poison = llvm::PoisonValue::get(ElementTy);
+      return RValue::getComplex(Poison, Poison);
+    }
+    return RValue::get(llvm::PoisonValue::get(CGF.ConvertType(Ty)));
+  }
+
+  if (isAggregateTypeForABI(Ty))
+    return DefaultABIInfo::EmitVAArg(CGF, VAListAddr, Ty, Slot);
+
+  return emitVoidPtrVAArg(
+      CGF, VAListAddr, Ty, /*IsIndirect=*/false,
+      getContext().getTypeInfoInChars(Ty), CharUnits::fromQuantity(8),
+      /*AllowHigherAlign=*/false, Slot, /*ForceRightAdjust=*/true);
 }
 
 void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
