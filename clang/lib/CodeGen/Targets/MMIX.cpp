@@ -60,6 +60,30 @@ static void diagnoseUnsupportedMMIXScalar(CodeGenModule &CGM,
   CGM.getDiags().Report(Loc, DiagID) << ValueKind << Ty;
 }
 
+static bool diagnoseUnsupportedMMIXAggregateArgument(CodeGenModule &CGM,
+                                                     SourceLocation Loc,
+                                                     QualType Ty) {
+  ASTContext &Context = CGM.getContext();
+  if (!Ty->isRecordType())
+    return false;
+
+  StringRef Reason;
+  if (Ty->isIncompleteType())
+    Reason = "incomplete";
+  else if (Ty->isVariablyModifiedType())
+    Reason = "variable-size";
+  else if (Context.getTypeAlign(Ty) > 64)
+    Reason = "over-aligned";
+  else
+    return false;
+
+  unsigned DiagID = CGM.getDiags().getCustomDiagID(
+      DiagnosticsEngine::Error,
+      "MMIX GNU ABI does not support %0 aggregate argument type %1");
+  CGM.getDiags().Report(Loc, DiagID) << Reason << Ty;
+  return true;
+}
+
 class MMIXABIInfo : public DefaultABIInfo {
 public:
   explicit MMIXABIInfo(CodeGenTypes &CGT) : DefaultABIInfo(CGT) {}
@@ -106,9 +130,15 @@ ABIArgInfo MMIXABIInfo::classifyAggregateArgument(QualType Ty) const {
   if (isEmptyRecord(getContext(), Ty, /*AllowArrays=*/true))
     return ABIArgInfo::getIgnore();
 
+  if (const auto *RT = Ty->getAsCanonical<RecordType>()) {
+    const RecordDecl *RD = RT->getDecl()->getDefinitionOrSelf();
+    if (!isa<CXXRecordDecl>(RD) && !RD->canPassInRegisters())
+      return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
+  }
+
   uint64_t Size = getContext().getTypeSize(Ty);
   if (Size > 64)
-    return DefaultABIInfo::classifyArgumentType(Ty);
+    return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace());
 
   llvm::IntegerType *CoerceTy = llvm::IntegerType::get(getVMContext(), Size);
   if (llvm::isPowerOf2_64(Size))
@@ -190,6 +220,8 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
 
   for (const ParmVarDecl *Param : FD->parameters()) {
     QualType Ty = Param->getType();
+    if (diagnoseUnsupportedMMIXAggregateArgument(CGM, Param->getLocation(), Ty))
+      continue;
     if (isUnsupportedMMIXScalarType(Context, Ty, /*AllowVoid=*/false))
       diagnoseUnsupportedMMIXScalar(CGM, Param->getLocation(), "argument", Ty);
   }
@@ -204,6 +236,8 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
 
   for (const CallArg &Arg : Args) {
     QualType Ty = Arg.getType();
+    if (diagnoseUnsupportedMMIXAggregateArgument(CGM, CallLoc, Ty))
+      continue;
     if (isUnsupportedMMIXScalarType(Context, Ty, /*AllowVoid=*/false))
       diagnoseUnsupportedMMIXScalar(CGM, CallLoc, "argument", Ty);
   }
