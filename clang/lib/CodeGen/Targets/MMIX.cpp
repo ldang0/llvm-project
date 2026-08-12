@@ -384,8 +384,16 @@ RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     return RValue::get(llvm::PoisonValue::get(CGF.ConvertType(Ty)));
   }
 
-  if (isAggregateTypeForABI(Ty))
-    return DefaultABIInfo::EmitVAArg(CGF, VAListAddr, Ty, Slot);
+  if (isAggregateTypeForABI(Ty)) {
+    ABIArgInfo AI = classifyAggregateArgument(Ty);
+    if (AI.isIgnore())
+      return Slot.asRValue();
+
+    return emitVoidPtrVAArg(
+        CGF, VAListAddr, Ty, /*IsIndirect=*/AI.isIndirect(),
+        getContext().getTypeInfoInChars(Ty), CharUnits::fromQuantity(8),
+        /*AllowHigherAlign=*/false, Slot, /*ForceRightAdjust=*/true);
+  }
 
   return emitVoidPtrVAArg(
       CGF, VAListAddr, Ty, /*IsIndirect=*/false,
