@@ -22,6 +22,11 @@ namespace clang {
 namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY MMIXTargetInfo final : public TargetInfo {
+  bool HasBase = true;
+  bool HasSystem = true;
+  bool HasCache = true;
+  bool HasVirtualMemory = true;
+
 public:
   MMIXTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
@@ -57,6 +62,22 @@ public:
 
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
+
+  bool
+  initFeatureMap(llvm::StringMap<bool> &Features, DiagnosticsEngine &Diags,
+                 StringRef CPU,
+                 const std::vector<std::string> &FeatureVec) const override;
+
+  bool handleTargetFeatures(std::vector<std::string> &Features,
+                            DiagnosticsEngine &Diags) override;
+
+  bool hasFeature(StringRef Feature) const override;
+
+  bool isValidCPUName(StringRef Name) const override;
+
+  void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override;
+
+  bool setCPU(StringRef Name) override { return isValidCPUName(Name); }
 
   llvm::SmallVector<Builtin::InfosShard> getTargetBuiltins() const override {
     return {};
