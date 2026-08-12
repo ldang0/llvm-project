@@ -23,6 +23,15 @@ define zeroext i1 @call_boolean(i64 %value) {
   ret i1 %result
 }
 
+; SelectionDAG may mark a directly returned formal argument as a copy-elision
+; candidate. That optimization hint does not change the MMIX ABI flags.
+; ISEL-LABEL: name: return_noundef_argument
+; ISEL:       [[VALUE:%[0-9]+]]:{{[^ ]+}} = COPY $r231
+; ISEL:       $r231 = COPY [[VALUE]]
+define i8 @return_noundef_argument(i8 noundef signext %value) {
+  ret i8 %value
+}
+
 ; Object pointers use the same complete-octa argument and result location.
 ; ISEL-LABEL: name: call_pointer
 ; ISEL:       $r231 = COPY %{{[0-9]+}}
