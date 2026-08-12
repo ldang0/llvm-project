@@ -14,6 +14,9 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/MacroBuilder.h"
 #include "llvm/ADT/StringSwitch.h"
+#include <array>
+#include <string>
+#include <vector>
 
 using namespace clang;
 using namespace clang::targets;
@@ -23,6 +26,39 @@ static bool isMMIXFeature(StringRef Feature) {
       .Cases({"base", "system", "cache", "virtual-memory"}, true)
       .Default(false);
 }
+
+namespace {
+
+struct MMIXGCCRegisterAliases {
+  std::array<std::string, 256> CanonicalNames;
+  std::array<std::string, 256> GNUNames;
+  std::vector<TargetInfo::GCCRegAlias> Aliases;
+
+  MMIXGCCRegisterAliases() {
+    Aliases.reserve(263);
+    for (unsigned I = 0; I != CanonicalNames.size(); ++I) {
+      CanonicalNames[I] = "r" + std::to_string(I);
+      GNUNames[I] = "$" + std::to_string(I);
+    }
+    for (unsigned I = 0; I != CanonicalNames.size(); ++I)
+      Aliases.push_back({{GNUNames[I].c_str()}, CanonicalNames[I].c_str()});
+
+    Aliases.push_back({{"sp"}, "r254"});
+    Aliases.push_back({{"rD"}, "rD"});
+    Aliases.push_back({{"rE"}, "rE"});
+    Aliases.push_back({{"rH"}, "rH"});
+    Aliases.push_back({{"rJ"}, "rJ"});
+    Aliases.push_back({{"rR"}, "rR"});
+    Aliases.push_back({{"rO"}, "rO"});
+  }
+};
+
+const MMIXGCCRegisterAliases &getMMIXGCCRegisterAliases() {
+  static const MMIXGCCRegisterAliases RegisterAliases;
+  return RegisterAliases;
+}
+
+} // namespace
 
 void MMIXTargetInfo::getTargetDefines(const LangOptions &,
                                       MacroBuilder &Builder) const {
@@ -96,4 +132,14 @@ bool MMIXTargetInfo::isValidCPUName(StringRef Name) const {
 void MMIXTargetInfo::fillValidCPUList(
     SmallVectorImpl<StringRef> &Values) const {
   Values.emplace_back("generic");
+}
+
+ArrayRef<const char *> MMIXTargetInfo::getGCCRegNames() const {
+  // Keep LLVM's canonical rN spellings private to the backend. Public GNU
+  // spellings are aliases so TargetInfo normalizes them before producing IR.
+  return {};
+}
+
+ArrayRef<TargetInfo::GCCRegAlias> MMIXTargetInfo::getGCCRegAliases() const {
+  return getMMIXGCCRegisterAliases().Aliases;
 }
