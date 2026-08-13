@@ -1,7 +1,9 @@
 // RUN: llvm-tblgen -I %p/../../../include -I %p/../../../lib/Target/MMIX %s
 
-// Verify that the CodeGen register classes and preservation records implement
-// the provisional ABI without narrowing the architectural MC register class.
+// Verify the semantic register roles required by the frozen GNU C ABI.  The
+// exact allocatable member list excludes the unstable globals $32-$230 and the
+// fixed result, static-chain, frame, stack, and scratch roles $251-$255 without
+// relying on how the register classes inherit from one another.
 include "../../../lib/Target/MMIX/MMIX.td"
 
 assert !eq(!repr(GPR64.MemberList), "(sequence \"R%u\", 0, 255)"),
