@@ -5,6 +5,7 @@ target triple = "mmix"
 
 declare zeroext i1 @boolean_callee(i1 zeroext)
 declare ptr @pointer_callee(ptr)
+declare ptr @returned_pointer_callee(ptr returned)
 declare void @stack_scalar_callee(
     i64, i64, i64, i64, i64, i64, i64, i64,
     i64, i64, i64, i64, i64, i64, i64, i64,
@@ -30,6 +31,24 @@ define zeroext i1 @call_boolean(i64 %value) {
 ; ISEL:       $r231 = COPY [[VALUE]]
 define i8 @return_noundef_argument(i8 noundef signext %value) {
   ret i8 %value
+}
+
+; The returned attribute describes value identity but does not alter the
+; argument's ABI location. Clang uses this form for functions such as memset.
+; ISEL-LABEL: name: return_pointer_argument
+; ISEL:       [[VALUE:%[0-9]+]]:gpr64codegen = COPY $r231
+; ISEL:       $r231 = COPY [[VALUE]]
+define ptr @return_pointer_argument(ptr returned %value) {
+  ret ptr %value
+}
+
+; ISEL-LABEL: name: call_returned_pointer
+; ISEL:       $r231 = COPY %{{[0-9]+}}
+; ISEL:       DIRECT_CALL_STATE @returned_pointer_callee, {{.*}}implicit $r231
+; ISEL:       %{{[0-9]+}}:gpr64codegen = COPY $r231
+define ptr @call_returned_pointer(ptr %value) {
+  %result = call ptr @returned_pointer_callee(ptr returned %value)
+  ret ptr %result
 }
 
 ; Object pointers use the same complete-octa argument and result location.

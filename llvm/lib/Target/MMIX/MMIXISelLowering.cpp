@@ -1183,7 +1183,7 @@ static bool hasUnsupportedABIFlags(const ISD::ArgFlagsTy &Flags) {
          Flags.isInAlloca() || Flags.isPreallocated() || Flags.isSwiftSelf() ||
          Flags.isSwiftAsync() || Flags.isSwiftError() ||
          Flags.isCFGuardTarget() || Flags.isHva() || Flags.isHvaStart() ||
-         Flags.isSecArgPass() || Flags.isReturned();
+         Flags.isSecArgPass();
 }
 
 static MMIXAggregateABIClassification classifyMMIXABIValue(
