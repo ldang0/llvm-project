@@ -21,6 +21,10 @@
 // RUN:   %S/Inputs/machine-model-invalid.c -o %t.pic.s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=PIC
 // RUN: not test -s %t.pic.s
+// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -fPIE -c \
+// RUN:   %S/Inputs/machine-model-invalid.c -o %t.pie.o 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=PIC
+// RUN: not test -s %t.pie.o
 
 // Source types that cannot cross or inhabit the frozen C machine model retain
 // their frontend-owned diagnostics through the public Driver path.

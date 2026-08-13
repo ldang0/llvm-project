@@ -1,0 +1,44 @@
+#if defined(TEST_HALF)
+_Float16 value;
+#elif defined(TEST_BITINT)
+_BitInt(17) value;
+#elif defined(TEST_COMPLEX)
+_Complex double consume(_Complex double value) { return value; }
+#elif defined(TEST_VECTOR)
+typedef int int2 __attribute__((ext_vector_type(2)));
+int2 value;
+#elif defined(TEST_ATOMIC)
+_Atomic int value;
+#elif defined(TEST_ATOMIC_OPERATION)
+int atomic_load(int *value) {
+  return __atomic_load_n(value, __ATOMIC_SEQ_CST);
+}
+#elif defined(TEST_VLA)
+void variable_length_array(int count) {
+  int values[count];
+  (void)values;
+}
+#elif defined(TEST_OVERALIGNED_ARGUMENT)
+struct __attribute__((aligned(16))) OverAligned {
+  long words[2];
+};
+void consume(struct OverAligned value) {}
+#elif defined(TEST_OVERALIGNED_RESULT)
+struct __attribute__((aligned(16))) OverAligned {
+  long words[3];
+};
+struct OverAligned produce(void) { return (struct OverAligned){0}; }
+#elif defined(TEST_ADDRESS_SPACE)
+int __attribute__((address_space(1))) value;
+#elif defined(TEST_NAKED)
+__attribute__((naked)) void naked_function(void) {}
+#elif defined(TEST_TARGET_ATTRIBUTE)
+__attribute__((target("base"))) void target_function(void) {}
+#elif defined(TEST_MULTIVERSIONING)
+__attribute__((target_clones("default", "base")))
+void multiversioned_function(void) {}
+#elif defined(TEST_CALLING_CONVENTION)
+__attribute__((fastcall)) void alternate_calling_convention(void) {}
+#elif defined(TEST_TLS)
+_Thread_local int value;
+#endif

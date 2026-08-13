@@ -28,6 +28,14 @@
 // RUN:   %S/Inputs/freestanding.c -o %t.o 2>&1 \
 // RUN:   | FileCheck --check-prefix=AS %s \
 // RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
+// RUN: not %clang -### --target=mmix-unknown-unknown -flto \
+// RUN:   %S/Inputs/freestanding.c -o %t-lto 2>&1 \
+// RUN:   | FileCheck --check-prefix=LINK %s \
+// RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
+// RUN: not %clang -### --target=mmix-unknown-unknown -flto=thin \
+// RUN:   %S/Inputs/freestanding.c -o %t-thinlto 2>&1 \
+// RUN:   | FileCheck --check-prefix=LINK %s \
+// RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
 
 // LINK: error: the clang compiler does not support 'linking for MMIX'
 
