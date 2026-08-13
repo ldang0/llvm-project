@@ -1,0 +1,69 @@
+// RUN: %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x -O1 \
+// RUN:   -S -emit-llvm %S/Inputs/runtime-helpers.c -o %t.ll
+// RUN: FileCheck %s --check-prefix=IR < %t.ll
+
+// RUN: %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x -O1 \
+// RUN:   -S %S/Inputs/runtime-helpers.c -o %t.s
+// RUN: FileCheck %s --check-prefix=ASM --implicit-check-not=MMIXAL < %t.s
+
+// RUN: %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x -O1 \
+// RUN:   -c %S/Inputs/runtime-helpers.c -o %t.o
+// RUN: llvm-readobj --file-headers --symbols --relocations --expand-relocs \
+// RUN:   %t.o | FileCheck %s --check-prefix=ELF
+// RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
+// RUN:   | FileCheck %s --check-prefix=DIS --implicit-check-not='<unknown>'
+
+// IR-LABEL: define dso_local void @copy_large(
+// IR: call void @llvm.memcpy.p0.p0.i64({{.*}}i64 128, i1 false)
+// IR-LABEL: define dso_local i32 @find_first_set(i64 noundef %{{[0-9]+}})
+// IR: call i32 @__ffsdi2(i64 noundef %{{[0-9]+}})
+// IR-LABEL: define dso_local double @remainder_double(double noundef %{{[0-9]+}}, double noundef %{{[0-9]+}})
+// IR: call double @fmod(double noundef %{{[0-9]+}}, double noundef %{{[0-9]+}})
+// IR-LABEL: define dso_local float @fused_float(float noundef %{{[0-9]+}}, float noundef %{{[0-9]+}}, float noundef %{{[0-9]+}})
+// IR: call float @fmaf(float noundef %{{[0-9]+}}, float noundef %{{[0-9]+}}, float noundef %{{[0-9]+}})
+
+// ASM-LABEL: copy_large:
+// ASM: SETH r{{[0-9]+}}, (memcpy>>48)&65535
+// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+// ASM-LABEL: find_first_set:
+// ASM: SETH r{{[0-9]+}}, (__ffsdi2>>48)&65535
+// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+// ASM-LABEL: remainder_double:
+// ASM: SETH r{{[0-9]+}}, (fmod>>48)&65535
+// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+// ASM-LABEL: fused_float:
+// ASM: SETH r{{[0-9]+}}, (fmaf>>48)&65535
+// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+
+// ELF: Format: elf64-mmix
+// ELF-NEXT: Arch: mmix
+// ELF: Type: Relocatable
+// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF-NEXT: Symbol: memcpy
+// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF-NEXT: Symbol: __ffsdi2
+// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF-NEXT: Symbol: fmod
+// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF-NEXT: Symbol: fmaf
+// ELF: Name: memcpy
+// ELF: Section: Undefined
+// ELF: Name: __ffsdi2
+// ELF: Section: Undefined
+// ELF: Name: fmod
+// ELF: Section: Undefined
+// ELF: Name: fmaf
+// ELF: Section: Undefined
+
+// DIS-LABEL: <copy_large>:
+// DIS: PUSHJ r31, 0
+// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE memcpy
+// DIS-LABEL: <find_first_set>:
+// DIS: PUSHJ r31, 0
+// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE __ffsdi2
+// DIS-LABEL: <remainder_double>:
+// DIS: PUSHJ r31, 0
+// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE fmod
+// DIS-LABEL: <fused_float>:
+// DIS: PUSHJ r31, 0
+// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE fmaf
