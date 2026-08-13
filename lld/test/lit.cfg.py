@@ -80,6 +80,7 @@ llvm_config.feature_config(
                 "AVR": "avr",
                 "Hexagon": "hexagon",
                 "LoongArch": "loongarch",
+                "MMIX": "mmix",
                 "Mips": "mips",
                 "MSP430": "msp430",
                 "PowerPC": "ppc",
