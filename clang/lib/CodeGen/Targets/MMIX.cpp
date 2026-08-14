@@ -56,6 +56,17 @@ static bool isUnsupportedMMIXScalarType(const ASTContext &Context,
   return !isSupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
 
+static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
+                                          QualType Ty) {
+  if (Ty->isIncompleteType() ||
+      Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)
+    return false;
+
+  uint64_t Size = Context.getTypeSize(Ty);
+  uint64_t Align = Context.getTypeAlign(Ty);
+  return (Size == 8 || Size == 16 || Size == 32 || Size == 64) && Align >= Size;
+}
+
 enum class MMIXUnsupportedObjectKind {
   None,
   Atomic,
@@ -68,8 +79,15 @@ classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
   Ty = Ty.getCanonicalType();
   if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)
     return MMIXUnsupportedObjectKind::AddressSpace;
-  if (Ty->isAtomicType())
-    return MMIXUnsupportedObjectKind::Atomic;
+  if (const auto *AT = Ty->getAs<AtomicType>()) {
+    MMIXUnsupportedObjectKind ValueKind =
+        classifyUnsupportedMMIXObjectType(Context, AT->getValueType());
+    if (ValueKind != MMIXUnsupportedObjectKind::None)
+      return ValueKind;
+    return isMMIXNativeAtomicStorageType(Context, Ty)
+               ? MMIXUnsupportedObjectKind::None
+               : MMIXUnsupportedObjectKind::Atomic;
+  }
   if (Ty->isVectorType())
     return MMIXUnsupportedObjectKind::Vector;
 
@@ -130,6 +148,18 @@ static bool isMMIXAtomicBuiltinName(StringRef Name) {
          Name.starts_with("__c11_atomic_");
 }
 
+static bool isSupportedMMIXAtomicFenceBuiltin(unsigned BuiltinID) {
+  switch (BuiltinID) {
+  case Builtin::BI__atomic_thread_fence:
+  case Builtin::BI__atomic_signal_fence:
+  case Builtin::BI__c11_atomic_thread_fence:
+  case Builtin::BI__c11_atomic_signal_fence:
+    return true;
+  default:
+    return false;
+  }
+}
+
 class MMIXCodeGenBoundaryVisitor
     : public RecursiveASTVisitor<MMIXCodeGenBoundaryVisitor> {
   CodeGenModule &CGM;
@@ -154,6 +184,14 @@ class MMIXCodeGenBoundaryVisitor
     return diagnoseType(Loc, "extended scalar operation", Ty);
   }
 
+  bool diagnoseAtomicOperation(SourceLocation Loc) {
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support atomic operation CodeGen");
+    CGM.getDiags().Report(Loc, DiagID);
+    return false;
+  }
+
 public:
   explicit MMIXCodeGenBoundaryVisitor(CodeGenModule &CGM) : CGM(CGM) {}
 
@@ -166,6 +204,8 @@ public:
   }
 
   bool VisitBinaryOperator(BinaryOperator *E) {
+    if (E->isCompoundAssignmentOp() && E->getLHS()->getType()->isAtomicType())
+      return diagnoseAtomicOperation(E->getExprLoc());
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getLHS()->getType()) &&
@@ -174,6 +214,9 @@ public:
   }
 
   bool VisitUnaryOperator(UnaryOperator *E) {
+    if (E->isIncrementDecrementOp() &&
+        E->getSubExpr()->getType()->isAtomicType())
+      return diagnoseAtomicOperation(E->getExprLoc());
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getSubExpr()->getType());
@@ -193,6 +236,8 @@ public:
     std::string Name = CGM.getContext().BuiltinInfo.getName(BuiltinID);
     if (!isMMIXAtomicBuiltinName(Name))
       return true;
+    if (isSupportedMMIXAtomicFenceBuiltin(BuiltinID))
+      return true;
 
     unsigned DiagID = CGM.getDiags().getCustomDiagID(
         DiagnosticsEngine::Error,
@@ -202,11 +247,23 @@ public:
   }
 
   bool VisitAtomicExpr(AtomicExpr *E) {
-    unsigned DiagID = CGM.getDiags().getCustomDiagID(
-        DiagnosticsEngine::Error,
-        "MMIX GNU ABI does not support atomic operation CodeGen");
-    CGM.getDiags().Report(E->getExprLoc(), DiagID);
-    return false;
+    switch (E->getOp()) {
+    case AtomicExpr::AO__c11_atomic_init:
+    case AtomicExpr::AO__c11_atomic_load:
+    case AtomicExpr::AO__c11_atomic_store:
+    case AtomicExpr::AO__atomic_load:
+    case AtomicExpr::AO__atomic_load_n:
+    case AtomicExpr::AO__atomic_store:
+    case AtomicExpr::AO__atomic_store_n:
+      break;
+    default:
+      return diagnoseAtomicOperation(E->getExprLoc());
+    }
+
+    QualType StorageTy = E->getPtr()->getType()->getPointeeType();
+    if (!isMMIXNativeAtomicStorageType(CGM.getContext(), StorageTy))
+      return diagnoseAtomicOperation(E->getExprLoc());
+    return true;
   }
 };
 

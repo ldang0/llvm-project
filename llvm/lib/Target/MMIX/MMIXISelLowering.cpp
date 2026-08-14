@@ -749,7 +749,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   RejectOperation(ISD::TRAP, MVT::Other);
   setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i64, Legal);
   setOperationAction(ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, MVT::i64, Expand);
-  setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Legal);
+  setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::i64, Custom);
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
   setOperationAction(ISD::INTRINSIC_VOID, MVT::Other, Custom);
@@ -773,6 +773,14 @@ MMIXTargetLowering::shouldExpandAtomicLoadInIR(LoadInst *LI) const {
       LI->getType()->getPrimitiveSizeInBits() < 64)
     return AtomicExpansionKind::CustomExpand;
   return AtomicExpansionKind::CmpXChg;
+}
+
+Instruction *MMIXTargetLowering::emitLeadingFence(IRBuilderBase &Builder,
+                                                  Instruction *Inst,
+                                                  AtomicOrdering Ord) const {
+  if (Ord == AtomicOrdering::SequentiallyConsistent)
+    return Builder.CreateFence(Ord);
+  return TargetLowering::emitLeadingFence(Builder, Inst, Ord);
 }
 
 void MMIXTargetLowering::emitExpandAtomicLoad(LoadInst *LI) const {
@@ -879,6 +887,13 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
                                            SelectionDAG &DAG) const {
   const Function &F = DAG.getMachineFunction().getFunction();
   const SDLoc DL(Op);
+  if (Op.getOpcode() == ISD::ATOMIC_FENCE) {
+    auto SSID = static_cast<SyncScope::ID>(Op.getConstantOperandVal(2));
+    if (SSID == SyncScope::SingleThread)
+      return DAG.getNode(ISD::MEMBARRIER, DL, MVT::Other, Op.getOperand(0));
+    return DAG.getNode(MMIXISD::SYNC, DL, MVT::Other,
+                       {Op.getOperand(0), DAG.getConstant(3, DL, MVT::i64)});
+  }
   if (Op.getOpcode() == ISD::LOAD && Op.getValueType() == MVT::f32) {
     auto *Load = cast<LoadSDNode>(Op);
     SDValue Bits = DAG.getExtLoad(

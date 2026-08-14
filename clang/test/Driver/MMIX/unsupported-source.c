@@ -26,6 +26,21 @@
 // RUN:   -o %t.atomic-operation.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=ATOMIC-OPERATION
 // RUN: not test -s %t.atomic-operation.o
+// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
+// RUN:   -DTEST_ATOMIC_RMW_OPERATOR -c %S/Inputs/unsupported-source.c \
+// RUN:   -o %t.atomic-rmw.o 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=ATOMIC-RMW
+// RUN: not test -s %t.atomic-rmw.o
+// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
+// RUN:   -DTEST_WIDE_ATOMIC -c %S/Inputs/unsupported-source.c \
+// RUN:   -o %t.wide-atomic.o 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=WIDE-ATOMIC
+// RUN: not test -s %t.wide-atomic.o
+// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
+// RUN:   -DTEST_UNALIGNED_ATOMIC -c %S/Inputs/unsupported-source.c \
+// RUN:   -o %t.unaligned-atomic.o 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=UNALIGNED-ATOMIC
+// RUN: not test -s %t.unaligned-atomic.o
 
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
 // RUN:   -DTEST_VLA -c %S/Inputs/unsupported-source.c -o %t.vla.o 2>&1 \
@@ -88,8 +103,11 @@
 // COMPLEX: error: MMIX GNU ABI does not support return type '_Complex double'
 // COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex double'
 // VECTOR: error: MMIX GNU ABI does not support vector value CodeGen involving type 'int2'
-// ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(int)'
+// ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
 // ATOMIC-OPERATION: error: MMIX GNU ABI does not support atomic operation CodeGen
+// ATOMIC-RMW: error: MMIX GNU ABI does not support atomic operation CodeGen
+// WIDE-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct SixteenBytes)'
+// UNALIGNED-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct EightBytes)'
 // VLA: error: variable length arrays are not supported for the current target
 // OVERALIGNED-ARGUMENT: error: MMIX GNU ABI does not support over-aligned aggregate argument type 'struct OverAligned'
 // OVERALIGNED-RESULT: error: MMIX GNU ABI does not support over-aligned aggregate return type 'struct OverAligned'

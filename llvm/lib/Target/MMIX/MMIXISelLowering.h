@@ -88,6 +88,8 @@ public:
   bool shouldInsertFencesForAtomic(const Instruction *) const override {
     return true;
   }
+  Instruction *emitLeadingFence(IRBuilderBase &Builder, Instruction *Inst,
+                                AtomicOrdering Ord) const override;
   AtomicExpansionKind shouldExpandAtomicLoadInIR(LoadInst *LI) const override;
   void emitExpandAtomicLoad(LoadInst *LI) const override;
   AtomicExpansionKind shouldExpandAtomicStoreInIR(StoreInst *) const override {

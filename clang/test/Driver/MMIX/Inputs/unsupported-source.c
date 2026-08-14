@@ -8,11 +8,26 @@ _Complex double consume(_Complex double value) { return value; }
 typedef int int2 __attribute__((ext_vector_type(2)));
 int2 value;
 #elif defined(TEST_ATOMIC)
-_Atomic int value;
+struct ThreeBytes {
+  unsigned char bytes[3];
+};
+_Atomic(struct ThreeBytes) value;
 #elif defined(TEST_ATOMIC_OPERATION)
-int atomic_load(int *value) {
-  return __atomic_load_n(value, __ATOMIC_SEQ_CST);
+int atomic_exchange(int *value) {
+  return __atomic_exchange_n(value, 1, __ATOMIC_SEQ_CST);
 }
+#elif defined(TEST_ATOMIC_RMW_OPERATOR)
+int atomic_increment(_Atomic(int) *value) { return (*value)++; }
+#elif defined(TEST_WIDE_ATOMIC)
+struct SixteenBytes {
+  unsigned char bytes[16];
+};
+_Atomic(struct SixteenBytes) value;
+#elif defined(TEST_UNALIGNED_ATOMIC)
+struct EightBytes {
+  unsigned char bytes[8];
+};
+_Atomic(struct EightBytes) value;
 #elif defined(TEST_VLA)
 void variable_length_array(int count) {
   int values[count];

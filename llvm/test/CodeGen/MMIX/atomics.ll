@@ -176,6 +176,17 @@ define i64 @load_acquire(ptr %p) {
   ret i64 %value
 }
 
+; Sequentially consistent loads use the contracted system fence on both sides.
+; CHECK-LABEL: load_seq_cst:
+; CHECK:       SYNC 3
+; CHECK:       CSWAP
+; CHECK:       GET
+; CHECK-NEXT:  SYNC 3
+define i64 @load_seq_cst(ptr %p) {
+  %value = load atomic i64, ptr %p seq_cst, align 8
+  ret i64 %value
+}
+
 ; CHECK-LABEL: load_monotonic_i8:
 ; CHECK-NOT:   PUT rM
 ; CHECK:       ANDN
@@ -248,5 +259,14 @@ define void @fences() {
   fence release
   fence acq_rel
   fence seq_cst
+  ret void
+}
+
+; A C signal fence is a compiler barrier and does not order MMIX hardware.
+; CHECK-LABEL: signal_fence:
+; CHECK-NOT:   SYNC
+; CHECK:       POP 0, 0
+define void @signal_fence() {
+  fence syncscope("singlethread") seq_cst
   ret void
 }
