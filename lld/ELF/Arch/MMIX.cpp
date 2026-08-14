@@ -31,6 +31,8 @@ unsigned getRelocationFieldSize(RelType type) {
   case R_MMIX_32:
   case R_MMIX_PC_24:
   case R_MMIX_PC_32:
+  case R_MMIX_ADDR19:
+  case R_MMIX_ADDR27:
     return 4;
   case R_MMIX_64:
   case R_MMIX_PC_64:
@@ -46,6 +48,24 @@ void checkMMIXBitfield(Ctx &ctx, uint8_t *loc, uint64_t val, unsigned bits,
   if (val > mask && val < ~mask)
     reportRangeError(ctx, loc, rel, Twine(static_cast<int64_t>(val)),
                      -static_cast<int64_t>(uint64_t(1) << bits), mask);
+}
+
+void relocateMMIXTerminal(uint8_t *loc, Ctx &ctx, uint64_t val,
+                          uint32_t valueMask, const Relocation &rel) {
+  constexpr int64_t instructionSize = 4;
+  int64_t delta = static_cast<int64_t>(val);
+  int64_t min = -static_cast<int64_t>(valueMask + 1) * instructionSize;
+  int64_t max = static_cast<int64_t>(valueMask) * instructionSize;
+  checkAlignment(ctx, loc, val, instructionSize, rel);
+  if (delta < min || delta > max)
+    reportRangeError(ctx, loc, rel, Twine(delta), min, max);
+
+  constexpr uint32_t directionMask = uint32_t(1) << 24;
+  uint32_t word = read32be(loc) & ~(directionMask | valueMask);
+  if (delta < 0)
+    word |= directionMask;
+  word |= static_cast<uint64_t>(delta / instructionSize) & valueMask;
+  write32be(loc, word);
 }
 
 class MMIX final : public TargetInfo {
@@ -108,6 +128,8 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_PC_24:
   case R_MMIX_PC_32:
   case R_MMIX_PC_64:
+  case R_MMIX_ADDR19:
+  case R_MMIX_ADDR27:
     return R_PC;
   default:
     break;
@@ -179,6 +201,12 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_MMIX_64:
   case R_MMIX_PC_64:
     write64be(loc, val);
+    return;
+  case R_MMIX_ADDR19:
+    relocateMMIXTerminal(loc, ctx, val, 0xffff, rel);
+    return;
+  case R_MMIX_ADDR27:
+    relocateMMIXTerminal(loc, ctx, val, 0xffffff, rel);
     return;
   default:
     Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << rel.type;
