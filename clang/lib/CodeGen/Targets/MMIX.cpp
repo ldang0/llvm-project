@@ -255,6 +255,13 @@ public:
     case AtomicExpr::AO__atomic_load_n:
     case AtomicExpr::AO__atomic_store:
     case AtomicExpr::AO__atomic_store_n:
+    case AtomicExpr::AO__c11_atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange_n:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_strong:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
+    case AtomicExpr::AO__atomic_compare_exchange:
+    case AtomicExpr::AO__atomic_compare_exchange_n:
       break;
     default:
       return diagnoseAtomicOperation(E->getExprLoc());

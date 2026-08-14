@@ -13,8 +13,8 @@ struct ThreeBytes {
 };
 _Atomic(struct ThreeBytes) value;
 #elif defined(TEST_ATOMIC_OPERATION)
-int atomic_exchange(int *value) {
-  return __atomic_exchange_n(value, 1, __ATOMIC_SEQ_CST);
+int atomic_fetch_add(int *value) {
+  return __atomic_fetch_add(value, 1, __ATOMIC_SEQ_CST);
 }
 #elif defined(TEST_ATOMIC_RMW_OPERATOR)
 int atomic_increment(_Atomic(int) *value) { return (*value)++; }
