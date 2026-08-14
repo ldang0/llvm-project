@@ -675,6 +675,10 @@ static bool isValidReservedSectionIndex(uint16_t Index, uint16_t Machine) {
       return true;
     }
   }
+
+  if (Machine == EM_MMIX)
+    return Index == SHN_MMIX_REGISTER;
+
   return false;
 }
 

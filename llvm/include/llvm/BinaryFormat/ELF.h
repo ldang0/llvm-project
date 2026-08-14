@@ -491,6 +491,11 @@ enum {
 #include "ELFRelocs/MMIX.def"
 };
 
+// MMIX-specific section indexes.
+enum {
+  SHN_MMIX_REGISTER = 0xff00 // Symbol value denotes a global register number.
+};
+
 // AVR specific e_flags
 enum : unsigned {
   EF_AVR_ARCH_AVR1 = 1,

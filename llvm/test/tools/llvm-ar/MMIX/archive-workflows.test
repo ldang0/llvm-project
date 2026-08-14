@@ -1,0 +1,62 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir -p %t/extract
+# RUN: llvm-mc -triple=mmix -filetype=obj %S/../../Inputs/MMIX/llvm-object.s \
+# RUN:   -o %t/llvm.o
+# RUN: yaml2obj %S/../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: llvm-ar rcD %t/mixed.a %t/llvm.o %t/gnu.o
+# RUN: llvm-ar t %t/mixed.a | FileCheck %s --check-prefix=MEMBERS
+# RUN: llvm-nm --print-armap %t/mixed.a | FileCheck %s --check-prefix=INDEX
+# RUN: llvm-ar p %t/mixed.a llvm.o | cmp - %t/llvm.o
+# RUN: cd %t/extract && llvm-ar x ../mixed.a
+# RUN: cmp %t/llvm.o %t/extract/llvm.o
+# RUN: cmp %t/gnu.o %t/extract/gnu.o
+
+## Replacing one member preserves the requested order and exact replacement
+## bytes.
+# RUN: llvm-mc -triple=mmix -filetype=obj %s -o %t/gnu.o
+# RUN: llvm-ar rD %t/mixed.a %t/gnu.o
+# RUN: llvm-ar t %t/mixed.a | FileCheck %s --check-prefix=MEMBERS
+# RUN: llvm-ar p %t/mixed.a gnu.o | cmp - %t/gnu.o
+
+## Deterministic creation and repeated indexing produce identical archives.
+# RUN: llvm-ar rcD %t/one.a %t/llvm.o %t/gnu.o
+# RUN: llvm-ar rcD %t/two.a %t/llvm.o %t/gnu.o
+# RUN: cmp %t/one.a %t/two.a
+# RUN: llvm-ar rcSD %t/no-index.a %t/llvm.o %t/gnu.o
+# RUN: llvm-nm --print-armap %t/no-index.a | FileCheck %s --check-prefix=NO-INDEX
+# RUN: llvm-ranlib -D %t/no-index.a
+# RUN: llvm-nm --print-armap %t/no-index.a \
+# RUN:   | FileCheck %s --check-prefix=UPDATED-INDEX
+# RUN: cp %t/no-index.a %t/indexed.a
+# RUN: llvm-ranlib -D %t/no-index.a
+# RUN: cmp %t/indexed.a %t/no-index.a
+
+## Both regular and thin indexed archives are usable by lld.
+# RUN: llvm-ar rcDT %t/thin.a %t/gnu.o
+# RUN: llvm-ar t %t/thin.a | FileCheck %s --check-prefix=THIN
+# RUN: ld.lld -e replacement %t/thin.a -o %t/thin.elf
+# RUN: llvm-readobj --file-headers --symbols %t/thin.elf \
+# RUN:   | FileCheck %s --check-prefix=LINK
+
+# MEMBERS:      llvm.o
+# MEMBERS-NEXT: gnu.o
+# INDEX:         Archive map
+# INDEX-DAG:     llvm_entry in llvm.o
+# INDEX-DAG:     gnu_function in gnu.o
+# UPDATED-INDEX: Archive map
+# UPDATED-INDEX-DAG: llvm_entry in llvm.o
+# UPDATED-INDEX-DAG: replacement in gnu.o
+# NO-INDEX-NOT:  Archive map
+# THIN:          gnu.o
+# LINK:          Format: elf64-mmix
+# LINK:          Type: Executable
+# LINK:          Machine: EM_MMIX
+# LINK:          Name: replacement
+
+.text
+.global replacement
+.type replacement,@function
+replacement:
+  JMP replacement
+.size replacement, .-replacement

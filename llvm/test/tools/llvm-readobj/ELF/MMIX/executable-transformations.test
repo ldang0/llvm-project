@@ -1,0 +1,35 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: ld.lld -T %S/../../../Inputs/MMIX/layout.lds %t/llvm.o %t/gnu.o \
+# RUN:   -o %t/original
+# RUN: llvm-objcopy %t/original %t/copied
+# RUN: llvm-strip --strip-all %t/original -o %t/stripped
+# RUN: llvm-readobj --file-headers --program-headers --sections --relocations \
+# RUN:   %t/copied | FileCheck %s --check-prefix=COMMON
+# RUN: llvm-readobj --file-headers --program-headers --sections --relocations \
+# RUN:   %t/stripped | FileCheck %s --check-prefix=COMMON
+# RUN: llvm-readobj --sections %t/copied \
+# RUN:   | FileCheck %s --check-prefix=COPIED
+# RUN: llvm-readobj --sections %t/stripped \
+# RUN:   | FileCheck %s --check-prefix=STRIPPED-SECTIONS
+
+# COMMON:      Format: elf64-mmix
+# COMMON:      Arch: mmix
+# COMMON:      Type: Executable
+# COMMON:      Machine: EM_MMIX
+# COMMON:      Entry: 0x1004
+# COMMON:      Name: .text
+# COMMON:      Name: .MMIX.reg_contents
+# COMMON:      Name: .data
+# COMMON:      Type: PT_LOAD
+# COMMON:      VirtualAddress: 0x1000
+# COMMON:      Type: PT_LOAD
+# COMMON:      VirtualAddress: 0x3000
+# COMMON:      Relocations [
+# COMMON-NEXT: ]
+# COPIED:      Name: .symtab
+# STRIPPED-SECTIONS-NOT: Name: .symtab

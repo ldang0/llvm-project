@@ -474,6 +474,10 @@ static Error replaceAndRemoveSections(const CommonConfig &Config,
         return true;
       if (&Sec == Obj.SectionNames)
         return false;
+      // MMIX loaders use this non-allocated section to initialize global
+      // registers.
+      if (Obj.Machine == EM_MMIX && Sec.Name == ".MMIX.reg_contents")
+        return false;
       if (StringRef(Sec.Name).starts_with(".gnu.warning"))
         return false;
       if (StringRef(Sec.Name).starts_with(".gnu_debuglink"))

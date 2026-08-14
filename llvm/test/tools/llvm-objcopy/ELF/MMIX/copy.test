@@ -1,0 +1,62 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-executable.yaml -o %t/gnu.elf
+# RUN: ld.lld -T %S/../../../Inputs/MMIX/layout.lds %t/llvm.o %t/gnu.o \
+# RUN:   -o %t/lld.elf
+
+## A plain copy is transparent for every published producer/artifact pair.
+# RUN: llvm-objcopy %t/llvm.o %t/llvm.copy.o
+# RUN: llvm-objcopy %t/gnu.o %t/gnu.copy.o
+# RUN: llvm-objcopy %t/lld.elf %t/lld.copy.elf
+# RUN: llvm-objcopy %t/gnu.elf %t/gnu.copy.elf
+# RUN: cmp %t/llvm.o %t/llvm.copy.o
+# RUN: cmp %t/gnu.o %t/gnu.copy.o
+# RUN: llvm-readobj --file-headers --program-headers %t/lld.copy.elf \
+# RUN:   | FileCheck %s --check-prefix=EXEC
+# RUN: llvm-readobj --file-headers --program-headers %t/gnu.copy.elf \
+# RUN:   | FileCheck %s --check-prefix=EXEC
+# EXEC:      Type: Executable
+# EXEC:      Machine: EM_MMIX
+# EXEC:      Entry: 0x{{[0-9A-Fa-f]+}}
+# EXEC:      Type: PT_LOAD
+
+## Renaming data carries its symbol and RELA section with it.
+# RUN: llvm-objcopy --rename-section \
+# RUN:   .data=.payload,alloc,load,data,contents %t/llvm.o %t/renamed.o
+# RUN: llvm-readobj --file-headers --sections --symbols --relocations \
+# RUN:   %t/renamed.o | FileCheck %s --check-prefix=RENAMED
+# RENAMED:      Machine: EM_MMIX
+# RENAMED:      Name: .payload
+# RENAMED:      Name: .rela.payload
+# RENAMED:      R_MMIX_64 gnu_data
+# RENAMED:      Name: llvm_object
+# RENAMED:      Section: .payload
+
+## Section extraction preserves bytes, and those bytes can form a new section.
+# RUN: llvm-objcopy --dump-section .data=%t/data.bin %t/llvm.o %t/dumped.o
+# RUN: llvm-objcopy --add-section .payload=%t/data.bin %t/gnu.o %t/added.o
+# RUN: llvm-objcopy --dump-section .data=%t/data.after.bin %t/dumped.o /dev/null
+# RUN: cmp %t/data.bin %t/data.after.bin
+# RUN: llvm-objdump -s --section=.payload %t/added.o \
+# RUN:   | FileCheck %s --check-prefix=PAYLOAD
+# PAYLOAD:      Contents of section .payload:
+# PAYLOAD-NEXT: 0000 01020304 05060708 00000000 00000000
+
+## GNU register symbols and register-content data survive copying.
+# RUN: llvm-readobj --sections --symbols %t/gnu.copy.o \
+# RUN:   | FileCheck %s --check-prefix=REGISTER
+# REGISTER:      Name: .MMIX.reg_contents
+# REGISTER:      Name: gnu_register
+# REGISTER:      Value: 0xFF
+# REGISTER:      Section: Processor Specific (0xFF00)
+# REGISTER:      Name: gnu_register_content
+# REGISTER:      Section: .MMIX.reg_contents
+
+## Generic ELF policy rejects removal of a relocation-required symbol.
+# RUN: not llvm-objcopy --strip-symbol gnu_data %t/llvm.o %t/invalid.o 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=REQUIRED -DINPUT=%t/llvm.o
+# REQUIRED: error: '[[INPUT]]': not stripping symbol 'gnu_data' because it is named in a relocation

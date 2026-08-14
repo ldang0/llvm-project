@@ -1,0 +1,37 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: llvm-ar rcD %t/llvm.a %t/llvm.o %t/gnu.o
+# RUN: llvm-readobj --file-headers --symbols --relocations %t/llvm.a \
+# RUN:   | FileCheck %s --check-prefix=READOBJ
+# RUN: llvm-readelf -h -s -r %t/llvm.a \
+# RUN:   | FileCheck %s --check-prefix=READELF
+
+# READOBJ:      File: {{.*}}(llvm.o)
+# READOBJ:      Format: elf64-mmix
+# READOBJ:      DataEncoding: BigEndian
+# READOBJ:      Type: Relocatable
+# READOBJ:      Machine: EM_MMIX
+# READOBJ:      R_MMIX_GETA gnu_data
+# READOBJ:      R_MMIX_PUSHJ_STUBBABLE gnu_function
+# READOBJ:      Name: llvm_entry
+# READOBJ:      File: {{.*}}(gnu.o)
+# READOBJ:      Format: elf64-mmix
+# READOBJ:      Machine: EM_MMIX
+# READOBJ:      Name: gnu_register
+# READOBJ-NEXT: Value: 0xFF
+# READOBJ:      Section: Processor Specific (0xFF00)
+
+# READELF:      File: {{.*}}(llvm.o)
+# READELF:      Class: {{ *}}ELF64
+# READELF:      Data: {{ *}}2's complement, big endian
+# READELF:      Type: {{ *}}REL (Relocatable file)
+# READELF:      Machine: {{ *}}Donald Knuth's educational 64-bit processor
+# READELF:      R_MMIX_GETA {{.*}} gnu_data + 0
+# READELF:      R_MMIX_PUSHJ_STUBBABLE {{.*}} gnu_function + 0
+# READELF:      llvm_entry
+# READELF:      File: {{.*}}(gnu.o)
+# READELF:      PRC[0xff00] gnu_register

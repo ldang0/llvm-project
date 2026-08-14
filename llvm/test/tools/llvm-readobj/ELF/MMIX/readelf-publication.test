@@ -1,0 +1,75 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-executable.yaml -o %t/gnu.elf
+# RUN: llvm-ar rcD %t/mixed.a %t/llvm.o %t/gnu.o
+# RUN: ld.lld -T %S/../../../Inputs/MMIX/layout.lds %t/llvm.o %t/gnu.o \
+# RUN:   -o %t/lld.elf
+# RUN: llvm-objcopy %t/lld.elf %t/copied.elf
+# RUN: llvm-strip --strip-all %t/lld.elf -o %t/stripped.elf
+
+# RUN: llvm-readelf -h -S -s -r %t/llvm.o \
+# RUN:   | FileCheck %s --check-prefixes=OBJECT,LLVM-OBJECT
+# RUN: llvm-readelf -h -S -s -r %t/gnu.o \
+# RUN:   | FileCheck %s --check-prefixes=OBJECT,GNU-OBJECT
+# RUN: llvm-readelf -h -S -s -r -l %t/lld.elf \
+# RUN:   | FileCheck %s --check-prefixes=EXEC,LLD-EXEC
+# RUN: llvm-readelf -h -S -s -r -l %t/gnu.elf \
+# RUN:   | FileCheck %s --check-prefixes=EXEC,GNU-EXEC
+# RUN: llvm-readelf -h -s -r %t/mixed.a \
+# RUN:   | FileCheck %s --check-prefix=ARCHIVE
+# RUN: llvm-readelf -h -S -s -r -l %t/copied.elf \
+# RUN:   | FileCheck %s --check-prefix=COPIED
+# RUN: llvm-readelf -h -S -s -r -l %t/stripped.elf \
+# RUN:   | FileCheck %s --check-prefix=STRIPPED
+
+# OBJECT:      Class: {{ *}}ELF64
+# OBJECT:      Data: {{ *}}2's complement, big endian
+# OBJECT:      Type: {{ *}}REL (Relocatable file)
+# OBJECT:      Machine: {{ *}}Donald Knuth's educational 64-bit processor
+# OBJECT:      .text
+# OBJECT:      .symtab
+# LLVM-OBJECT: R_MMIX_GETA {{.*}} gnu_data + 0
+# LLVM-OBJECT: R_MMIX_PUSHJ_STUBBABLE {{.*}} gnu_function + 0
+# LLVM-OBJECT: llvm_entry
+# GNU-OBJECT:  There are no relocations in this file.
+# GNU-OBJECT:  PRC[0xff00] gnu_register
+# GNU-OBJECT:  gnu_register_content
+
+# EXEC:      Class: {{ *}}ELF64
+# EXEC:      Data: {{ *}}2's complement, big endian
+# EXEC:      Type: {{ *}}EXEC (Executable file)
+# EXEC:      Machine: {{ *}}Donald Knuth's educational 64-bit processor
+# EXEC:      Entry point address: {{ *}}0x{{[0-9a-f]+}}
+# EXEC:      LOAD
+# EXEC:      .text
+# EXEC:      .MMIX.reg_contents
+# EXEC:      There are no relocations in this file.
+# LLD-EXEC:  llvm_entry
+# LLD-EXEC:  PRC[0xff00] gnu_register
+# GNU-EXEC:  gnu_start
+# GNU-EXEC:  gnu_initialized
+
+# ARCHIVE:      File: {{.*}}(llvm.o)
+# ARCHIVE:      Machine: {{ *}}Donald Knuth's educational 64-bit processor
+# ARCHIVE:      R_MMIX_GETA {{.*}} gnu_data + 0
+# ARCHIVE:      File: {{.*}}(gnu.o)
+# ARCHIVE:      PRC[0xff00] gnu_register
+
+# COPIED:      Type: {{ *}}EXEC (Executable file)
+# COPIED:      Machine: {{ *}}Donald Knuth's educational 64-bit processor
+# COPIED:      Entry point address: {{ *}}0x1004
+# COPIED:      .MMIX.reg_contents
+# COPIED:      LOAD
+# COPIED:      There are no relocations in this file.
+# COPIED:      llvm_entry
+
+# STRIPPED:      Type: {{ *}}EXEC (Executable file)
+# STRIPPED:      Machine: {{ *}}Donald Knuth's educational 64-bit processor
+# STRIPPED:      Entry point address: {{ *}}0x1004
+# STRIPPED:      .MMIX.reg_contents
+# STRIPPED:      LOAD
+# STRIPPED:      There are no relocations in this file.

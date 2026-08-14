@@ -1,0 +1,30 @@
+--- !ELF
+FileHeader:
+  Class: ELFCLASS64
+  Data: ELFDATA2MSB
+  Type: ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .text.gnu
+    Type: SHT_PROGBITS
+    Flags: [ SHF_ALLOC, SHF_EXECINSTR ]
+    AddressAlign: 4
+    Content: FD020000FD000000
+  - Name: .data.gnu
+    Type: SHT_PROGBITS
+    Flags: [ SHF_ALLOC, SHF_WRITE ]
+    AddressAlign: 8
+    Content: 1122334455667788
+  - Name: .MMIX.reg_contents
+    Type: SHT_PROGBITS
+    AddressAlign: 1
+    Content: 8877665544332211
+Symbols:
+  - { Name: gnu_local_object, Section: .data.gnu, Type: STT_OBJECT, Size: 8 }
+  - { Name: gnu_function, Section: .text.gnu, Binding: STB_GLOBAL, Type: STT_FUNC, Size: 8 }
+  - { Name: gnu_data, Section: .data.gnu, Binding: STB_GLOBAL, Type: STT_OBJECT, Size: 8 }
+  - { Name: gnu_weak_undefined, Binding: STB_WEAK }
+  - { Name: gnu_absolute, Index: SHN_ABS, Value: 0x84, Binding: STB_GLOBAL }
+  - { Name: gnu_common, Index: SHN_COMMON, Value: 8, Size: 16, Binding: STB_GLOBAL, Type: STT_OBJECT }
+  - { Name: gnu_register, Index: 0xFF00, Value: 255, Binding: STB_GLOBAL }
+  - { Name: gnu_register_content, Section: .MMIX.reg_contents, Binding: STB_GLOBAL }

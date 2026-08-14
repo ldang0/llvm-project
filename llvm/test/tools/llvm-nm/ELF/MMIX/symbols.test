@@ -1,0 +1,107 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-executable.yaml -o %t/gnu.elf
+# RUN: llvm-ar rcD %t/mixed.a %t/llvm.o %t/gnu.o
+# RUN: ld.lld -T %t/far.lds %t/llvm.o %t/gnu.o -o %t/executable
+# RUN: llvm-objcopy %t/executable %t/copied
+# RUN: llvm-strip --strip-all %t/executable -o %t/stripped
+
+# RUN: llvm-nm --debug-syms --no-sort %t/llvm.o \
+# RUN:   | FileCheck %s --check-prefix=LLVM
+# RUN: llvm-nm --debug-syms --no-sort %t/gnu.o \
+# RUN:   | FileCheck %s --check-prefix=GNU
+# RUN: llvm-nm --no-sort %t/mixed.a | FileCheck %s --check-prefix=ARCHIVE
+# RUN: llvm-nm --debug-syms --no-sort %t/executable \
+# RUN:   | FileCheck %s --check-prefix=EXEC
+# RUN: llvm-nm --debug-syms --no-sort %t/gnu.elf \
+# RUN:   | FileCheck %s --check-prefix=GNU-EXEC
+# RUN: llvm-nm --debug-syms --no-sort %t/copied \
+# RUN:   | FileCheck %s --check-prefix=EXEC
+# RUN: llvm-nm %t/stripped 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=STRIPPED -DINPUT=%t/stripped
+# RUN: llvm-nm --format=posix --undefined-only %t/llvm.o \
+# RUN:   | FileCheck %s --check-prefix=UNDEFINED
+# RUN: llvm-nm --size-sort --print-size %t/llvm.o \
+# RUN:   | FileCheck %s --check-prefix=SIZE
+# RUN: llvm-nm --format=just-symbols %t/llvm.o \
+# RUN:   | FileCheck %s --check-prefix=SORTED
+
+# LLVM-DAG: 0000000000000000 t llvm_local_function
+# LLVM-DAG: 0000000000000000 d llvm_local_object
+# LLVM-DAG: 0000000000000004 T llvm_entry
+# LLVM-DAG:                  U gnu_data
+# LLVM-DAG:                  U gnu_function
+# LLVM-DAG: 000000000000001c W llvm_weak_defined
+# LLVM-DAG:                  w llvm_weak_undefined
+# LLVM-DAG: 0000000000000008 D llvm_object
+# LLVM-DAG: 0000000000000042 A llvm_absolute
+# LLVM-DAG: 0000000000000010 C llvm_common
+
+# GNU-DAG: 0000000000000000 d gnu_local_object
+# GNU-DAG: 0000000000000000 T gnu_function
+# GNU-DAG: 0000000000000000 D gnu_data
+# GNU-DAG:                  w gnu_weak_undefined
+# GNU-DAG: 0000000000000084 A gnu_absolute
+# GNU-DAG: 0000000000000010 C gnu_common
+# GNU-DAG: 00000000000000ff ? gnu_register
+# GNU-DAG: 0000000000000000 N gnu_register_content
+
+# ARCHIVE:      llvm.o:
+# ARCHIVE:      0000000000000004 T llvm_entry
+# ARCHIVE:      gnu.o:
+# ARCHIVE:      0000000000000000 T gnu_function
+# ARCHIVE:      00000000000000ff ? gnu_register
+
+# EXEC-DAG: 0000000000001004 T llvm_entry
+# EXEC-DAG: 0000000000100000 T gnu_function
+# EXEC-DAG: 0000000000000042 A llvm_absolute
+# EXEC-DAG: 0000000000000084 A gnu_absolute
+# EXEC-DAG: 00000000000000ff ? gnu_register
+# EXEC-DAG: 00000000000000fe ? gnu_register_content
+# EXEC-DAG: t __MMIX_call_stub_0
+# EXEC-NOT: MMIX_linker_allocated
+
+# GNU-EXEC-DAG: 0000000000000000 T gnu_start
+# GNU-EXEC-DAG: 0000000000000000 D gnu_initialized
+# GNU-EXEC-DAG: 00000000000000ff ? gnu_register
+
+# STRIPPED: [[INPUT]]: no symbols
+
+# UNDEFINED-DAG: gnu_data U 0 0
+# UNDEFINED-DAG: gnu_function U 0 0
+# UNDEFINED-DAG: llvm_weak_undefined w 0 0
+# UNDEFINED-NOT: llvm_entry
+
+# SIZE-DAG: 0000000000000000 0000000000000004 t llvm_local_function
+# SIZE-DAG: 000000000000001c 0000000000000004 W llvm_weak_defined
+# SIZE-DAG: 0000000000000008 0000000000000008 D llvm_object
+# SIZE-DAG: 0000000000000010 0000000000000010 C llvm_common
+# SIZE-DAG: 0000000000000004 0000000000000018 T llvm_entry
+
+# SORTED: gnu_data
+# SORTED-NEXT: gnu_function
+# SORTED-NEXT: llvm_absolute
+# SORTED-NEXT: llvm_common
+# SORTED-NEXT: llvm_entry
+# SORTED-NEXT: llvm_local_function
+# SORTED-NEXT: llvm_local_object
+# SORTED-NEXT: llvm_object
+# SORTED-NEXT: llvm_weak_defined
+# SORTED-NEXT: llvm_weak_undefined
+
+#--- far.lds
+ENTRY(llvm_entry)
+SECTIONS {
+  .text.llvm 0x1000 : { *(.text) }
+  .text.gnu 0x100000 : { *(.text.gnu) }
+  .MMIX.reg_contents 0x200000 : {
+    *(.MMIX.reg_contents.linker_allocated)
+    *(.MMIX.reg_contents)
+  }
+  .data 0x300000 : { *(.data*) }
+  .bss 0x400000 (NOLOAD) : { *(.bss*) *(COMMON) }
+}

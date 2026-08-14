@@ -1,0 +1,42 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-executable.yaml -o %t/gnu.elf
+# RUN: llvm-ar rcD %t/mixed.a %t/llvm.o %t/gnu.o
+# RUN: llvm-objdump --no-print-imm-hex -drt %t/mixed.a \
+# RUN:   | FileCheck %s --check-prefix=ARCHIVE
+# RUN: llvm-objdump --no-print-imm-hex -dst %t/gnu.elf \
+# RUN:   | FileCheck %s --check-prefix=GNU-EXEC
+
+# ARCHIVE:      {{.*}}mixed.a(llvm.o): file format elf64-mmix
+# ARCHIVE:      SYMBOL TABLE:
+# ARCHIVE-DAG:  llvm_entry
+# ARCHIVE-DAG:  llvm_common
+# ARCHIVE:      <llvm_entry>:
+# ARCHIVE:      GETA r1, 0
+# ARCHIVE-NEXT: R_MMIX_GETA{{.*}}gnu_data
+# ARCHIVE:      PUSHJ r2, 0
+# ARCHIVE-NEXT: R_MMIX_PUSHJ_STUBBABLE{{.*}}gnu_function
+# ARCHIVE:      JMP 0
+# ARCHIVE-NEXT: R_MMIX_ADDR27{{.*}}llvm_entry
+# ARCHIVE:      {{.*}}mixed.a(gnu.o): file format elf64-mmix
+# ARCHIVE:      SYMBOL TABLE:
+# ARCHIVE-DAG:  gnu_register
+# ARCHIVE-DAG:  gnu_register_content
+# ARCHIVE:      <gnu_function>:
+# ARCHIVE-NEXT: {{.*}}SWYM 2, 0, 0
+# ARCHIVE-NEXT: {{.*}}SWYM 0, 0, 0
+
+# GNU-EXEC:      file format elf64-mmix
+# GNU-EXEC:      SYMBOL TABLE:
+# GNU-EXEC-DAG:  gnu_start
+# GNU-EXEC-DAG:  gnu_initialized
+# GNU-EXEC-DAG:  gnu_register
+# GNU-EXEC:      Contents of section .MMIX.reg_contents:
+# GNU-EXEC:      Disassembly of section .text:
+# GNU-EXEC:      <.text>:
+# GNU-EXEC-NEXT: {{.*}}SWYM 1, 0, 0
+# GNU-EXEC-NEXT: {{.*}}SWYM 2, 0, 0

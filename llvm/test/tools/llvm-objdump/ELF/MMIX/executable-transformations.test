@@ -1,0 +1,30 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t && mkdir %t
+# RUN: llvm-mc -triple=mmix -filetype=obj \
+# RUN:   %S/../../../Inputs/MMIX/llvm-object.s -o %t/llvm.o
+# RUN: yaml2obj %S/../../../Inputs/MMIX/gnu-object.yaml -o %t/gnu.o
+# RUN: ld.lld -T %S/../../../Inputs/MMIX/layout.lds %t/llvm.o %t/gnu.o \
+# RUN:   -o %t/original
+# RUN: llvm-objcopy %t/original %t/copied
+# RUN: llvm-strip --strip-all %t/original -o %t/stripped
+# RUN: llvm-objdump --no-print-imm-hex -d -s %t/copied \
+# RUN:   | FileCheck %s --check-prefix=COMMON
+# RUN: llvm-objdump --no-print-imm-hex -d -s %t/stripped \
+# RUN:   | FileCheck %s --check-prefix=COMMON
+# RUN: llvm-objdump -t %t/copied | FileCheck %s --check-prefix=COPIED
+# RUN: llvm-objdump -t %t/stripped | FileCheck %s --check-prefix=STRIPPED
+
+# COMMON:      file format elf64-mmix
+# COMMON:      Contents of section .text:
+# COMMON:      Contents of section .MMIX.reg_contents:
+# COMMON:      07f0 88776655 44332211
+# COMMON:      Disassembly of section .text:
+# COMMON:      SWYM 0, 0, 0
+# COMMON:      GETA r1, 2051
+# COMMON:      PUSHJ r2, 3
+# COMMON:      JMPB -5
+# COPIED:      SYMBOL TABLE:
+# COPIED:      llvm_entry
+# STRIPPED:    SYMBOL TABLE:
+# STRIPPED-NOT: llvm_entry
