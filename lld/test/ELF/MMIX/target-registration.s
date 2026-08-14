@@ -14,7 +14,7 @@
 # HEADER:      Type: Executable (0x2)
 # HEADER-NEXT: Machine: EM_MMIX (0x50)
 
-# ERROR: error: {{.*}}unsupported relocation R_MMIX_64 against symbol _start
+# ERROR: error: {{.*}}unsupported relocation R_MMIX_PC_64 against symbol _start
 
 --- !ELF
 FileHeader:
@@ -62,7 +62,7 @@ Sections:
     Link: .symtab
     Info: .data
     Relocations:
-      - { Offset: 0, Type: R_MMIX_64, Symbol: _start, Addend: 0 }
+      - { Offset: 0, Type: R_MMIX_PC_64, Symbol: _start, Addend: 0 }
 Symbols:
   - Name:    _start
     Type:    STT_FUNC
