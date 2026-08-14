@@ -22,13 +22,18 @@ namespace {
 unsigned getRelocationFieldSize(RelType type) {
   switch (type) {
   case R_MMIX_8:
+  case R_MMIX_PC_8:
     return 1;
   case R_MMIX_16:
+  case R_MMIX_PC_16:
     return 2;
   case R_MMIX_24:
   case R_MMIX_32:
+  case R_MMIX_PC_24:
+  case R_MMIX_PC_32:
     return 4;
   case R_MMIX_64:
+  case R_MMIX_PC_64:
     return 8;
   default:
     return 0;
@@ -98,6 +103,12 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_32:
   case R_MMIX_64:
     return R_ABS;
+  case R_MMIX_PC_8:
+  case R_MMIX_PC_16:
+  case R_MMIX_PC_24:
+  case R_MMIX_PC_32:
+  case R_MMIX_PC_64:
+    return R_PC;
   default:
     break;
   }
@@ -146,22 +157,27 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_MMIX_NONE:
     return;
   case R_MMIX_8:
+  case R_MMIX_PC_8:
     checkMMIXBitfield(ctx, loc, val, 8, rel);
     *loc = val;
     return;
   case R_MMIX_16:
+  case R_MMIX_PC_16:
     checkMMIXBitfield(ctx, loc, val, 16, rel);
     write16be(loc, val);
     return;
   case R_MMIX_24:
+  case R_MMIX_PC_24:
     checkMMIXBitfield(ctx, loc, val, 24, rel);
     write32be(loc, (read32be(loc) & 0xff000000) | (val & 0xffffff));
     return;
   case R_MMIX_32:
+  case R_MMIX_PC_32:
     checkMMIXBitfield(ctx, loc, val, 32, rel);
     write32be(loc, val);
     return;
   case R_MMIX_64:
+  case R_MMIX_PC_64:
     write64be(loc, val);
     return;
   default:
