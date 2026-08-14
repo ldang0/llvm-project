@@ -28,10 +28,21 @@ template <class RelTy> struct Relocs;
 
 std::string toStr(Ctx &, RelType type);
 
+struct TargetSymbolTableEntry {
+  uint32_t sectionIndex;
+  uint64_t value;
+};
+
 class TargetInfo {
 public:
   TargetInfo(Ctx &ctx) : ctx(ctx) {}
   virtual uint32_t calcEFlags() const { return 0; }
+  // Return the target-specific ELF symbol-table representation when generic
+  // section and virtual-address semantics cannot represent the symbol.
+  virtual std::optional<TargetSymbolTableEntry>
+  getTargetSymbolTableEntry(const Symbol &) const {
+    return std::nullopt;
+  }
   // Create target-specific synthetic sections, defined in Arch/ files.
   virtual void initTargetSpecificSections() {}
   virtual RelExpr getRelExpr(RelType type, const Symbol &s,

@@ -12,6 +12,7 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -35,6 +36,10 @@ constexpr uint32_t goImmediateOpcode = 0x9f;
 constexpr uint32_t pushgoImmediateOpcode = 0xbf;
 constexpr uint32_t pc19ValueMask = 0xffff;
 constexpr uint32_t pc27ValueMask = 0xffffff;
+constexpr uint16_t shnMMIXRegister = SHN_LOPROC;
+constexpr StringLiteral registerContentsSectionName = ".MMIX.reg_contents";
+constexpr uint16_t defaultFirstGlobalRegister = 255;
+constexpr uint16_t minimumGlobalRegister = 32;
 
 struct MMIXRelaxationSequence {
   uint8_t size;
@@ -78,8 +83,6 @@ StringRef getUnsupportedRelocationReason(RelType type) {
   case R_MMIX_GNU_VTINHERIT:
   case R_MMIX_GNU_VTENTRY:
     return "requires GNU vtable metadata support";
-  case R_MMIX_REG_OR_BYTE:
-  case R_MMIX_REG:
   case R_MMIX_BASE_PLUS_OFFSET:
   case R_MMIX_LOCAL:
     return "requires MMIX register-model support";
@@ -96,6 +99,8 @@ unsigned getRelocationFieldSize(RelType type) {
   switch (type) {
   case R_MMIX_8:
   case R_MMIX_PC_8:
+  case R_MMIX_REG_OR_BYTE:
+  case R_MMIX_REG:
     return 1;
   case R_MMIX_16:
   case R_MMIX_PC_16:
@@ -207,6 +212,8 @@ class MMIX final : public TargetInfo {
 public:
   MMIX(Ctx &ctx);
 
+  std::optional<TargetSymbolTableEntry>
+  getTargetSymbolTableEntry(const Symbol &sym) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
@@ -259,7 +266,22 @@ private:
   mutable SmallVector<CallStub, 0> callStubs;
   mutable SmallVector<RelaxationSection, 0> relaxationSections;
   mutable bool relaxationSitesInitialized = false;
+  mutable bool registerModelInitialized = false;
+  mutable uint16_t firstGlobalRegister = defaultFirstGlobalRegister;
+  mutable OutputSection *registerContentsOutput = nullptr;
 
+  DenseMap<const Symbol *, uint16_t> registerSymbols;
+  DenseSet<const InputSection *> registerContentSections;
+
+  void collectRegisterModel();
+  void initializeRegisterModel() const;
+  bool isRegisterContentSymbol(const Symbol &sym) const;
+  std::optional<uint16_t>
+  getRegisterContentValue(const Symbol &sym, int64_t addend,
+                          const uint8_t *loc = nullptr) const;
+  std::optional<uint8_t> resolveRegister(const Relocation &rel,
+                                         bool allowImmediate,
+                                         const uint8_t *loc) const;
   RelaxationSection &getRelaxationSection(InputSection &sec) const;
   uint32_t getOrCreateCallStub(RelaxationSite &site, uint64_t target,
                                uint64_t place) const;
@@ -290,6 +312,216 @@ MMIX::MMIX(Ctx &ctx) : TargetInfo(ctx) {
     if (file->abiVersion != 0)
       ErrAlways(ctx) << file << ": unsupported MMIX ELF ABI version "
                      << static_cast<unsigned>(file->abiVersion);
+
+  collectRegisterModel();
+}
+
+void MMIX::collectRegisterModel() {
+  for (ELFFileBase *file : ctx.objectFiles) {
+    ArrayRef<ELF64BE::Sym> elfSymbols = file->getELFSyms<ELF64BE>();
+    ArrayRef<Symbol *> symbols = file->getSymbols();
+    ArrayRef<InputSectionBase *> sections = file->getSections();
+
+    for (InputSectionBase *section : sections) {
+      if (!section || section == &InputSection::discarded ||
+          section->name != registerContentsSectionName)
+        continue;
+      InputSection *input = dyn_cast<InputSection>(section);
+      if (!input) {
+        Err(ctx) << section
+                 << ": MMIX register contents must be a regular "
+                    "input section";
+        continue;
+      }
+      registerContentSections.insert(input);
+      if (input->type != SHT_PROGBITS)
+        Err(ctx) << input << ": MMIX register contents must use SHT_PROGBITS";
+      if (input->flags & SHF_ALLOC)
+        Err(ctx) << input << ": MMIX register contents must not be allocated";
+      if (input->addralign < 8)
+        Err(ctx) << input
+                 << ": MMIX register contents require 8-byte alignment";
+      if (input->getSize() % 8 != 0)
+        Err(ctx) << input
+                 << ": MMIX register contents size is not a multiple of 8";
+    }
+
+    for (auto [index, elfSym] : llvm::enumerate(elfSymbols)) {
+      Symbol *sym = symbols[index];
+      uint32_t sectionIndex = elfSym.st_shndx;
+      if (sectionIndex == shnMMIXRegister) {
+        bool valid = true;
+        if (elfSym.getType() != STT_NOTYPE) {
+          Err(ctx) << file << ": MMIX register symbol " << sym
+                   << " must use STT_NOTYPE";
+          valid = false;
+        }
+        if (elfSym.st_size != 0) {
+          Err(ctx) << file << ": MMIX register symbol " << sym
+                   << " must have size zero";
+          valid = false;
+        }
+        if (elfSym.st_value < minimumGlobalRegister || elfSym.st_value > 255) {
+          Err(ctx) << file << ": MMIX register symbol " << sym
+                   << " has invalid register number " << elfSym.st_value;
+          valid = false;
+        }
+        if (valid && sym->isDefined() && sym->file == file)
+          registerSymbols.try_emplace(sym, elfSym.st_value);
+        continue;
+      }
+
+      if (sectionIndex >= sections.size())
+        continue;
+      InputSectionBase *section = sections[sectionIndex];
+      if (!section || section == &InputSection::discarded ||
+          section->name != registerContentsSectionName ||
+          elfSym.getType() == STT_SECTION)
+        continue;
+      if (elfSym.getType() != STT_NOTYPE)
+        Err(ctx) << file << ": MMIX register-content symbol " << sym
+                 << " must use STT_NOTYPE";
+      if (elfSym.st_size != 0)
+        Err(ctx) << file << ": MMIX register-content symbol " << sym
+                 << " must have size zero";
+      if ((elfSym.st_value & 7) != 0)
+        Err(ctx) << file << ": MMIX register-content symbol " << sym
+                 << " is not 8-byte aligned";
+      if (elfSym.st_value >= section->getSize())
+        Err(ctx) << file << ": MMIX register-content symbol " << sym
+                 << " is outside its content section";
+    }
+  }
+}
+
+bool MMIX::isRegisterContentSymbol(const Symbol &sym) const {
+  const Defined *defined = dyn_cast<Defined>(&sym);
+  const InputSection *section =
+      defined ? dyn_cast_or_null<InputSection>(defined->section) : nullptr;
+  return section && registerContentSections.contains(section) &&
+         sym.type != STT_SECTION;
+}
+
+std::optional<TargetSymbolTableEntry>
+MMIX::getTargetSymbolTableEntry(const Symbol &sym) const {
+  auto direct = registerSymbols.find(&sym);
+  if (direct != registerSymbols.end())
+    return TargetSymbolTableEntry{shnMMIXRegister, direct->second};
+  if (!isRegisterContentSymbol(sym))
+    return std::nullopt;
+  std::optional<uint16_t> reg = getRegisterContentValue(sym, 0);
+  return TargetSymbolTableEntry{shnMMIXRegister, reg.value_or(0)};
+}
+
+void MMIX::initializeRegisterModel() const {
+  if (registerModelInitialized)
+    return;
+  registerModelInitialized = true;
+  if (registerContentSections.empty())
+    return;
+
+  OutputSection *output = nullptr;
+  for (const InputSection *section : registerContentSections) {
+    if (!section->isLive())
+      continue;
+    OutputSection *parent = section->getParent();
+    if (!parent || parent->name != registerContentsSectionName) {
+      Err(ctx) << section
+               << ": MMIX register contents must be placed in the "
+                  ".MMIX.reg_contents output section";
+      continue;
+    }
+    if (output && output != parent) {
+      Err(ctx) << section
+               << ": MMIX register contents use multiple output sections";
+      continue;
+    }
+    output = parent;
+    if ((section->outSecOff & 7) != 0)
+      Err(ctx) << section
+               << ": MMIX register contents have an unaligned output offset";
+  }
+  if (!output)
+    return;
+  registerContentsOutput = output;
+  if ((output->size & 7) != 0) {
+    Err(ctx) << "output section " << output->name
+             << ": MMIX register contents output size is not a multiple of 8";
+    return;
+  }
+
+  uint64_t entries = output->size / 8;
+  constexpr uint64_t maximumEntries =
+      defaultFirstGlobalRegister - minimumGlobalRegister;
+  if (entries > maximumEntries) {
+    Err(ctx) << "output section " << output->name
+             << ": too many MMIX global register contents: " << entries
+             << ", maximum is " << maximumEntries;
+    entries = maximumEntries;
+  }
+  firstGlobalRegister = defaultFirstGlobalRegister - entries;
+}
+
+std::optional<uint16_t>
+MMIX::getRegisterContentValue(const Symbol &sym, int64_t addend,
+                              const uint8_t *loc) const {
+  const Defined &defined = cast<Defined>(sym);
+  const InputSection &section = *cast<InputSection>(defined.section);
+  int64_t offset = section.getOffset(defined.value) + addend;
+  OutputSection *output = section.getParent();
+  auto report = [&](const Twine &message) {
+    if (loc)
+      Err(ctx) << getErrorLoc(ctx, loc) << message;
+    else
+      Err(ctx) << message;
+  };
+  if (offset < 0 || uint64_t(offset) >= output->size) {
+    report(Twine("register-content symbol ") + sym.getName() +
+           " with addend resolves outside .MMIX.reg_contents");
+    return std::nullopt;
+  }
+  if ((offset & 7) != 0) {
+    report(Twine("register-content symbol ") + sym.getName() +
+           " with addend is not 8-byte aligned");
+    return std::nullopt;
+  }
+  return firstGlobalRegister + offset / 8;
+}
+
+std::optional<uint8_t> MMIX::resolveRegister(const Relocation &rel,
+                                             bool allowImmediate,
+                                             const uint8_t *loc) const {
+  auto direct = registerSymbols.find(rel.sym);
+  uint64_t value;
+  if (direct != registerSymbols.end()) {
+    value = direct->second + rel.addend;
+  } else if (isRegisterContentSymbol(*rel.sym)) {
+    std::optional<uint16_t> reg =
+        getRegisterContentValue(*rel.sym, rel.addend, loc);
+    if (!reg)
+      return std::nullopt;
+    value = *reg;
+  } else if (allowImmediate) {
+    const Defined *defined = dyn_cast<Defined>(rel.sym);
+    if (!defined || defined->section) {
+      Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+               << " requires a register symbol or absolute byte, but "
+               << rel.sym << " is neither";
+      return std::nullopt;
+    }
+    value = rel.sym->getVA(ctx, rel.addend);
+  } else {
+    Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+             << " requires a register symbol, but " << rel.sym << " is not one";
+    return std::nullopt;
+  }
+
+  if (value > 255) {
+    Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+             << " resolves to " << value << ", outside byte range [0, 255]";
+    return std::nullopt;
+  }
+  return static_cast<uint8_t>(value);
 }
 
 RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
@@ -304,6 +536,8 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_24:
   case R_MMIX_32:
   case R_MMIX_64:
+  case R_MMIX_REG_OR_BYTE:
+  case R_MMIX_REG:
     expr = R_ABS;
     break;
   case R_MMIX_PC_8:
@@ -500,6 +734,7 @@ MMIX::findRelaxationSite(const Relocation &rel) const {
 }
 
 bool MMIX::relaxOnce(int) const {
+  initializeRegisterModel();
   if (!relaxationSitesInitialized) {
     SmallVector<InputSection *, 0> storage;
     for (OutputSection *osec : ctx.outputSections) {
@@ -640,6 +875,9 @@ void MMIX::finalizeRelax(int passes) const {
     site.callDelta =
         static_cast<int64_t>(stub.section->getVA(stub.offset) - place);
   }
+
+  if (registerContentsOutput)
+    registerContentsOutput->addr = uint64_t(firstGlobalRegister) * 8;
 }
 
 void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
@@ -650,6 +888,14 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_MMIX_PC_8:
     checkMMIXBitfield(ctx, loc, val, 8, rel);
     *loc = val;
+    return;
+  case R_MMIX_REG_OR_BYTE:
+    if (std::optional<uint8_t> reg = resolveRegister(rel, true, loc))
+      *loc = *reg;
+    return;
+  case R_MMIX_REG:
+    if (std::optional<uint8_t> reg = resolveRegister(rel, false, loc))
+      *loc = *reg;
     return;
   case R_MMIX_16:
   case R_MMIX_PC_16:

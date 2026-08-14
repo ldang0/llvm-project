@@ -2115,6 +2115,13 @@ static uint32_t getSymSectionIndex(Symbol *sym) {
   return SHN_ABS;
 }
 
+static TargetSymbolTableEntry getSymbolTableEntry(Ctx &ctx, Symbol *sym) {
+  if (std::optional<TargetSymbolTableEntry> entry =
+          ctx.target->getTargetSymbolTableEntry(*sym))
+    return *entry;
+  return {getSymSectionIndex(sym), sym->getVA(ctx)};
+}
+
 // Write the internal symbol table contents to the output symbol table.
 template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
   // The first entry is a null entry as per the ELF spec.
@@ -2136,15 +2143,16 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
       eSym->st_value = commonSec->addralign;
       eSym->st_size = cast<Defined>(sym)->size;
     } else {
-      const uint32_t shndx = getSymSectionIndex(sym);
-      eSym->st_shndx = shndx;
-      eSym->st_value = sym->getVA(ctx);
+      TargetSymbolTableEntry entry = getSymbolTableEntry(ctx, sym);
+      eSym->st_shndx = entry.sectionIndex;
+      eSym->st_value = entry.value;
       // Copy symbol size if it is a defined symbol. st_size is not
       // significant for undefined symbols, so whether copying it or not is up
       // to us if that's the case. We'll leave it as zero because by not
       // setting a value, we can get the exact same outputs for two sets of
       // input files that differ only in undefined symbol size in DSOs.
-      eSym->st_size = shndx != SHN_UNDEF ? cast<Defined>(sym)->size : 0;
+      eSym->st_size =
+          entry.sectionIndex != SHN_UNDEF ? cast<Defined>(sym)->size : 0;
     }
 
     ++eSym;
@@ -2199,7 +2207,7 @@ void SymtabShndxSection::writeTo(uint8_t *buf) {
   bool relocatable = ctx.arg.relocatable;
   for (const SymbolTableEntry &entry : ctx.in.symTab->getSymbols()) {
     if (!getCommonSec(relocatable, entry.sym) &&
-        getSymSectionIndex(entry.sym) == SHN_XINDEX)
+        getSymbolTableEntry(ctx, entry.sym).sectionIndex == SHN_XINDEX)
       write32(ctx, buf, entry.sym->getOutputSection()->sectionIndex);
     buf += 4;
   }
