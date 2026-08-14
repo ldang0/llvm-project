@@ -49,7 +49,7 @@ Sections:
     Type:         SHT_PROGBITS
     Flags:        [ SHF_ALLOC, SHF_EXECINSTR ]
     AddressAlign: 4
-    Content:      FD000000
+    Content:      F4010000FD000000FD000000FD00000040010000FD000000FD000000FD000000FD000000FD000000F2010000FD000000FD000000FD000000FD000000F0000000FD000000FD000000FD000000FD000000FD000000
   - Name: .rela.text
     Type: SHT_RELA
     Link: .symtab
@@ -61,16 +61,16 @@ Sections:
       - { Offset: 0, Type: R_MMIX_GETA_1, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_GETA_2, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_GETA_3, Symbol: target, Addend: 0 }
-      - { Offset: 0, Type: R_MMIX_CBRANCH, Symbol: target, Addend: 0 }
+      - { Offset: 16, Type: R_MMIX_CBRANCH, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_CBRANCH_J, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_CBRANCH_1, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_CBRANCH_2, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_CBRANCH_3, Symbol: target, Addend: 0 }
-      - { Offset: 0, Type: R_MMIX_PUSHJ, Symbol: target, Addend: 0 }
+      - { Offset: 40, Type: R_MMIX_PUSHJ, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_PUSHJ_1, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_PUSHJ_2, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_PUSHJ_3, Symbol: target, Addend: 0 }
-      - { Offset: 0, Type: R_MMIX_JMP, Symbol: target, Addend: 0 }
+      - { Offset: 60, Type: R_MMIX_JMP, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_JMP_1, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_JMP_2, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_JMP_3, Symbol: target, Addend: 0 }
@@ -83,4 +83,5 @@ Sections:
 Symbols:
   - Name:    target
     Section: .text
+    Value:   80
     Binding: STB_GLOBAL

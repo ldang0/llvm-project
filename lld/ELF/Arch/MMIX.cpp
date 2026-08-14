@@ -6,11 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "OutputSections.h"
 #include "RelocScan.h"
 #include "Symbols.h"
 #include "Target.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Endian.h"
+#include <optional>
 
 using namespace llvm;
 using namespace llvm::support::endian;
@@ -19,6 +23,29 @@ using namespace lld;
 using namespace lld::elf;
 
 namespace {
+constexpr uint32_t swymInstruction = 0xfd000000;
+
+struct MMIXRelaxationSequence {
+  uint8_t size;
+  uint8_t opcodeMask;
+  uint8_t opcode;
+};
+
+std::optional<MMIXRelaxationSequence> getRelaxationSequence(RelType type) {
+  switch (type) {
+  case R_MMIX_GETA:
+    return MMIXRelaxationSequence{16, 0xfe, 0xf4};
+  case R_MMIX_CBRANCH:
+    return MMIXRelaxationSequence{24, 0xe0, 0x40};
+  case R_MMIX_PUSHJ:
+    return MMIXRelaxationSequence{20, 0xfe, 0xf2};
+  case R_MMIX_JMP:
+    return MMIXRelaxationSequence{20, 0xfe, 0xf0};
+  default:
+    return std::nullopt;
+  }
+}
+
 StringRef getUnsupportedRelocationReason(RelType type) {
   switch (type) {
   case R_MMIX_GETA:
@@ -114,16 +141,30 @@ public:
 
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
-  int64_t getImplicitAddend(const uint8_t *buf,
-                            RelType type) const override;
+  int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   template <class ELFT, class RelTy>
   void scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
                        unsigned shard);
   void scanSection(InputSectionBase &sec, unsigned shard) override {
     elf::scanSection1<MMIX, ELF64BE>(*this, sec, shard);
   }
+  bool relaxOnce(int pass) const override;
+  void finalizeRelax(int passes) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
+
+private:
+  enum class RelaxationState : uint8_t { Pending, Direct, Expanded };
+
+  struct RelaxationSite {
+    InputSection *section;
+    uint32_t relocationIndex;
+    uint8_t reservationSize;
+    RelaxationState state = RelaxationState::Pending;
+  };
+
+  mutable SmallVector<RelaxationSite, 0> relaxationSites;
+  mutable bool relaxationSitesInitialized = false;
 };
 } // namespace
 
@@ -173,6 +214,10 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_PC_64:
   case R_MMIX_ADDR19:
   case R_MMIX_ADDR27:
+  case R_MMIX_GETA:
+  case R_MMIX_CBRANCH:
+  case R_MMIX_PUSHJ:
+  case R_MMIX_JMP:
     expr = R_PC;
     break;
   default:
@@ -216,6 +261,44 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
     if (type == R_MMIX_NONE)
       continue;
 
+    if (std::optional<MMIXRelaxationSequence> sequence =
+            getRelaxationSequence(type)) {
+      uint64_t offset = it->r_offset;
+      Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
+      if ((offset & 3) != 0) {
+        Err(ctx) << &sec << ": relaxation relocation " << type << " offset "
+                 << offset << " is not 4-byte aligned against symbol " << &sym;
+        continue;
+      }
+      ArrayRef<uint8_t> contents = sec.content();
+      if (offset >= contents.size() ||
+          sequence->size > contents.size() - offset) {
+        Err(ctx) << &sec << ": " << type << " requires a "
+                 << static_cast<unsigned>(sequence->size)
+                 << "-byte reserved sequence at offset " << offset
+                 << " against symbol " << &sym;
+        continue;
+      }
+
+      contents = contents.slice(offset, sequence->size);
+      if ((contents[0] & sequence->opcodeMask) != sequence->opcode) {
+        Err(ctx) << &sec << ": " << type
+                 << " reserved sequence has an invalid primary instruction "
+                 << "at offset " << offset << " against symbol " << &sym;
+        continue;
+      }
+
+      bool validPadding = true;
+      for (unsigned i = 4; i < sequence->size; i += 4)
+        validPadding &= read32be(contents.data() + i) == swymInstruction;
+      if (!validPadding) {
+        Err(ctx) << &sec << ": " << type
+                 << " reserved sequence contains non-SWYM padding at offset "
+                 << offset << " against symbol " << &sym;
+        continue;
+      }
+    }
+
     if (unsigned size = getRelocationFieldSize(type)) {
       uint64_t offset = it->r_offset;
       Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
@@ -237,6 +320,45 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
       }
     }
     rs.scan<ELFT, RelTy>(it, type, rs.getAddend<ELFT>(*it, type));
+  }
+}
+
+bool MMIX::relaxOnce(int) const {
+  if (!relaxationSitesInitialized) {
+    SmallVector<InputSection *, 0> storage;
+    for (OutputSection *osec : ctx.outputSections) {
+      if (!(osec->flags & SHF_EXECINSTR))
+        continue;
+      for (InputSection *sec : getInputSections(*osec, storage)) {
+        ArrayRef<Relocation> rels = sec->relocs();
+        for (auto [index, rel] : llvm::enumerate(rels))
+          if (std::optional<MMIXRelaxationSequence> sequence =
+                  getRelaxationSequence(rel.type))
+            relaxationSites.push_back(
+                {sec, static_cast<uint32_t>(index), sequence->size});
+      }
+    }
+    relaxationSitesInitialized = true;
+  }
+
+  // Sites retain their section and relocation index, so later passes can
+  // recompute S + A - P after any section-size or stub change. Decisions may
+  // only advance from Pending to one of the final forms in family-specific
+  // relaxation implementations.
+  return false;
+}
+
+void MMIX::finalizeRelax(int passes) const {
+  Log(ctx) << "MMIX relaxation passes: " << passes;
+  for (RelaxationSite &site : relaxationSites) {
+    if (site.state != RelaxationState::Pending)
+      continue;
+    Relocation &rel = site.section->relocs()[site.relocationIndex];
+    const uint8_t *loc = site.section->content().data() + rel.offset;
+    Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << rel.type
+             << " against symbol " << rel.sym << ": "
+             << getUnsupportedRelocationReason(rel.type);
+    rel.expr = R_NONE;
   }
 }
 
