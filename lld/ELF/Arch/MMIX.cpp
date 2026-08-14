@@ -106,8 +106,6 @@ StringRef getUnsupportedRelocationReason(RelType type) {
   case R_MMIX_GNU_VTINHERIT:
   case R_MMIX_GNU_VTENTRY:
     return "requires GNU vtable metadata support";
-  case R_MMIX_LOCAL:
-    return "requires MMIX register-model support";
   default:
     return {};
   }
@@ -316,8 +314,15 @@ private:
   void updateRegisterModel() const;
   bool orderLinkerAllocatedRegisterContents() const;
   bool planBasePlusOffsetAllocations() const;
+  void validateLocalAssertions() const;
   const BasePlusOffsetRequest *
   findBasePlusOffsetRequest(const Relocation &rel) const;
+  std::optional<uint64_t> addUnsignedAddend(uint64_t value, int64_t addend,
+                                            const Relocation &rel,
+                                            const uint8_t *loc,
+                                            StringRef calculation) const;
+  std::optional<uint16_t> resolveLocalAssertion(const Relocation &rel,
+                                                const uint8_t *loc) const;
   bool isRegisterContentSymbol(const Symbol &sym) const;
   std::optional<uint16_t>
   getRegisterContentValue(const Symbol &sym, int64_t addend,
@@ -596,8 +601,15 @@ bool MMIX::planBasePlusOffsetAllocations() const {
       rel.expr = R_NONE;
       continue;
     }
-    resolved.push_back(
-        {rel.sym->getVA(ctx, rel.addend), static_cast<uint32_t>(index)});
+    const uint8_t *loc = request.section->content().data() + rel.offset;
+    std::optional<uint64_t> value = addUnsignedAddend(
+        rel.sym->getVA(ctx), rel.addend, rel, loc, "address calculation");
+    if (!value) {
+      request.valid = false;
+      rel.expr = R_NONE;
+      continue;
+    }
+    resolved.push_back({*value, static_cast<uint32_t>(index)});
   }
   llvm::sort(resolved, [](const ResolvedRequest &a, const ResolvedRequest &b) {
     return a.value < b.value;
@@ -620,6 +632,76 @@ bool MMIX::planBasePlusOffsetAllocations() const {
   return changed;
 }
 
+std::optional<uint64_t> MMIX::addUnsignedAddend(uint64_t value, int64_t addend,
+                                                const Relocation &rel,
+                                                const uint8_t *loc,
+                                                StringRef calculation) const {
+  if (addend >= 0) {
+    uint64_t unsignedAddend = static_cast<uint64_t>(addend);
+    if (value <= UINT64_MAX - unsignedAddend)
+      return value + unsignedAddend;
+  } else {
+    uint64_t magnitude = uint64_t(-(addend + 1)) + 1;
+    if (value >= magnitude)
+      return value - magnitude;
+  }
+  Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type << ' '
+           << calculation << " overflows the 64-bit address range";
+  return std::nullopt;
+}
+
+std::optional<uint16_t> MMIX::resolveLocalAssertion(const Relocation &rel,
+                                                    const uint8_t *loc) const {
+  auto direct = registerSymbols.find(rel.sym);
+  if (direct != registerSymbols.end()) {
+    std::optional<uint64_t> value = addUnsignedAddend(
+        direct->second, rel.addend, rel, loc, "register calculation");
+    if (!value)
+      return std::nullopt;
+    if (*value <= 255)
+      return static_cast<uint16_t>(*value);
+  } else if (isRegisterContentSymbol(*rel.sym)) {
+    return getRegisterContentValue(*rel.sym, rel.addend, loc);
+  } else if (const Defined *defined = dyn_cast<Defined>(rel.sym);
+             defined && !defined->section) {
+    std::optional<uint64_t> value = addUnsignedAddend(
+        rel.sym->getVA(ctx), rel.addend, rel, loc, "register calculation");
+    if (!value)
+      return std::nullopt;
+    if (*value <= 255)
+      return static_cast<uint16_t>(*value);
+  } else {
+    Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+             << " requires a register or absolute value, but " << rel.sym
+             << " is neither";
+    return std::nullopt;
+  }
+
+  Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+           << " resolves outside the register range [0, 255]";
+  return std::nullopt;
+}
+
+void MMIX::validateLocalAssertions() const {
+  SmallVector<InputSection *, 0> storage;
+  for (OutputSection *osec : ctx.outputSections) {
+    for (InputSection *sec : getInputSections(*osec, storage)) {
+      for (Relocation &rel : sec->relocs()) {
+        if (rel.type != R_MMIX_LOCAL)
+          continue;
+        const uint8_t *loc = sec->content().data() + rel.offset;
+        std::optional<uint16_t> reg = resolveLocalAssertion(rel, loc);
+        if (!reg)
+          continue;
+        if (*reg >= firstGlobalRegister)
+          Err(ctx) << getErrorLoc(ctx, loc) << "R_MMIX_LOCAL register $" << *reg
+                   << " is not local; first global register is $"
+                   << firstGlobalRegister;
+      }
+    }
+  }
+}
+
 const MMIX::BasePlusOffsetRequest *
 MMIX::findBasePlusOffsetRequest(const Relocation &rel) const {
   auto it = basePlusOffsetRequestByRelocation.find(&rel);
@@ -633,7 +715,7 @@ MMIX::getRegisterContentValue(const Symbol &sym, int64_t addend,
                               const uint8_t *loc) const {
   const Defined &defined = cast<Defined>(sym);
   const InputSection &section = *cast<InputSection>(defined.section);
-  int64_t offset = section.getOffset(defined.value) + addend;
+  uint64_t baseOffset = section.getOffset(defined.value);
   OutputSection *output = section.getParent();
   auto report = [&](const Twine &message) {
     if (loc)
@@ -641,26 +723,37 @@ MMIX::getRegisterContentValue(const Symbol &sym, int64_t addend,
     else
       Err(ctx) << message;
   };
-  if (offset < 0 || uint64_t(offset) >= output->size) {
+  std::optional<uint64_t> offset;
+  if (addend >= 0) {
+    uint64_t unsignedAddend = static_cast<uint64_t>(addend);
+    if (baseOffset <= UINT64_MAX - unsignedAddend)
+      offset = baseOffset + unsignedAddend;
+  } else {
+    uint64_t magnitude = uint64_t(-(addend + 1)) + 1;
+    if (baseOffset >= magnitude)
+      offset = baseOffset - magnitude;
+  }
+  if (!offset || *offset >= output->size) {
     report(Twine("register-content symbol ") + sym.getName() +
            " with addend resolves outside .MMIX.reg_contents");
     return std::nullopt;
   }
-  if ((offset & 7) != 0) {
+  if ((*offset & 7) != 0) {
     report(Twine("register-content symbol ") + sym.getName() +
            " with addend is not 8-byte aligned");
     return std::nullopt;
   }
-  return firstGlobalRegister + offset / 8;
+  return firstGlobalRegister + *offset / 8;
 }
 
 std::optional<uint8_t> MMIX::resolveRegister(const Relocation &rel,
                                              bool allowImmediate,
                                              const uint8_t *loc) const {
   auto direct = registerSymbols.find(rel.sym);
-  uint64_t value;
+  std::optional<uint64_t> value;
   if (direct != registerSymbols.end()) {
-    value = direct->second + rel.addend;
+    value = addUnsignedAddend(direct->second, rel.addend, rel, loc,
+                              "register calculation");
   } else if (isRegisterContentSymbol(*rel.sym)) {
     std::optional<uint16_t> reg =
         getRegisterContentValue(*rel.sym, rel.addend, loc);
@@ -675,19 +768,22 @@ std::optional<uint8_t> MMIX::resolveRegister(const Relocation &rel,
                << rel.sym << " is neither";
       return std::nullopt;
     }
-    value = rel.sym->getVA(ctx, rel.addend);
+    value = addUnsignedAddend(rel.sym->getVA(ctx), rel.addend, rel, loc,
+                              "immediate calculation");
   } else {
     Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
              << " requires a register symbol, but " << rel.sym << " is not one";
     return std::nullopt;
   }
 
-  if (value > 255) {
+  if (!value)
+    return std::nullopt;
+  if (*value > 255) {
     Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
-             << " resolves to " << value << ", outside byte range [0, 255]";
+             << " resolves to " << *value << ", outside byte range [0, 255]";
     return std::nullopt;
   }
-  return static_cast<uint8_t>(value);
+  return static_cast<uint8_t>(*value);
 }
 
 RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
@@ -705,6 +801,7 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_REG_OR_BYTE:
   case R_MMIX_REG:
   case R_MMIX_BASE_PLUS_OFFSET:
+  case R_MMIX_LOCAL:
     expr = R_ABS;
     break;
   case R_MMIX_PC_8:
@@ -764,6 +861,13 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
 
     if (type == R_MMIX_BASE_PLUS_OFFSET)
       linkerAllocatedRegisterContents->markNeeded();
+
+    if (type == R_MMIX_LOCAL && it->r_offset >= sec.getSize()) {
+      Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
+      Err(ctx) << &sec << ": R_MMIX_LOCAL metadata offset " << it->r_offset
+               << " is outside the section against symbol " << &sym;
+      continue;
+    }
 
     if ((getRelaxationSequence(type) || isStubbableCall(type)) &&
         !(sec.flags & SHF_EXECINSTR)) {
@@ -1016,6 +1120,8 @@ bool MMIX::relaxOnce(int) const {
 
 void MMIX::finalizeRelax(int passes) const {
   Log(ctx) << "MMIX relaxation passes: " << passes;
+  updateRegisterModel();
+  validateLocalAssertions();
   for (RelaxationSection &sectionState : relaxationSections) {
     if (sectionState.stubIndices.empty())
       continue;
@@ -1083,6 +1189,8 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     write16be(loc, (reg << 8) | request->offset);
     return;
   }
+  case R_MMIX_LOCAL:
+    return;
   case R_MMIX_16:
   case R_MMIX_PC_16:
     checkMMIXBitfield(ctx, loc, val, 16, rel);
