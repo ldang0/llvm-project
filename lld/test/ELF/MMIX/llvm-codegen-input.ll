@@ -51,7 +51,6 @@
 ; DATA:      Contents of section .data:
 ; DATA-NEXT: 20000 00000000 0000002a 00000000 00020000
 
-; MILESTONE3-DAG: unsupported relocation R_MMIX_GETA against symbol external_data: requires MMIX relaxation support
 ; MILESTONE3-DAG: unsupported relocation R_MMIX_PUSHJ_STUBBABLE against symbol external_function: requires MMIX range-extension stub support
 
 ;--- layout.lds

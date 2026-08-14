@@ -4,12 +4,8 @@
 # RUN: not ld.lld --error-limit=0 -e 0 %t.o -o /dev/null 2>&1 \
 # RUN:   | FileCheck %s --implicit-check-not='unsupported relocation Unknown'
 
-## Primary expanding records require relaxation, while stubbable PUSHJ needs
-## the separate range-extension implementation.
-# CHECK-DAG: unsupported relocation R_MMIX_GETA against symbol target: requires MMIX relaxation support
-# CHECK-DAG: unsupported relocation R_MMIX_CBRANCH against symbol target: requires MMIX relaxation support
-# CHECK-DAG: unsupported relocation R_MMIX_PUSHJ against symbol target: requires MMIX relaxation support
-# CHECK-DAG: unsupported relocation R_MMIX_JMP against symbol target: requires MMIX relaxation support
+## Primary expanding records are implemented. Stubbable PUSHJ still needs the
+## separate range-extension implementation.
 # CHECK-DAG: unsupported relocation R_MMIX_PUSHJ_STUBBABLE against symbol target: requires MMIX range-extension stub support
 
 ## GNU continuation records require their primary sequence context.

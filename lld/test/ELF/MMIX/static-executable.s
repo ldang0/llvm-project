@@ -57,7 +57,6 @@
 # DATA-NEXT: 20020 667788e5 ffe45aff ffe2ffff ffdeffff
 # DATA-NEXT: 20030 ffffffff ffda
 
-# MILESTONE3-DAG: unsupported relocation R_MMIX_GETA against symbol state: requires MMIX relaxation support
 # MILESTONE3-DAG: unsupported relocation R_MMIX_PUSHJ_STUBBABLE against symbol worker: requires MMIX range-extension stub support
 
 #--- layout.lds

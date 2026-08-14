@@ -1,20 +1,15 @@
 # REQUIRES: mmix
 
 # RUN: yaml2obj --docnum=1 %s -o %t-valid.o
-# RUN: not ld.lld --verbose --error-limit=0 -e target %t-valid.o \
-# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=VALID
+# RUN: ld.lld --verbose --error-limit=0 -e target %t-valid.o \
+# RUN:   -o %t-valid 2>&1 | FileCheck %s --check-prefix=VALID
 # RUN: yaml2obj --docnum=2 %s -o %t-invalid.o
 # RUN: not ld.lld --verbose --error-limit=0 -e target %t-invalid.o \
 # RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=INVALID
 
-## All primary expanding relocations enter one target-local relaxation pass.
-## Family-specific rewrites are introduced by subsequent tasks, so valid
-## reservations still end in the established stable diagnostic.
-# VALID-DAG: MMIX relaxation passes: 1
-# VALID-DAG: unsupported relocation R_MMIX_GETA against symbol target: requires MMIX relaxation support
-# VALID-DAG: unsupported relocation R_MMIX_CBRANCH against symbol target: requires MMIX relaxation support
-# VALID-DAG: unsupported relocation R_MMIX_PUSHJ against symbol target: requires MMIX relaxation support
-# VALID-DAG: unsupported relocation R_MMIX_JMP against symbol target: requires MMIX relaxation support
+## All primary expanding relocations enter the same target-local relaxation
+## lifecycle and converge after their initial monotonic classification.
+# VALID: MMIX relaxation passes: 2
 
 ## Reject malformed reservations before a relaxation implementation can
 ## inspect or rewrite their instructions.

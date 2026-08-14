@@ -24,6 +24,14 @@ using namespace lld::elf;
 
 namespace {
 constexpr uint32_t swymInstruction = 0xfd000000;
+constexpr uint32_t setlOpcode = 0xe3;
+constexpr uint32_t inchOpcode = 0xe4;
+constexpr uint32_t incmhOpcode = 0xe5;
+constexpr uint32_t incmlOpcode = 0xe6;
+constexpr uint32_t goImmediateOpcode = 0x9f;
+constexpr uint32_t pushgoImmediateOpcode = 0xbf;
+constexpr uint32_t pc19ValueMask = 0xffff;
+constexpr uint32_t pc27ValueMask = 0xffffff;
 
 struct MMIXRelaxationSequence {
   uint8_t size;
@@ -48,11 +56,6 @@ std::optional<MMIXRelaxationSequence> getRelaxationSequence(RelType type) {
 
 StringRef getUnsupportedRelocationReason(RelType type) {
   switch (type) {
-  case R_MMIX_GETA:
-  case R_MMIX_CBRANCH:
-  case R_MMIX_PUSHJ:
-  case R_MMIX_JMP:
-    return "requires MMIX relaxation support";
   case R_MMIX_GETA_1:
   case R_MMIX_GETA_2:
   case R_MMIX_GETA_3:
@@ -135,6 +138,60 @@ void relocateMMIXTerminal(uint8_t *loc, Ctx &ctx, uint64_t val,
   write32be(loc, word);
 }
 
+bool isDirectMMIXTransfer(uint64_t target, uint64_t place, uint32_t valueMask) {
+  if (target & 3)
+    return false;
+  int64_t delta = static_cast<int64_t>(target - place);
+  constexpr int64_t instructionSize = 4;
+  int64_t min = -static_cast<int64_t>(valueMask + 1) * instructionSize;
+  int64_t max = static_cast<int64_t>(valueMask) * instructionSize;
+  return delta >= min && delta <= max;
+}
+
+void writeAbsoluteAddress(uint8_t *loc, uint8_t reg, uint64_t value) {
+  write32be(loc, (setlOpcode << 24) | (uint32_t(reg) << 16) | (value & 0xffff));
+  write32be(loc + 4, (incmlOpcode << 24) | (uint32_t(reg) << 16) |
+                         ((value >> 16) & 0xffff));
+  write32be(loc + 8, (incmhOpcode << 24) | (uint32_t(reg) << 16) |
+                         ((value >> 32) & 0xffff));
+  write32be(loc + 12, (inchOpcode << 24) | (uint32_t(reg) << 16) |
+                          ((value >> 48) & 0xffff));
+}
+
+void relocateMMIXExpanded(uint8_t *loc, uint64_t value, const Relocation &rel) {
+  constexpr uint8_t scratchRegister = 255;
+  uint8_t originalX = loc[1];
+  switch (rel.type) {
+  case R_MMIX_GETA:
+    writeAbsoluteAddress(loc, originalX, value);
+    return;
+  case R_MMIX_CBRANCH: {
+    constexpr uint32_t conditionInversionBit = uint32_t(1) << 27;
+    constexpr uint32_t predictionInversionBit = uint32_t(1) << 28;
+    constexpr uint32_t branchFieldMask = 0xffff;
+    constexpr uint32_t instructionsToSkip = 6;
+    uint32_t branch = read32be(loc);
+    branch ^= conditionInversionBit | predictionInversionBit;
+    branch = (branch & ~branchFieldMask) | instructionsToSkip;
+    write32be(loc, branch);
+    writeAbsoluteAddress(loc + 4, scratchRegister, value);
+    write32be(loc + 20, (goImmediateOpcode << 24) | 0xffff00);
+    return;
+  }
+  case R_MMIX_PUSHJ:
+    writeAbsoluteAddress(loc, scratchRegister, value);
+    write32be(loc + 16, (pushgoImmediateOpcode << 24) |
+                            (uint32_t(originalX) << 16) | 0xff00);
+    return;
+  case R_MMIX_JMP:
+    writeAbsoluteAddress(loc, scratchRegister, value);
+    write32be(loc + 16, (goImmediateOpcode << 24) | 0xffff00);
+    return;
+  default:
+    llvm_unreachable("not an expanding MMIX relocation");
+  }
+}
+
 class MMIX final : public TargetInfo {
 public:
   MMIX(Ctx &ctx);
@@ -154,12 +211,11 @@ public:
                 uint64_t val) const override;
 
 private:
-  enum class RelaxationState : uint8_t { Pending, Direct, Expanded };
+  enum class RelaxationState : uint8_t { Pending, Direct, Expanded, Invalid };
 
   struct RelaxationSite {
     InputSection *section;
     uint32_t relocationIndex;
-    uint8_t reservationSize;
     RelaxationState state = RelaxationState::Pending;
   };
 
@@ -332,34 +388,49 @@ bool MMIX::relaxOnce(int) const {
       for (InputSection *sec : getInputSections(*osec, storage)) {
         ArrayRef<Relocation> rels = sec->relocs();
         for (auto [index, rel] : llvm::enumerate(rels))
-          if (std::optional<MMIXRelaxationSequence> sequence =
-                  getRelaxationSequence(rel.type))
-            relaxationSites.push_back(
-                {sec, static_cast<uint32_t>(index), sequence->size});
+          if (getRelaxationSequence(rel.type))
+            relaxationSites.push_back({sec, static_cast<uint32_t>(index)});
       }
     }
     relaxationSitesInitialized = true;
   }
 
-  // Sites retain their section and relocation index, so later passes can
-  // recompute S + A - P after any section-size or stub change. Decisions may
-  // only advance from Pending to one of the final forms in family-specific
-  // relaxation implementations.
-  return false;
+  bool changed = false;
+  for (RelaxationSite &site : relaxationSites) {
+    if (site.state == RelaxationState::Invalid)
+      continue;
+
+    Relocation &rel = site.section->relocs()[site.relocationIndex];
+    uint64_t target = rel.sym->getVA(ctx, rel.addend);
+    uint64_t place = site.section->getVA(rel.offset);
+    if (target & 3) {
+      const uint8_t *loc = site.section->content().data() + rel.offset;
+      Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+               << " against symbol " << rel.sym
+               << " has a target that is not 4-byte aligned: 0x"
+               << utohexstr(target);
+      site.state = RelaxationState::Invalid;
+      rel.expr = R_NONE;
+      continue;
+    }
+
+    uint32_t valueMask = rel.type == R_MMIX_JMP ? pc27ValueMask : pc19ValueMask;
+    bool direct = isDirectMMIXTransfer(target, place, valueMask);
+    if (site.state == RelaxationState::Pending) {
+      site.state = direct ? RelaxationState::Direct : RelaxationState::Expanded;
+      rel.expr = direct ? R_PC : R_ABS;
+      changed = true;
+    } else if (site.state == RelaxationState::Direct && !direct) {
+      site.state = RelaxationState::Expanded;
+      rel.expr = R_ABS;
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 void MMIX::finalizeRelax(int passes) const {
   Log(ctx) << "MMIX relaxation passes: " << passes;
-  for (RelaxationSite &site : relaxationSites) {
-    if (site.state != RelaxationState::Pending)
-      continue;
-    Relocation &rel = site.section->relocs()[site.relocationIndex];
-    const uint8_t *loc = site.section->content().data() + rel.offset;
-    Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << rel.type
-             << " against symbol " << rel.sym << ": "
-             << getUnsupportedRelocationReason(rel.type);
-    rel.expr = R_NONE;
-  }
 }
 
 void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
@@ -391,10 +462,24 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     write64be(loc, val);
     return;
   case R_MMIX_ADDR19:
-    relocateMMIXTerminal(loc, ctx, val, 0xffff, rel);
+    relocateMMIXTerminal(loc, ctx, val, pc19ValueMask, rel);
     return;
   case R_MMIX_ADDR27:
-    relocateMMIXTerminal(loc, ctx, val, 0xffffff, rel);
+    relocateMMIXTerminal(loc, ctx, val, pc27ValueMask, rel);
+    return;
+  case R_MMIX_GETA:
+  case R_MMIX_CBRANCH:
+  case R_MMIX_PUSHJ:
+    if (rel.expr == R_PC)
+      relocateMMIXTerminal(loc, ctx, val, pc19ValueMask, rel);
+    else if (rel.expr == R_ABS)
+      relocateMMIXExpanded(loc, val, rel);
+    return;
+  case R_MMIX_JMP:
+    if (rel.expr == R_PC)
+      relocateMMIXTerminal(loc, ctx, val, pc27ValueMask, rel);
+    else if (rel.expr == R_ABS)
+      relocateMMIXExpanded(loc, val, rel);
     return;
   default:
     Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << rel.type;
