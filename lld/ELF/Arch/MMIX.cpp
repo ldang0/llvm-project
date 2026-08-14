@@ -19,6 +19,46 @@ using namespace lld;
 using namespace lld::elf;
 
 namespace {
+StringRef getUnsupportedRelocationReason(RelType type) {
+  switch (type) {
+  case R_MMIX_GETA:
+  case R_MMIX_CBRANCH:
+  case R_MMIX_PUSHJ:
+  case R_MMIX_JMP:
+    return "requires MMIX relaxation support";
+  case R_MMIX_GETA_1:
+  case R_MMIX_GETA_2:
+  case R_MMIX_GETA_3:
+  case R_MMIX_CBRANCH_J:
+  case R_MMIX_CBRANCH_1:
+  case R_MMIX_CBRANCH_2:
+  case R_MMIX_CBRANCH_3:
+  case R_MMIX_PUSHJ_1:
+  case R_MMIX_PUSHJ_2:
+  case R_MMIX_PUSHJ_3:
+  case R_MMIX_JMP_1:
+  case R_MMIX_JMP_2:
+  case R_MMIX_JMP_3:
+    return "GNU relaxation continuation cannot be used as standalone input";
+  case R_MMIX_GNU_VTINHERIT:
+  case R_MMIX_GNU_VTENTRY:
+    return "requires GNU vtable metadata support";
+  case R_MMIX_REG_OR_BYTE:
+  case R_MMIX_REG:
+  case R_MMIX_BASE_PLUS_OFFSET:
+  case R_MMIX_LOCAL:
+    return "requires MMIX register-model support";
+  case R_MMIX_PUSHJ_STUBBABLE:
+    return "requires MMIX range-extension stub support";
+  default:
+    return {};
+  }
+}
+
+bool isTerminalRelocation(RelType type) {
+  return type == R_MMIX_ADDR19 || type == R_MMIX_ADDR27;
+}
+
 unsigned getRelocationFieldSize(RelType type) {
   switch (type) {
   case R_MMIX_8:
@@ -114,6 +154,8 @@ MMIX::MMIX(Ctx &ctx) : TargetInfo(ctx) {
 
 RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
                          const uint8_t *loc) const {
+  RelExpr expr = R_NONE;
+  bool implemented = true;
   switch (type) {
   case R_MMIX_NONE:
     return R_NONE;
@@ -122,7 +164,8 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_24:
   case R_MMIX_32:
   case R_MMIX_64:
-    return R_ABS;
+    expr = R_ABS;
+    break;
   case R_MMIX_PC_8:
   case R_MMIX_PC_16:
   case R_MMIX_PC_24:
@@ -130,14 +173,30 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_PC_64:
   case R_MMIX_ADDR19:
   case R_MMIX_ADDR27:
-    return R_PC;
+    expr = R_PC;
+    break;
   default:
+    implemented = false;
     break;
   }
 
-  Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << type
-           << " against symbol " << &s;
-  return R_NONE;
+  if (!implemented) {
+    StringRef reason = getUnsupportedRelocationReason(type);
+    if (reason.empty())
+      Err(ctx) << getErrorLoc(ctx, loc) << "unknown relocation (" << type.v
+               << ") against symbol " << &s;
+    else
+      Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << type
+               << " against symbol " << &s << ": " << reason;
+    return R_NONE;
+  }
+
+  if (s.isTls()) {
+    Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << type
+             << " against TLS symbol " << &s << " is unsupported";
+    return R_NONE;
+  }
+  return expr;
 }
 
 int64_t MMIX::getImplicitAddend(const uint8_t *buf, RelType type) const {
@@ -159,14 +218,21 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
 
     if (unsigned size = getRelocationFieldSize(type)) {
       uint64_t offset = it->r_offset;
+      Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
       if (offset >= sec.getSize()) {
         Err(ctx) << &sec << ": relocation " << type << " offset " << offset
-                 << " is outside the section";
+                 << " is outside the section against symbol " << &sym;
         continue;
       }
       if (size > sec.getSize() - offset) {
         Err(ctx) << &sec << ": relocation " << type << " field at offset "
-                 << offset << " extends past the end of the section";
+                 << offset << " extends past the end of the section against "
+                 << "symbol " << &sym;
+        continue;
+      }
+      if (isTerminalRelocation(type) && (offset & 3) != 0) {
+        Err(ctx) << &sec << ": relocation " << type << " field offset "
+                 << offset << " is not 4-byte aligned against symbol " << &sym;
         continue;
       }
     }
