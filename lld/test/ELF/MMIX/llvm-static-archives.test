@@ -1,0 +1,116 @@
+# REQUIRES: mmix
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llc -mtriple=mmix-unknown-elf -filetype=obj %t/main.ll -o %t/main.o
+# RUN: llc -mtriple=mmix-unknown-elf -filetype=obj %t/library.ll \
+# RUN:   -o %t/library.o
+# RUN: llc -mtriple=mmix-unknown-elf -filetype=obj %t/unused.ll \
+# RUN:   -o %t/unused.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/mc.s -o %t/mc.o
+# RUN: llvm-ar rcs %t/libcodegen.a %t/unused.o %t/library.o
+# RUN: llvm-ar rcs %t/libmc.a %t/mc.o
+# RUN: ld.lld -T %t/layout.lds %t/main.o --start-group %t/libmc.a \
+# RUN:   %t/libcodegen.a --end-group -o %t/one
+# RUN: ld.lld -T %t/layout.lds %t/main.o --start-group %t/libmc.a \
+# RUN:   %t/libcodegen.a --end-group -o %t/two
+# RUN: cmp %t/one %t/two
+# RUN: llvm-readobj --sections --symbols --relocations %t/one \
+# RUN:   | FileCheck %s --check-prefix=OBJ \
+# RUN:     --implicit-check-not=unused_archive --implicit-check-not=.text.unused \
+# RUN:     --implicit-check-not=.data.unused
+# RUN: llvm-objdump --no-print-imm-hex -d %t/one \
+# RUN:   | FileCheck %s --check-prefix=DIS
+# RUN: llvm-objdump -s --section=.data.codegen %t/one \
+# RUN:   | FileCheck %s --check-prefix=DATA
+
+# OBJ:      Name: .text.start
+# OBJ:      Name: .text.codegen
+# OBJ:      Name: .text.mc
+# OBJ:      Name: .data.mc
+# OBJ:      Name: .data.codegen
+# OBJ-NOT:  Name: .MMIX.reg_contents
+# OBJ:      Relocations [
+# OBJ-NEXT: ]
+# OBJ-DAG:  Name: __MMIX_call_stub_0
+# OBJ-DAG:  Name: __MMIX_call_stub_1
+# OBJ-DAG:  Name: _start
+# OBJ-DAG:  Name: archive_codegen
+# OBJ-DAG:  Name: archive_leaf
+# OBJ-DAG:  Name: archive_mc
+# OBJ-DAG:  Name: archive_data
+# OBJ-DAG:  Name: archive_pointer
+
+# DIS-LABEL: <_start>:
+# DIS:       PUSHJ r31, {{[0-9]+}}
+# DIS-LABEL: <archive_codegen>:
+# DIS:       PUSHJ r31, {{[0-9]+}}
+# DIS:       SETL
+# DIS-LABEL: <__MMIX_call_stub_0>:
+# DIS:       GO r255, r255, 0
+# DIS-LABEL: <archive_mc>:
+# DIS:       PUSHJ r1, {{[0-9]+}}
+# DIS-LABEL: <__MMIX_call_stub_1>:
+# DIS:       GO r255, r255, 0
+
+# DATA:      Contents of section .data.codegen:
+# DATA-NEXT: 210000 00000000 00200000
+
+#--- main.ll
+target triple = "mmix-unknown-elf"
+
+declare i64 @archive_codegen()
+
+define i64 @_start() section ".text.start" {
+  %value = call i64 @archive_codegen()
+  ret i64 %value
+}
+
+#--- library.ll
+target triple = "mmix-unknown-elf"
+
+@archive_data = external global i64
+@archive_pointer = global ptr @archive_data, section ".data.codegen", align 8
+
+declare void @archive_mc()
+
+define i64 @archive_codegen() section ".text.codegen" {
+  call void @archive_mc()
+  %value = load volatile i64, ptr @archive_data, align 8
+  ret i64 %value
+}
+
+define void @archive_leaf() section ".text.codegen" {
+  ret void
+}
+
+#--- unused.ll
+target triple = "mmix-unknown-elf"
+
+@unused_archive_data = global i64 99, section ".data.unused", align 8
+
+define void @unused_archive_function() section ".text.unused" {
+  ret void
+}
+
+#--- mc.s
+.section .text.mc,"ax",@progbits
+.global archive_mc
+.type archive_mc,@function
+archive_mc:
+  PUSHJ r1, archive_leaf
+  POP 0, 0
+.section .data.mc,"aw",@progbits
+.global archive_data
+.type archive_data,@object
+archive_data:
+  .quad 0x1122334455667788
+
+#--- layout.lds
+ENTRY(_start)
+SECTIONS {
+  .text.start 0x1000 : { *(.text.start) }
+  .text.codegen 0x2000 : { *(.text.codegen) }
+  .text.mc 0x100000000 : { *(.text.mc) }
+  .data.mc 0x200000 : { *(.data.mc) }
+  .data.codegen 0x210000 : { *(.data.codegen) }
+}
