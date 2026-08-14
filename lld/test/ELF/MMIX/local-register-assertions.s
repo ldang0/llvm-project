@@ -53,6 +53,8 @@ Sections:
     Relocations:
       - { Offset: 0, Type: R_MMIX_LOCAL, Symbol: absolute, Addend: 1 }
       - { Offset: 1, Type: R_MMIX_LOCAL, Symbol: direct, Addend: 1 }
+      # GNU as encodes `LOCAL 200` with STN_UNDEF and addend 200.
+      - { Offset: 2, Type: R_MMIX_LOCAL, Addend: 200 }
 Symbols:
   - { Name: direct, Index: 0xFF00, Value: 32 }
   - { Name: absolute, Index: SHN_ABS, Value: 253, Binding: STB_GLOBAL }

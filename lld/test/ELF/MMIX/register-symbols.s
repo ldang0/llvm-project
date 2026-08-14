@@ -52,7 +52,6 @@
 # INVALID-SYMBOL-DAG: MMIX register-content symbol bad_content_size must have size zero
 
 # INVALID-SECTION-DAG: MMIX register contents must not be allocated
-# INVALID-SECTION-DAG: MMIX register contents require 8-byte alignment
 # INVALID-SECTION-DAG: MMIX register contents size is not a multiple of 8
 # TOO-MANY: too many MMIX global register contents: 224, maximum is 223
 # DUPLICATE: duplicate symbol: duplicate_content
@@ -83,7 +82,7 @@ FileHeader: { Class: ELFCLASS64, Data: ELFDATA2MSB, Type: ET_REL, Machine: EM_MM
 Sections:
   - Name: .MMIX.reg_contents
     Type: SHT_PROGBITS
-    AddressAlign: 8
+    AddressAlign: 1
     Content: 0123456789ABCDEF
 Symbols:
   - { Name: other_content, Section: .MMIX.reg_contents, Binding: STB_GLOBAL }

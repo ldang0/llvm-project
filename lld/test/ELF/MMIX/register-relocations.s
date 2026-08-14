@@ -6,6 +6,10 @@
 # RUN: ld.lld -e _start %t/use.o %t/definitions.o -o %t/executable
 # RUN: llvm-readobj --relocations %t/executable | FileCheck %s --check-prefix=RELOCS
 # RUN: llvm-objdump -s --section=.text %t/executable | FileCheck %s --check-prefix=CONTENTS
+# RUN: yaml2obj %t/gnu-style.yaml -o %t/gnu-style.o
+# RUN: ld.lld -e _start %t/gnu-style.o -o %t/gnu-style
+# RUN: llvm-objdump -s --section=.text %t/gnu-style \
+# RUN:   | FileCheck %s --check-prefix=GNU-STYLE
 # RUN: yaml2obj %t/invalid.yaml -o %t/invalid.o
 # RUN: not ld.lld --error-limit=0 -e 0 %t/invalid.o -o /dev/null 2>&1 | FileCheck %s --check-prefix=INVALID
 # RUN: yaml2obj %t/invalid-offset.yaml -o %t/invalid-offset.o
@@ -15,6 +19,8 @@
 # RELOCS-NEXT: ]
 # CONTENTS:      Contents of section .text:
 # CONTENTS-NEXT: {{[0-9a-f]+}} aa21fffe 00ffffbb
+# GNU-STYLE:      Contents of section .text:
+# GNU-STYLE-NEXT: {{[0-9a-f]+}} 220102fe
 
 # INVALID-DAG: relocation R_MMIX_REG requires a register symbol, but absolute is not one
 # INVALID-DAG: relocation R_MMIX_REG requires a register symbol, but ordinary is not one
@@ -113,3 +119,26 @@ Sections:
       - { Offset: 4, Type: R_MMIX_REG, Symbol: valid_register }
 Symbols:
   - { Name: valid_register, Index: 0xFF00, Value: 32 }
+
+#--- gnu-style.yaml
+--- !ELF
+FileHeader: { Class: ELFCLASS64, Data: ELFDATA2MSB, Type: ET_REL, Machine: EM_MMIX }
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Flags: [ SHF_ALLOC, SHF_EXECINSTR ]
+    AddressAlign: 4
+    Content: 22010200
+  - Name: .MMIX.reg_contents
+    Type: SHT_PROGBITS
+    AddressAlign: 1
+    Content: 1122334455667788
+  - Name: .rela.text
+    Type: SHT_RELA
+    Link: .symtab
+    Info: .text
+    Relocations:
+      - { Offset: 3, Type: R_MMIX_REG, Symbol: .MMIX.reg_contents }
+Symbols:
+  - { Name: .MMIX.reg_contents, Section: .MMIX.reg_contents, Type: STT_SECTION }
+  - { Name: _start, Section: .text, Binding: STB_GLOBAL, Type: STT_FUNC }

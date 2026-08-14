@@ -323,6 +323,7 @@ private:
                                             StringRef calculation) const;
   std::optional<uint16_t> resolveLocalAssertion(const Relocation &rel,
                                                 const uint8_t *loc) const;
+  bool isRegisterContentReference(const Symbol &sym) const;
   bool isRegisterContentSymbol(const Symbol &sym) const;
   std::optional<uint16_t>
   getRegisterContentValue(const Symbol &sym, int64_t addend,
@@ -422,9 +423,10 @@ void MMIX::collectRegisterModel() {
         Err(ctx) << input << ": MMIX register contents must use SHT_PROGBITS";
       if (input->flags & SHF_ALLOC)
         Err(ctx) << input << ": MMIX register contents must not be allocated";
-      if (input->addralign < 8)
-        Err(ctx) << input
-                 << ": MMIX register contents require 8-byte alignment";
+      // GNU as emits this target-defined section with sh_addralign 1. Its
+      // entries are nevertheless octabytes, so promote the input alignment
+      // before generic output-section layout combines the contents.
+      input->addralign = std::max(input->addralign, uint32_t(8));
       if (input->getSize() % 8 != 0)
         Err(ctx) << input
                  << ": MMIX register contents size is not a multiple of 8";
@@ -479,11 +481,14 @@ void MMIX::collectRegisterModel() {
 }
 
 bool MMIX::isRegisterContentSymbol(const Symbol &sym) const {
+  return isRegisterContentReference(sym) && sym.type != STT_SECTION;
+}
+
+bool MMIX::isRegisterContentReference(const Symbol &sym) const {
   const Defined *defined = dyn_cast<Defined>(&sym);
   const InputSection *section =
       defined ? dyn_cast_or_null<InputSection>(defined->section) : nullptr;
-  return section && registerContentSections.contains(section) &&
-         sym.type != STT_SECTION;
+  return section && registerContentSections.contains(section);
 }
 
 std::optional<TargetSymbolTableEntry>
@@ -593,7 +598,7 @@ bool MMIX::planBasePlusOffsetAllocations() const {
       continue;
     Relocation &rel = request.section->relocs()[request.relocationIndex];
     if (registerSymbols.contains(rel.sym) ||
-        isRegisterContentSymbol(*rel.sym)) {
+        isRegisterContentReference(*rel.sym)) {
       const uint8_t *loc = request.section->content().data() + rel.offset;
       Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
                << " cannot use register symbol " << rel.sym << " as an address";
@@ -660,8 +665,15 @@ std::optional<uint16_t> MMIX::resolveLocalAssertion(const Relocation &rel,
       return std::nullopt;
     if (*value <= 255)
       return static_cast<uint16_t>(*value);
-  } else if (isRegisterContentSymbol(*rel.sym)) {
+  } else if (isRegisterContentReference(*rel.sym)) {
     return getRegisterContentValue(*rel.sym, rel.addend, loc);
+  } else if (rel.sym->isUndefined() && rel.sym->getName().empty()) {
+    std::optional<uint64_t> value = addUnsignedAddend(
+        0, rel.addend, rel, loc, "register calculation");
+    if (!value)
+      return std::nullopt;
+    if (*value <= 255)
+      return static_cast<uint16_t>(*value);
   } else if (const Defined *defined = dyn_cast<Defined>(rel.sym);
              defined && !defined->section) {
     std::optional<uint64_t> value = addUnsignedAddend(
@@ -754,7 +766,7 @@ std::optional<uint8_t> MMIX::resolveRegister(const Relocation &rel,
   if (direct != registerSymbols.end()) {
     value = addUnsignedAddend(direct->second, rel.addend, rel, loc,
                               "register calculation");
-  } else if (isRegisterContentSymbol(*rel.sym)) {
+  } else if (isRegisterContentReference(*rel.sym)) {
     std::optional<uint16_t> reg =
         getRegisterContentValue(*rel.sym, rel.addend, loc);
     if (!reg)
