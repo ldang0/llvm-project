@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "LinkerScript.h"
 #include "OutputSections.h"
 #include "RelocScan.h"
 #include "Symbols.h"
@@ -17,6 +18,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Endian.h"
+#include <atomic>
 #include <cstring>
 #include <optional>
 
@@ -38,6 +40,8 @@ constexpr uint32_t pc19ValueMask = 0xffff;
 constexpr uint32_t pc27ValueMask = 0xffffff;
 constexpr uint16_t shnMMIXRegister = SHN_LOPROC;
 constexpr StringLiteral registerContentsSectionName = ".MMIX.reg_contents";
+constexpr StringLiteral linkerAllocatedRegisterContentsSectionName =
+    ".MMIX.reg_contents.linker_allocated";
 constexpr uint16_t defaultFirstGlobalRegister = 255;
 constexpr uint16_t minimumGlobalRegister = 32;
 
@@ -64,6 +68,25 @@ std::optional<MMIXRelaxationSequence> getRelaxationSequence(RelType type) {
 
 bool isStubbableCall(RelType type) { return type == R_MMIX_PUSHJ_STUBBABLE; }
 
+class MMIXLinkerAllocatedRegisterSection final : public SyntheticSection {
+public:
+  MMIXLinkerAllocatedRegisterSection(Ctx &ctx, StringRef name)
+      : SyntheticSection(ctx, name, SHT_PROGBITS, 0, 8) {}
+
+  size_t getSize() const override { return bases.size() * 8; }
+  bool isNeeded() const override { return needed.load(); }
+  void markNeeded() { needed.store(true); }
+  void writeTo(uint8_t *buf) override {
+    for (auto [index, base] : llvm::enumerate(bases))
+      write64be(buf + index * 8, base);
+  }
+
+  SmallVector<uint64_t, 0> bases;
+
+private:
+  std::atomic<bool> needed = false;
+};
+
 StringRef getUnsupportedRelocationReason(RelType type) {
   switch (type) {
   case R_MMIX_GETA_1:
@@ -83,7 +106,6 @@ StringRef getUnsupportedRelocationReason(RelType type) {
   case R_MMIX_GNU_VTINHERIT:
   case R_MMIX_GNU_VTENTRY:
     return "requires GNU vtable metadata support";
-  case R_MMIX_BASE_PLUS_OFFSET:
   case R_MMIX_LOCAL:
     return "requires MMIX register-model support";
   default:
@@ -104,6 +126,7 @@ unsigned getRelocationFieldSize(RelType type) {
     return 1;
   case R_MMIX_16:
   case R_MMIX_PC_16:
+  case R_MMIX_BASE_PLUS_OFFSET:
     return 2;
   case R_MMIX_24:
   case R_MMIX_32:
@@ -212,6 +235,7 @@ class MMIX final : public TargetInfo {
 public:
   MMIX(Ctx &ctx);
 
+  void initTargetSpecificSections() override;
   std::optional<TargetSymbolTableEntry>
   getTargetSymbolTableEntry(const Symbol &sym) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
@@ -261,20 +285,39 @@ private:
     SmallVector<uint32_t, 0> stubIndices;
   };
 
+  struct BasePlusOffsetRequest {
+    InputSection *section;
+    uint32_t relocationIndex;
+    uint32_t baseIndex = UINT32_MAX;
+    uint8_t offset = 0;
+    bool valid = true;
+  };
+
   mutable SmallVector<RelaxationSite, 0> relaxationSites;
   mutable DenseMap<const Relocation *, uint32_t> relaxationSiteByRelocation;
   mutable SmallVector<CallStub, 0> callStubs;
   mutable SmallVector<RelaxationSection, 0> relaxationSections;
+  mutable SmallVector<BasePlusOffsetRequest, 0> basePlusOffsetRequests;
+  mutable DenseMap<const Relocation *, uint32_t>
+      basePlusOffsetRequestByRelocation;
   mutable bool relaxationSitesInitialized = false;
-  mutable bool registerModelInitialized = false;
+  mutable bool basePlusOffsetRequestsInitialized = false;
+  mutable bool linkerAllocatedRegisterContentsOrdered = false;
   mutable uint16_t firstGlobalRegister = defaultFirstGlobalRegister;
   mutable OutputSection *registerContentsOutput = nullptr;
+
+  std::unique_ptr<MMIXLinkerAllocatedRegisterSection>
+      linkerAllocatedRegisterContents;
 
   DenseMap<const Symbol *, uint16_t> registerSymbols;
   DenseSet<const InputSection *> registerContentSections;
 
   void collectRegisterModel();
-  void initializeRegisterModel() const;
+  void updateRegisterModel() const;
+  bool orderLinkerAllocatedRegisterContents() const;
+  bool planBasePlusOffsetAllocations() const;
+  const BasePlusOffsetRequest *
+  findBasePlusOffsetRequest(const Relocation &rel) const;
   bool isRegisterContentSymbol(const Symbol &sym) const;
   std::optional<uint16_t>
   getRegisterContentValue(const Symbol &sym, int64_t addend,
@@ -314,6 +357,42 @@ MMIX::MMIX(Ctx &ctx) : TargetInfo(ctx) {
                      << static_cast<unsigned>(file->abiVersion);
 
   collectRegisterModel();
+}
+
+void MMIX::initTargetSpecificSections() {
+  StringRef name = ctx.script->hasSectionsCommand
+                       ? linkerAllocatedRegisterContentsSectionName
+                       : registerContentsSectionName;
+  linkerAllocatedRegisterContents =
+      std::make_unique<MMIXLinkerAllocatedRegisterSection>(ctx, name);
+  ctx.inputSections.push_back(linkerAllocatedRegisterContents.get());
+}
+
+bool MMIX::orderLinkerAllocatedRegisterContents() const {
+  if (linkerAllocatedRegisterContentsOrdered ||
+      ctx.script->hasSectionsCommand ||
+      !linkerAllocatedRegisterContents->isNeeded())
+    return false;
+  linkerAllocatedRegisterContentsOrdered = true;
+
+  OutputSection *output = linkerAllocatedRegisterContents->getParent();
+  if (!output)
+    return false;
+  for (SectionCommand *cmd : output->commands) {
+    auto *isd = dyn_cast<InputSectionDescription>(cmd);
+    if (!isd)
+      continue;
+    auto it = llvm::find(isd->sections, linkerAllocatedRegisterContents.get());
+    if (it == isd->sections.end())
+      continue;
+    if (it == isd->sections.begin())
+      return false;
+    InputSection *section = *it;
+    isd->sections.erase(it);
+    isd->sections.insert(isd->sections.begin(), section);
+    return true;
+  }
+  return false;
 }
 
 void MMIX::collectRegisterModel() {
@@ -413,14 +492,27 @@ MMIX::getTargetSymbolTableEntry(const Symbol &sym) const {
   return TargetSymbolTableEntry{shnMMIXRegister, reg.value_or(0)};
 }
 
-void MMIX::initializeRegisterModel() const {
-  if (registerModelInitialized)
-    return;
-  registerModelInitialized = true;
-  if (registerContentSections.empty())
+void MMIX::updateRegisterModel() const {
+  bool hasAllocatedContents = linkerAllocatedRegisterContents &&
+                              linkerAllocatedRegisterContents->isNeeded();
+  if (registerContentSections.empty() && !hasAllocatedContents)
     return;
 
   OutputSection *output = nullptr;
+  if (hasAllocatedContents) {
+    output = linkerAllocatedRegisterContents->getParent();
+    if (!output || output->name != registerContentsSectionName) {
+      Err(ctx) << linkerAllocatedRegisterContents.get()
+               << ": MMIX linker-allocated register contents must be placed "
+                  "in the .MMIX.reg_contents output section";
+      output = nullptr;
+    } else if (linkerAllocatedRegisterContents->outSecOff != 0) {
+      Err(ctx) << linkerAllocatedRegisterContents.get()
+               << ": MMIX linker-allocated register contents must precede "
+                  "ordinary .MMIX.reg_contents input sections";
+    }
+  }
+
   for (const InputSection *section : registerContentSections) {
     if (!section->isLive())
       continue;
@@ -440,6 +532,11 @@ void MMIX::initializeRegisterModel() const {
     if ((section->outSecOff & 7) != 0)
       Err(ctx) << section
                << ": MMIX register contents have an unaligned output offset";
+    if (hasAllocatedContents &&
+        section->outSecOff < linkerAllocatedRegisterContents->getSize())
+      Err(ctx) << section
+               << ": ordinary MMIX register contents must follow "
+                  ".MMIX.reg_contents.linker_allocated";
   }
   if (!output)
     return;
@@ -460,6 +557,75 @@ void MMIX::initializeRegisterModel() const {
     entries = maximumEntries;
   }
   firstGlobalRegister = defaultFirstGlobalRegister - entries;
+}
+
+bool MMIX::planBasePlusOffsetAllocations() const {
+  if (!basePlusOffsetRequestsInitialized) {
+    SmallVector<InputSection *, 0> storage;
+    for (OutputSection *osec : ctx.outputSections) {
+      for (InputSection *sec : getInputSections(*osec, storage)) {
+        ArrayRef<Relocation> rels = sec->relocs();
+        for (auto [index, rel] : llvm::enumerate(rels)) {
+          if (rel.type != R_MMIX_BASE_PLUS_OFFSET)
+            continue;
+          uint32_t requestIndex = basePlusOffsetRequests.size();
+          basePlusOffsetRequests.push_back({sec, static_cast<uint32_t>(index)});
+          basePlusOffsetRequestByRelocation.try_emplace(&rels[index],
+                                                        requestIndex);
+        }
+      }
+    }
+    basePlusOffsetRequestsInitialized = true;
+  }
+
+  struct ResolvedRequest {
+    uint64_t value;
+    uint32_t requestIndex;
+  };
+  SmallVector<ResolvedRequest, 0> resolved;
+  for (auto [index, request] : llvm::enumerate(basePlusOffsetRequests)) {
+    if (!request.valid)
+      continue;
+    Relocation &rel = request.section->relocs()[request.relocationIndex];
+    if (registerSymbols.contains(rel.sym) ||
+        isRegisterContentSymbol(*rel.sym)) {
+      const uint8_t *loc = request.section->content().data() + rel.offset;
+      Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+               << " cannot use register symbol " << rel.sym << " as an address";
+      request.valid = false;
+      rel.expr = R_NONE;
+      continue;
+    }
+    resolved.push_back(
+        {rel.sym->getVA(ctx, rel.addend), static_cast<uint32_t>(index)});
+  }
+  llvm::sort(resolved, [](const ResolvedRequest &a, const ResolvedRequest &b) {
+    return a.value < b.value;
+  });
+
+  SmallVector<uint64_t, 0> bases;
+  uint64_t currentBase = 0;
+  for (auto [index, item] : llvm::enumerate(resolved)) {
+    if (index == 0 || item.value - currentBase > 255) {
+      currentBase = item.value;
+      bases.push_back(currentBase);
+    }
+    BasePlusOffsetRequest &request = basePlusOffsetRequests[item.requestIndex];
+    request.baseIndex = bases.size() - 1;
+    request.offset = item.value - currentBase;
+  }
+
+  bool changed = linkerAllocatedRegisterContents->bases != bases;
+  linkerAllocatedRegisterContents->bases = std::move(bases);
+  return changed;
+}
+
+const MMIX::BasePlusOffsetRequest *
+MMIX::findBasePlusOffsetRequest(const Relocation &rel) const {
+  auto it = basePlusOffsetRequestByRelocation.find(&rel);
+  return it == basePlusOffsetRequestByRelocation.end()
+             ? nullptr
+             : &basePlusOffsetRequests[it->second];
 }
 
 std::optional<uint16_t>
@@ -538,6 +704,7 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_64:
   case R_MMIX_REG_OR_BYTE:
   case R_MMIX_REG:
+  case R_MMIX_BASE_PLUS_OFFSET:
     expr = R_ABS;
     break;
   case R_MMIX_PC_8:
@@ -594,6 +761,9 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
     RelType type = it->getType(false);
     if (type == R_MMIX_NONE)
       continue;
+
+    if (type == R_MMIX_BASE_PLUS_OFFSET)
+      linkerAllocatedRegisterContents->markNeeded();
 
     if ((getRelaxationSequence(type) || isStubbableCall(type)) &&
         !(sec.flags & SHF_EXECINSTR)) {
@@ -734,7 +904,10 @@ MMIX::findRelaxationSite(const Relocation &rel) const {
 }
 
 bool MMIX::relaxOnce(int) const {
-  initializeRegisterModel();
+  bool changed = orderLinkerAllocatedRegisterContents();
+  if (!changed)
+    updateRegisterModel();
+  changed |= planBasePlusOffsetAllocations();
   if (!relaxationSitesInitialized) {
     SmallVector<InputSection *, 0> storage;
     for (OutputSection *osec : ctx.outputSections) {
@@ -754,7 +927,6 @@ bool MMIX::relaxOnce(int) const {
     relaxationSitesInitialized = true;
   }
 
-  bool changed = false;
   for (RelaxationSection &sectionState : relaxationSections) {
     uint64_t offset = sectionState.originalSize;
     for (uint32_t index : sectionState.stubIndices) {
@@ -897,6 +1069,20 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     if (std::optional<uint8_t> reg = resolveRegister(rel, false, loc))
       *loc = *reg;
     return;
+  case R_MMIX_BASE_PLUS_OFFSET: {
+    const BasePlusOffsetRequest *request = findBasePlusOffsetRequest(rel);
+    if (!request || !request->valid || request->baseIndex == UINT32_MAX)
+      return;
+    uint64_t reg = uint64_t(firstGlobalRegister) + request->baseIndex;
+    if (reg > 255) {
+      Err(ctx) << getErrorLoc(ctx, loc)
+               << "R_MMIX_BASE_PLUS_OFFSET allocation exceeds the global "
+                  "register range";
+      return;
+    }
+    write16be(loc, (reg << 8) | request->offset);
+    return;
+  }
   case R_MMIX_16:
   case R_MMIX_PC_16:
     checkMMIXBitfield(ctx, loc, val, 16, rel);

@@ -19,10 +19,9 @@
 # CHECK-DAG: unsupported relocation R_MMIX_JMP_2 against symbol target: GNU relaxation continuation cannot be used as standalone input
 # CHECK-DAG: unsupported relocation R_MMIX_JMP_3 against symbol target: GNU relaxation continuation cannot be used as standalone input
 
-## Metadata and register-model records remain recognized but unimplemented.
+## Metadata and LOCAL records remain recognized but unimplemented.
 # CHECK-DAG: unsupported relocation R_MMIX_GNU_VTINHERIT against symbol target: requires GNU vtable metadata support
 # CHECK-DAG: unsupported relocation R_MMIX_GNU_VTENTRY against symbol target: requires GNU vtable metadata support
-# CHECK-DAG: unsupported relocation R_MMIX_BASE_PLUS_OFFSET against symbol target: requires MMIX register-model support
 # CHECK-DAG: unsupported relocation R_MMIX_LOCAL against symbol target: requires MMIX register-model support
 
 ## Values outside the complete GNU MMIX relocation enum are unknown.
@@ -64,7 +63,6 @@ Sections:
       - { Offset: 0, Type: R_MMIX_JMP_1, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_JMP_2, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_JMP_3, Symbol: target, Addend: 0 }
-      - { Offset: 0, Type: R_MMIX_BASE_PLUS_OFFSET, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: R_MMIX_LOCAL, Symbol: target, Addend: 0 }
       - { Offset: 0, Type: 37, Symbol: target, Addend: 0 }
 Symbols:
