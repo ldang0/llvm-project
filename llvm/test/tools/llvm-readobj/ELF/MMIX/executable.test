@@ -1,0 +1,89 @@
+## Inspect the target-independent ELF structure of a linked MMIX executable.
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/input.s -o %t/input.o
+# RUN: ld.lld -T %t/layout.lds %t/input.o -o %t/executable
+# RUN: llvm-readobj --file-headers %t/executable | FileCheck %s --check-prefix=HEADER
+# RUN: llvm-readobj --sections %t/executable | FileCheck %s --check-prefix=SECTIONS
+# RUN: llvm-readobj --symbols %t/executable | FileCheck %s --check-prefix=SYMBOLS
+# RUN: llvm-readobj --program-headers %t/executable \
+# RUN:   | FileCheck %s --check-prefix=SEGMENTS
+
+# HEADER:      Format: elf64-mmix
+# HEADER:      Arch: mmix
+# HEADER:      Type: Executable
+# HEADER:      Machine: EM_MMIX
+# HEADER:      Entry: 0x1000
+# SECTIONS:      Name: .text
+# SECTIONS:      Type: SHT_PROGBITS
+# SECTIONS:      SHF_EXECINSTR
+# SECTIONS:      Address: 0x1000
+# SECTIONS:      AddressAlignment: 4
+# SECTIONS:      Name: .rodata
+# SECTIONS:      Address: 0x2000
+# SECTIONS:      AddressAlignment: 1
+# SECTIONS:      Name: .data
+# SECTIONS:      SHF_WRITE
+# SECTIONS:      Address: 0x3000
+# SECTIONS:      AddressAlignment: 8
+# SECTIONS:      Name: .bss
+# SECTIONS:      Type: SHT_NOBITS
+# SECTIONS:      Address: 0x4000
+# SECTIONS:      Size: 16
+# SECTIONS:      AddressAlignment: 16
+# SYMBOLS:      Name: _start
+# SYMBOLS:      Value: 0x1000
+# SYMBOLS:      Type: Function
+# SYMBOLS:      Name: initialized
+# SYMBOLS:      Value: 0x3000
+# SYMBOLS:      Type: Object
+# SYMBOLS:      Name: zero_filled
+# SYMBOLS:      Value: 0x4000
+# SYMBOLS:      Type: Object
+# SEGMENTS:      ProgramHeaders [
+# SEGMENTS:      Type: PT_LOAD
+# SEGMENTS:      VirtualAddress: 0x1000
+# SEGMENTS:      PF_X
+# SEGMENTS:      Type: PT_LOAD
+# SEGMENTS:      VirtualAddress: 0x2000
+# SEGMENTS:      Type: PT_LOAD
+# SEGMENTS:      VirtualAddress: 0x3000
+# SEGMENTS:      FileSize: 8
+# SEGMENTS:      MemSize: 4112
+# SEGMENTS:      PF_W
+
+#--- layout.lds
+ENTRY(_start)
+SECTIONS {
+  .text 0x1000 : { *(.text) }
+  .rodata 0x2000 : { *(.rodata) }
+  .data 0x3000 : { *(.data) }
+  .bss 0x4000 (NOLOAD) : { *(.bss) }
+}
+
+#--- input.s
+.text
+.global _start
+.type _start,@function
+_start:
+JMP _start
+.size _start, .-_start
+
+.section .rodata,"a",@progbits
+.quad 0x1122334455667788
+
+.data
+.p2align 3
+.global initialized
+.type initialized,@object
+initialized:
+.quad 1
+.size initialized, .-initialized
+
+.bss
+.p2align 4
+.global zero_filled
+.type zero_filled,@object
+zero_filled:
+.zero 16
+.size zero_filled, .-zero_filled
