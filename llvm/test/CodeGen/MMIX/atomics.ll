@@ -123,6 +123,94 @@ define i32 @rmw_or_i32(ptr %p, i32 %value) {
   ret i32 %old
 }
 
+; The remaining integer RMW operations use the same retry contract. These
+; checks identify the semantic operation without depending on the shape of
+; AtomicExpand's IR control flow.
+; CHECK-LABEL: rmw_sub:
+; CHECK:       CSWAP
+; CHECK:       SUBU
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i64 @rmw_sub(ptr %p, i64 %value) {
+  %old = atomicrmw sub ptr %p, i64 %value monotonic
+  ret i64 %old
+}
+
+; CHECK-LABEL: rmw_and_i8:
+; CHECK:       CSWAP
+; CHECK:       AND
+; CHECK:       OR
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i8 @rmw_and_i8(ptr %p, i8 %value) {
+  %old = atomicrmw and ptr %p, i8 %value monotonic
+  ret i8 %old
+}
+
+; CHECK-LABEL: rmw_nand_i16:
+; CHECK:       CSWAP
+; CHECK:       AND
+; CHECK:       ANDN
+; CHECK:       OR
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i16 @rmw_nand_i16(ptr %p, i16 %value) {
+  %old = atomicrmw nand ptr %p, i16 %value monotonic
+  ret i16 %old
+}
+
+; Signed narrow extrema sign-extend the selected field before comparison.
+; CHECK-LABEL: rmw_min_i16:
+; CHECK:       CSWAP
+; CHECK:       SRU
+; CHECK:       SLU
+; CHECK:       SR
+; CHECK:       CMP
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i16 @rmw_min_i16(ptr %p, i16 %value) {
+  %old = atomicrmw min ptr %p, i16 %value monotonic
+  ret i16 %old
+}
+
+; CHECK-LABEL: rmw_max_i32:
+; CHECK:       CSWAP
+; CHECK:       SRU
+; CHECK:       SLU
+; CHECK:       SR
+; CHECK:       CMP
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i32 @rmw_max_i32(ptr %p, i32 %value) {
+  %old = atomicrmw max ptr %p, i32 %value monotonic
+  ret i32 %old
+}
+
+; Unsigned extrema mask the selected field and use an unsigned comparison.
+; CHECK-LABEL: rmw_umin_i8:
+; CHECK:       CSWAP
+; CHECK:       SRU
+; CHECK:       AND
+; CHECK:       CMPU
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i8 @rmw_umin_i8(ptr %p, i8 %value) {
+  %old = atomicrmw umin ptr %p, i8 %value monotonic
+  ret i8 %old
+}
+
+; CHECK-LABEL: rmw_umax_i32:
+; CHECK:       CSWAP
+; CHECK:       SRU
+; CHECK:       AND
+; CHECK:       CMPU
+; CHECK:       CSWAP
+; CHECK:       BNZB
+define i32 @rmw_umax_i32(ptr %p, i32 %value) {
+  %old = atomicrmw umax ptr %p, i32 %value monotonic
+  ret i32 %old
+}
+
 ; Narrow cmpxchg uses an aligned octabyte CSWAP while preserving the selected
 ; big-endian subfield and returning the narrow old value and success flag.
 ; CHECK-LABEL: cmp_i8:

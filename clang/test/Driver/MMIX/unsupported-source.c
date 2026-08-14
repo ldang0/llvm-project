@@ -32,6 +32,11 @@
 // RUN:   | FileCheck %s --check-prefix=ATOMIC-RMW
 // RUN: not test -s %t.atomic-rmw.o
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
+// RUN:   -DTEST_ATOMIC_EXTENSION -c %S/Inputs/unsupported-source.c \
+// RUN:   -o %t.atomic-extension.o 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=ATOMIC-EXTENSION
+// RUN: not test -s %t.atomic-extension.o
+// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
 // RUN:   -DTEST_WIDE_ATOMIC -c %S/Inputs/unsupported-source.c \
 // RUN:   -o %t.wide-atomic.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=WIDE-ATOMIC
@@ -106,6 +111,7 @@
 // ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
 // ATOMIC-OPERATION: error: MMIX GNU ABI does not support atomic operation CodeGen
 // ATOMIC-RMW: error: MMIX GNU ABI does not support atomic operation CodeGen
+// ATOMIC-EXTENSION: error: MMIX GNU ABI does not support atomic operation CodeGen
 // WIDE-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct SixteenBytes)'
 // UNALIGNED-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct EightBytes)'
 // VLA: error: variable length arrays are not supported for the current target

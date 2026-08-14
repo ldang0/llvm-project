@@ -67,6 +67,12 @@ static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
   return (Size == 8 || Size == 16 || Size == 32 || Size == 64) && Align >= Size;
 }
 
+static bool isSupportedMMIXAtomicRMWType(QualType Ty) {
+  if (const auto *AT = Ty->getAs<AtomicType>())
+    Ty = AT->getValueType();
+  return Ty->isIntegerType() || Ty->isPointerType();
+}
+
 enum class MMIXUnsupportedObjectKind {
   None,
   Atomic,
@@ -204,7 +210,8 @@ public:
   }
 
   bool VisitBinaryOperator(BinaryOperator *E) {
-    if (E->isCompoundAssignmentOp() && E->getLHS()->getType()->isAtomicType())
+    if (E->isCompoundAssignmentOp() && E->getLHS()->getType()->isAtomicType() &&
+        !isSupportedMMIXAtomicRMWType(E->getLHS()->getType()))
       return diagnoseAtomicOperation(E->getExprLoc());
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
@@ -215,7 +222,8 @@ public:
 
   bool VisitUnaryOperator(UnaryOperator *E) {
     if (E->isIncrementDecrementOp() &&
-        E->getSubExpr()->getType()->isAtomicType())
+        E->getSubExpr()->getType()->isAtomicType() &&
+        !isSupportedMMIXAtomicRMWType(E->getSubExpr()->getType()))
       return diagnoseAtomicOperation(E->getExprLoc());
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
@@ -262,6 +270,33 @@ public:
     case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
     case AtomicExpr::AO__atomic_compare_exchange:
     case AtomicExpr::AO__atomic_compare_exchange_n:
+      break;
+    case AtomicExpr::AO__c11_atomic_fetch_add:
+    case AtomicExpr::AO__c11_atomic_fetch_sub:
+    case AtomicExpr::AO__c11_atomic_fetch_and:
+    case AtomicExpr::AO__c11_atomic_fetch_or:
+    case AtomicExpr::AO__c11_atomic_fetch_xor:
+    case AtomicExpr::AO__c11_atomic_fetch_nand:
+    case AtomicExpr::AO__c11_atomic_fetch_min:
+    case AtomicExpr::AO__c11_atomic_fetch_max:
+    case AtomicExpr::AO__atomic_fetch_add:
+    case AtomicExpr::AO__atomic_fetch_sub:
+    case AtomicExpr::AO__atomic_fetch_and:
+    case AtomicExpr::AO__atomic_fetch_or:
+    case AtomicExpr::AO__atomic_fetch_xor:
+    case AtomicExpr::AO__atomic_fetch_nand:
+    case AtomicExpr::AO__atomic_fetch_min:
+    case AtomicExpr::AO__atomic_fetch_max:
+    case AtomicExpr::AO__atomic_add_fetch:
+    case AtomicExpr::AO__atomic_sub_fetch:
+    case AtomicExpr::AO__atomic_and_fetch:
+    case AtomicExpr::AO__atomic_or_fetch:
+    case AtomicExpr::AO__atomic_xor_fetch:
+    case AtomicExpr::AO__atomic_nand_fetch:
+    case AtomicExpr::AO__atomic_min_fetch:
+    case AtomicExpr::AO__atomic_max_fetch:
+      if (!isSupportedMMIXAtomicRMWType(E->getValueType()))
+        return diagnoseAtomicOperation(E->getExprLoc());
       break;
     default:
       return diagnoseAtomicOperation(E->getExprLoc());

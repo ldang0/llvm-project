@@ -13,11 +13,15 @@ struct ThreeBytes {
 };
 _Atomic(struct ThreeBytes) value;
 #elif defined(TEST_ATOMIC_OPERATION)
-int atomic_fetch_add(int *value) {
-  return __atomic_fetch_add(value, 1, __ATOMIC_SEQ_CST);
+float atomic_fetch_add(float *value) {
+  return __atomic_fetch_add(value, 1.0f, __ATOMIC_SEQ_CST);
 }
 #elif defined(TEST_ATOMIC_RMW_OPERATOR)
-int atomic_increment(_Atomic(int) *value) { return (*value)++; }
+float atomic_add_assign(_Atomic(float) *value) { return *value += 1.0f; }
+#elif defined(TEST_ATOMIC_EXTENSION)
+unsigned atomic_uinc(unsigned *value) {
+  return __atomic_fetch_uinc(value, 1, __ATOMIC_SEQ_CST);
+}
 #elif defined(TEST_WIDE_ATOMIC)
 struct SixteenBytes {
   unsigned char bytes[16];
