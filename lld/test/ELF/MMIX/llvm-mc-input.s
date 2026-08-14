@@ -15,12 +15,6 @@
 # RUN: llvm-objdump -s --section=.data %t/executable \
 # RUN:   | FileCheck %s --check-prefix=DATA
 
-## R_MMIX_PUSHJ_STUBBABLE is emitted by llvm-mc but belongs to the next
-## linker milestone, so its rejection remains an explicit neighboring case.
-# RUN: llvm-mc -triple=mmix -filetype=obj %t/unsupported.s -o %t/unsupported.o
-# RUN: not ld.lld -e unsupported_entry %t/unsupported.o %t/definitions.o \
-# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=MILESTONE3
-
 # STRUCTURE:      Format: elf64-mmix
 # STRUCTURE:      Type: Executable
 # STRUCTURE:      Entry: 0x10000
@@ -49,8 +43,6 @@
 # DATA-NEXT: 20000 131236a5 00123712 34567c11 22334455
 # DATA-NEXT: 20010 66778d13 00125a00 00100000 000c0000
 # DATA-NEXT: 20020 00000000 00080000 00000000 cafe
-
-# MILESTONE3: unsupported relocation R_MMIX_PUSHJ_STUBBABLE against symbol external_call: requires MMIX range-extension stub support
 
 #--- layout.lds
 ENTRY(_start)
@@ -119,10 +111,3 @@ SWYM 0, 0, 0
 .global data_target
 data_target:
 .quad 0xcafe
-
-#--- unsupported.s
-.text
-.global unsupported_entry
-unsupported_entry:
-PUSHJ r1, external_call
-.global external_call

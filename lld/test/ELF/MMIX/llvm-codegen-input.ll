@@ -15,16 +15,16 @@
 ; RUN: llvm-objdump -s --section=.data %t/executable \
 ; RUN:   | FileCheck %s --check-prefix=DATA
 
-; External addresses and calls are intentionally adjacent negative coverage:
-; llc emits the GNU-compatible records, while their linker transformations
-; remain work for the next milestone.
-; RUN: llc -mtriple=mmix-unknown-elf -filetype=obj %t/unsupported.ll \
-; RUN:   -o %t/unsupported.o
+; Verify that the same path accepts external addresses and calls emitted by
+; llc once their definitions are supplied by another object.
+; RUN: llc -mtriple=mmix-unknown-elf -filetype=obj %t/external.ll \
+; RUN:   -o %t/external.o
 ; RUN: llvm-mc -triple=mmix -filetype=obj %t/definitions.s \
 ; RUN:   -o %t/definitions.o
-; RUN: not ld.lld --error-limit=0 -e use_external %t/unsupported.o \
-; RUN:   %t/definitions.o -o /dev/null 2>&1 \
-; RUN:   | FileCheck %s --check-prefix=MILESTONE3
+; RUN: ld.lld -e use_external %t/external.o %t/definitions.o \
+; RUN:   -o %t/external-executable
+; RUN: llvm-readobj --relocations %t/external-executable \
+; RUN:   | FileCheck %s --check-prefix=RELOCS --implicit-check-not=R_MMIX_
 
 ; STRUCTURE:      Format: elf64-mmix
 ; STRUCTURE:      Type: Executable
@@ -51,8 +51,6 @@
 ; DATA:      Contents of section .data:
 ; DATA-NEXT: 20000 00000000 0000002a 00000000 00020000
 
-; MILESTONE3-DAG: unsupported relocation R_MMIX_PUSHJ_STUBBABLE against symbol external_function: requires MMIX range-extension stub support
-
 ;--- layout.lds
 ENTRY(_start)
 SECTIONS {
@@ -75,7 +73,7 @@ loop:
   br label %loop
 }
 
-;--- unsupported.ll
+;--- external.ll
 target triple = "mmix-unknown-elf"
 
 @external_data = external global i64

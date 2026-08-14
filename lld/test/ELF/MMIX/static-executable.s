@@ -20,12 +20,6 @@
 # RUN: llvm-objdump -s --section=.data %t/executable.1 \
 # RUN:   | FileCheck %s --check-prefix=DATA
 
-## Keep both stable next-milestone failures beside the positive baseline.
-# RUN: llvm-mc -triple=mmix -filetype=obj %t/milestone3.s -o %t/milestone3.o
-# RUN: not ld.lld --error-limit=0 -e unsupported_entry %t/milestone3.o \
-# RUN:   %t/worker.o -o /dev/null 2>&1 \
-# RUN:   | FileCheck %s --check-prefix=MILESTONE3
-
 # STRUCTURE:      Format: elf64-mmix
 # STRUCTURE:      Type: Executable
 # STRUCTURE:      Entry: 0x10000
@@ -56,8 +50,6 @@
 # DATA-NEXT: 20010 121234a5 00123412 34567811 22334455
 # DATA-NEXT: 20020 667788e5 ffe45aff ffe2ffff ffdeffff
 # DATA-NEXT: 20030 ffffffff ffda
-
-# MILESTONE3-DAG: unsupported relocation R_MMIX_PUSHJ_STUBBABLE against symbol worker: requires MMIX range-extension stub support
 
 #--- layout.lds
 ENTRY(_start)
@@ -121,12 +113,3 @@ state:
 .long state - .Lpc32
 .Lpc64:
 .quad state - .Lpc64
-
-#--- milestone3.s
-.text
-.global unsupported_entry
-unsupported_entry:
-GETA r1, %geta(state)
-PUSHJ r2, worker
-.global state
-.global worker

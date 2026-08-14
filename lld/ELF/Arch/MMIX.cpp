@@ -9,11 +9,14 @@
 #include "OutputSections.h"
 #include "RelocScan.h"
 #include "Symbols.h"
+#include "SyntheticSections.h"
 #include "Target.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Endian.h"
+#include <cstring>
 #include <optional>
 
 using namespace llvm;
@@ -54,6 +57,8 @@ std::optional<MMIXRelaxationSequence> getRelaxationSequence(RelType type) {
   }
 }
 
+bool isStubbableCall(RelType type) { return type == R_MMIX_PUSHJ_STUBBABLE; }
+
 StringRef getUnsupportedRelocationReason(RelType type) {
   switch (type) {
   case R_MMIX_GETA_1:
@@ -78,8 +83,6 @@ StringRef getUnsupportedRelocationReason(RelType type) {
   case R_MMIX_BASE_PLUS_OFFSET:
   case R_MMIX_LOCAL:
     return "requires MMIX register-model support";
-  case R_MMIX_PUSHJ_STUBBABLE:
-    return "requires MMIX range-extension stub support";
   default:
     return {};
   }
@@ -148,6 +151,14 @@ bool isDirectMMIXTransfer(uint64_t target, uint64_t place, uint32_t valueMask) {
   return delta >= min && delta <= max;
 }
 
+uint32_t encodeMMIXTerminal(uint32_t word, int64_t delta, uint32_t valueMask) {
+  constexpr uint32_t directionMask = uint32_t(1) << 24;
+  word &= ~(directionMask | valueMask);
+  if (delta < 0)
+    word |= directionMask;
+  return word | (static_cast<uint64_t>(delta / 4) & valueMask);
+}
+
 void writeAbsoluteAddress(uint8_t *loc, uint8_t reg, uint64_t value) {
   write32be(loc, (setlOpcode << 24) | (uint32_t(reg) << 16) | (value & 0xffff));
   write32be(loc + 4, (incmlOpcode << 24) | (uint32_t(reg) << 16) |
@@ -211,16 +222,48 @@ public:
                 uint64_t val) const override;
 
 private:
-  enum class RelaxationState : uint8_t { Pending, Direct, Expanded, Invalid };
+  enum class RelaxationState : uint8_t {
+    Pending,
+    Direct,
+    Expanded,
+    Stub,
+    Invalid
+  };
 
   struct RelaxationSite {
     InputSection *section;
     uint32_t relocationIndex;
     RelaxationState state = RelaxationState::Pending;
+    uint32_t stubIndex = UINT32_MAX;
+    int64_t callDelta = 0;
+  };
+
+  struct CallStub {
+    InputSection *section;
+    Symbol *target;
+    int64_t addend;
+    uint64_t offset;
+    uint8_t size;
+    Defined *symbol;
+  };
+
+  struct RelaxationSection {
+    InputSection *section;
+    const uint8_t *originalContent;
+    uint64_t originalSize;
+    SmallVector<uint32_t, 0> stubIndices;
   };
 
   mutable SmallVector<RelaxationSite, 0> relaxationSites;
+  mutable DenseMap<const Relocation *, uint32_t> relaxationSiteByRelocation;
+  mutable SmallVector<CallStub, 0> callStubs;
+  mutable SmallVector<RelaxationSection, 0> relaxationSections;
   mutable bool relaxationSitesInitialized = false;
+
+  RelaxationSection &getRelaxationSection(InputSection &sec) const;
+  uint32_t getOrCreateCallStub(RelaxationSite &site, uint64_t target,
+                               uint64_t place) const;
+  const RelaxationSite *findRelaxationSite(const Relocation &rel) const;
 };
 } // namespace
 
@@ -274,6 +317,7 @@ RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
   case R_MMIX_CBRANCH:
   case R_MMIX_PUSHJ:
   case R_MMIX_JMP:
+  case R_MMIX_PUSHJ_STUBBABLE:
     expr = R_PC;
     break;
   default:
@@ -317,6 +361,14 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
     if (type == R_MMIX_NONE)
       continue;
 
+    if ((getRelaxationSequence(type) || isStubbableCall(type)) &&
+        !(sec.flags & SHF_EXECINSTR)) {
+      Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
+      Err(ctx) << &sec << ": relaxation relocation " << type
+               << " is not in an executable section against symbol " << &sym;
+      continue;
+    }
+
     if (std::optional<MMIXRelaxationSequence> sequence =
             getRelaxationSequence(type)) {
       uint64_t offset = it->r_offset;
@@ -355,6 +407,29 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
       }
     }
 
+    if (isStubbableCall(type)) {
+      uint64_t offset = it->r_offset;
+      Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
+      ArrayRef<uint8_t> contents = sec.content();
+      if ((offset & 3) != 0) {
+        Err(ctx) << &sec << ": stubbable call relocation offset " << offset
+                 << " is not 4-byte aligned against symbol " << &sym;
+        continue;
+      }
+      if (offset >= contents.size() || 4 > contents.size() - offset) {
+        Err(ctx) << &sec << ": " << type
+                 << " requires a 4-byte PUSHJ instruction at offset " << offset
+                 << " against symbol " << &sym;
+        continue;
+      }
+      if ((contents[offset] & 0xfe) != 0xf2) {
+        Err(ctx) << &sec << ": " << type
+                 << " does not reference a PUSHJ instruction at offset "
+                 << offset << " against symbol " << &sym;
+        continue;
+      }
+    }
+
     if (unsigned size = getRelocationFieldSize(type)) {
       uint64_t offset = it->r_offset;
       Symbol &sym = sec.getFile<ELFT>()->getSymbol(it->getSymbol(false));
@@ -379,6 +454,51 @@ void MMIX::scanSectionImpl(InputSectionBase &sec, Relocs<RelTy> rels,
   }
 }
 
+MMIX::RelaxationSection &MMIX::getRelaxationSection(InputSection &sec) const {
+  for (RelaxationSection &state : relaxationSections)
+    if (state.section == &sec)
+      return state;
+  ArrayRef<uint8_t> contents = sec.content();
+  relaxationSections.push_back({&sec, contents.data(), contents.size(), {}});
+  return relaxationSections.back();
+}
+
+uint32_t MMIX::getOrCreateCallStub(RelaxationSite &site, uint64_t target,
+                                   uint64_t place) const {
+  Relocation &rel = site.section->relocs()[site.relocationIndex];
+  RelaxationSection &sectionState = getRelaxationSection(*site.section);
+  for (uint32_t index : sectionState.stubIndices) {
+    CallStub &stub = callStubs[index];
+    if (stub.target == rel.sym && stub.addend == rel.addend &&
+        isDirectMMIXTransfer(site.section->getVA(stub.offset), place,
+                             pc19ValueMask))
+      return index;
+  }
+
+  uint64_t offset = sectionState.originalSize;
+  for (uint32_t index : sectionState.stubIndices)
+    offset += callStubs[index].size;
+  uint64_t stubVA = site.section->getVA(offset);
+  uint8_t size = isDirectMMIXTransfer(target, stubVA, pc27ValueMask) ? 4 : 20;
+  std::string name =
+      (Twine("__MMIX_call_stub_") + Twine(callStubs.size())).str();
+  Defined *symbol = addSyntheticLocal(ctx, ctx.saver.save(name), STT_FUNC,
+                                      offset, size, *site.section);
+  uint32_t index = callStubs.size();
+  callStubs.push_back(
+      {site.section, rel.sym, rel.addend, offset, size, symbol});
+  sectionState.stubIndices.push_back(index);
+  site.section->size = offset + size;
+  return index;
+}
+
+const MMIX::RelaxationSite *
+MMIX::findRelaxationSite(const Relocation &rel) const {
+  auto it = relaxationSiteByRelocation.find(&rel);
+  return it == relaxationSiteByRelocation.end() ? nullptr
+                                                : &relaxationSites[it->second];
+}
+
 bool MMIX::relaxOnce(int) const {
   if (!relaxationSitesInitialized) {
     SmallVector<InputSection *, 0> storage;
@@ -387,15 +507,41 @@ bool MMIX::relaxOnce(int) const {
         continue;
       for (InputSection *sec : getInputSections(*osec, storage)) {
         ArrayRef<Relocation> rels = sec->relocs();
-        for (auto [index, rel] : llvm::enumerate(rels))
-          if (getRelaxationSequence(rel.type))
+        for (auto [index, rel] : llvm::enumerate(rels)) {
+          if (getRelaxationSequence(rel.type) || isStubbableCall(rel.type)) {
+            uint32_t siteIndex = relaxationSites.size();
             relaxationSites.push_back({sec, static_cast<uint32_t>(index)});
+            relaxationSiteByRelocation.try_emplace(&rels[index], siteIndex);
+          }
+        }
       }
     }
     relaxationSitesInitialized = true;
   }
 
   bool changed = false;
+  for (RelaxationSection &sectionState : relaxationSections) {
+    uint64_t offset = sectionState.originalSize;
+    for (uint32_t index : sectionState.stubIndices) {
+      CallStub &stub = callStubs[index];
+      stub.offset = offset;
+      stub.symbol->value = offset;
+      uint64_t target = stub.target->getVA(ctx, stub.addend);
+      uint64_t stubVA = stub.section->getVA(offset);
+      if (stub.size == 4 &&
+          !isDirectMMIXTransfer(target, stubVA, pc27ValueMask)) {
+        stub.size = 20;
+        stub.symbol->size = 20;
+        changed = true;
+      }
+      offset += stub.size;
+    }
+    if (sectionState.section->size != offset) {
+      sectionState.section->size = offset;
+      changed = true;
+    }
+  }
+
   for (RelaxationSite &site : relaxationSites) {
     if (site.state == RelaxationState::Invalid)
       continue;
@@ -416,6 +562,38 @@ bool MMIX::relaxOnce(int) const {
 
     uint32_t valueMask = rel.type == R_MMIX_JMP ? pc27ValueMask : pc19ValueMask;
     bool direct = isDirectMMIXTransfer(target, place, valueMask);
+    if (isStubbableCall(rel.type)) {
+      if (site.state == RelaxationState::Pending) {
+        if (direct) {
+          site.state = RelaxationState::Direct;
+        } else {
+          site.stubIndex = getOrCreateCallStub(site, target, place);
+          site.state = RelaxationState::Stub;
+        }
+        changed = true;
+      } else if (site.state == RelaxationState::Direct && !direct) {
+        site.stubIndex = getOrCreateCallStub(site, target, place);
+        site.state = RelaxationState::Stub;
+        changed = true;
+      }
+
+      if (site.state == RelaxationState::Stub) {
+        CallStub &stub = callStubs[site.stubIndex];
+        uint64_t stubVA = stub.section->getVA(stub.offset);
+        if (!isDirectMMIXTransfer(stubVA, place, pc19ValueMask)) {
+          const uint8_t *loc = site.section->content().data() + rel.offset;
+          Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+                   << " against symbol " << rel.sym
+                   << " cannot reach its section-end stub";
+          site.state = RelaxationState::Invalid;
+          rel.expr = R_NONE;
+        } else {
+          site.callDelta = static_cast<int64_t>(stubVA - place);
+        }
+      }
+      continue;
+    }
+
     if (site.state == RelaxationState::Pending) {
       site.state = direct ? RelaxationState::Direct : RelaxationState::Expanded;
       rel.expr = direct ? R_PC : R_ABS;
@@ -431,6 +609,37 @@ bool MMIX::relaxOnce(int) const {
 
 void MMIX::finalizeRelax(int passes) const {
   Log(ctx) << "MMIX relaxation passes: " << passes;
+  for (RelaxationSection &sectionState : relaxationSections) {
+    if (sectionState.stubIndices.empty())
+      continue;
+    InputSection &sec = *sectionState.section;
+    uint8_t *contents = ctx.bAlloc.Allocate<uint8_t>(sec.size);
+    memcpy(contents, sectionState.originalContent, sectionState.originalSize);
+    for (uint32_t index : sectionState.stubIndices) {
+      CallStub &stub = callStubs[index];
+      uint8_t *loc = contents + stub.offset;
+      uint64_t target = stub.target->getVA(ctx, stub.addend);
+      uint64_t stubVA = stub.section->getVA(stub.offset);
+      if (stub.size == 4) {
+        int64_t delta = static_cast<int64_t>(target - stubVA);
+        write32be(loc, encodeMMIXTerminal(0xf0000000, delta, pc27ValueMask));
+      } else {
+        writeAbsoluteAddress(loc, 255, target);
+        write32be(loc + 16, (goImmediateOpcode << 24) | 0xffff00);
+      }
+    }
+    sec.content_ = contents;
+  }
+
+  for (RelaxationSite &site : relaxationSites) {
+    if (site.state != RelaxationState::Stub)
+      continue;
+    Relocation &rel = site.section->relocs()[site.relocationIndex];
+    uint64_t place = site.section->getVA(rel.offset);
+    CallStub &stub = callStubs[site.stubIndex];
+    site.callDelta =
+        static_cast<int64_t>(stub.section->getVA(stub.offset) - place);
+  }
 }
 
 void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
@@ -481,6 +690,19 @@ void MMIX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     else if (rel.expr == R_ABS)
       relocateMMIXExpanded(loc, val, rel);
     return;
+  case R_MMIX_PUSHJ_STUBBABLE: {
+    const RelaxationSite *site = findRelaxationSite(rel);
+    if (!site) {
+      Err(ctx) << getErrorLoc(ctx, loc)
+               << "missing MMIX stubbable-call relaxation state";
+      return;
+    }
+    uint64_t callValue = site->state == RelaxationState::Stub
+                             ? static_cast<uint64_t>(site->callDelta)
+                             : val;
+    relocateMMIXTerminal(loc, ctx, callValue, pc19ValueMask, rel);
+    return;
+  }
   default:
     Err(ctx) << getErrorLoc(ctx, loc) << "unsupported relocation " << rel.type;
   }
