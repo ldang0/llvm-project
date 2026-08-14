@@ -166,6 +166,23 @@ static bool isSupportedMMIXAtomicFenceBuiltin(unsigned BuiltinID) {
   }
 }
 
+static bool isSupportedMMIXLegacySyncBuiltinName(StringRef Name) {
+  if (Name == "__sync_synchronize")
+    return true;
+
+  static constexpr llvm::StringLiteral Operations[] = {
+      "__sync_fetch_and_add",        "__sync_fetch_and_sub",
+      "__sync_fetch_and_or",         "__sync_fetch_and_and",
+      "__sync_fetch_and_xor",        "__sync_fetch_and_nand",
+      "__sync_add_and_fetch",        "__sync_sub_and_fetch",
+      "__sync_or_and_fetch",         "__sync_and_and_fetch",
+      "__sync_xor_and_fetch",        "__sync_nand_and_fetch",
+      "__sync_val_compare_and_swap", "__sync_bool_compare_and_swap",
+      "__sync_lock_test_and_set",    "__sync_lock_release"};
+  return llvm::any_of(Operations,
+                      [Name](StringRef Op) { return Name.starts_with(Op); });
+}
+
 class MMIXCodeGenBoundaryVisitor
     : public RecursiveASTVisitor<MMIXCodeGenBoundaryVisitor> {
   CodeGenModule &CGM;
@@ -190,12 +207,44 @@ class MMIXCodeGenBoundaryVisitor
     return diagnoseType(Loc, "extended scalar operation", Ty);
   }
 
-  bool diagnoseAtomicOperation(SourceLocation Loc) {
+  bool diagnoseAtomicOperation(SourceLocation Loc, StringRef Operation) {
     unsigned DiagID = CGM.getDiags().getCustomDiagID(
         DiagnosticsEngine::Error,
-        "MMIX GNU ABI does not support atomic operation CodeGen");
-    CGM.getDiags().Report(Loc, DiagID);
+        "MMIX GNU ABI does not support atomic operation %0");
+    CGM.getDiags().Report(Loc, DiagID) << Operation;
     return false;
+  }
+
+  bool diagnoseAtomicStorage(SourceLocation Loc, StringRef Operation,
+                             QualType Ty) {
+    const ASTContext &Context = CGM.getContext();
+    if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0) {
+      unsigned DiagID = CGM.getDiags().getCustomDiagID(
+          DiagnosticsEngine::Error,
+          "MMIX atomic operation %0 requires address space zero storage");
+      CGM.getDiags().Report(Loc, DiagID) << Operation;
+      return false;
+    }
+
+    uint64_t Size = Context.getTypeSize(Ty);
+    uint64_t Align = Context.getTypeAlign(Ty);
+    if (Size != 8 && Size != 16 && Size != 32 && Size != 64) {
+      unsigned DiagID = CGM.getDiags().getCustomDiagID(
+          DiagnosticsEngine::Error,
+          "MMIX atomic operation %0 requires a 1, 2, 4, or 8-byte object; "
+          "type %1 is %2 bits wide");
+      CGM.getDiags().Report(Loc, DiagID) << Operation << Ty << Size;
+      return false;
+    }
+    if (Align < Size) {
+      unsigned DiagID = CGM.getDiags().getCustomDiagID(
+          DiagnosticsEngine::Error,
+          "MMIX atomic operation %0 requires at least %1-bit alignment for "
+          "type %2");
+      CGM.getDiags().Report(Loc, DiagID) << Operation << Size << Ty;
+      return false;
+    }
+    return true;
   }
 
 public:
@@ -212,7 +261,7 @@ public:
   bool VisitBinaryOperator(BinaryOperator *E) {
     if (E->isCompoundAssignmentOp() && E->getLHS()->getType()->isAtomicType() &&
         !isSupportedMMIXAtomicRMWType(E->getLHS()->getType()))
-      return diagnoseAtomicOperation(E->getExprLoc());
+      return diagnoseAtomicOperation(E->getExprLoc(), E->getOpcodeStr());
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getLHS()->getType()) &&
@@ -224,7 +273,8 @@ public:
     if (E->isIncrementDecrementOp() &&
         E->getSubExpr()->getType()->isAtomicType() &&
         !isSupportedMMIXAtomicRMWType(E->getSubExpr()->getType()))
-      return diagnoseAtomicOperation(E->getExprLoc());
+      return diagnoseAtomicOperation(
+          E->getExprLoc(), UnaryOperator::getOpcodeStr(E->getOpcode()));
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getSubExpr()->getType());
@@ -246,6 +296,25 @@ public:
       return true;
     if (isSupportedMMIXAtomicFenceBuiltin(BuiltinID))
       return true;
+    if (Name == "__atomic_always_lock_free")
+      return true;
+    if (Name == "__atomic_is_lock_free" ||
+        Name == "__c11_atomic_is_lock_free") {
+      unsigned DiagID = CGM.getDiags().getCustomDiagID(
+          DiagnosticsEngine::Error,
+          "MMIX atomic lock-free query requires an unavailable atomic runtime");
+      CGM.getDiags().Report(E->getExprLoc(), DiagID);
+      return false;
+    }
+    if (isSupportedMMIXLegacySyncBuiltinName(Name)) {
+      if (Name == "__sync_synchronize")
+        return true;
+
+      QualType StorageTy = E->getArg(0)->getType()->getPointeeType();
+      if (isSupportedMMIXAtomicRMWType(StorageTy) &&
+          isMMIXNativeAtomicStorageType(CGM.getContext(), StorageTy))
+        return true;
+    }
 
     unsigned DiagID = CGM.getDiags().getCustomDiagID(
         DiagnosticsEngine::Error,
@@ -270,6 +339,8 @@ public:
     case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
     case AtomicExpr::AO__atomic_compare_exchange:
     case AtomicExpr::AO__atomic_compare_exchange_n:
+    case AtomicExpr::AO__atomic_test_and_set:
+    case AtomicExpr::AO__atomic_clear:
       break;
     case AtomicExpr::AO__c11_atomic_fetch_add:
     case AtomicExpr::AO__c11_atomic_fetch_sub:
@@ -296,16 +367,15 @@ public:
     case AtomicExpr::AO__atomic_min_fetch:
     case AtomicExpr::AO__atomic_max_fetch:
       if (!isSupportedMMIXAtomicRMWType(E->getValueType()))
-        return diagnoseAtomicOperation(E->getExprLoc());
+        return diagnoseAtomicOperation(E->getExprLoc(), E->getOpAsString());
       break;
     default:
-      return diagnoseAtomicOperation(E->getExprLoc());
+      return diagnoseAtomicOperation(E->getExprLoc(), E->getOpAsString());
     }
 
     QualType StorageTy = E->getPtr()->getType()->getPointeeType();
-    if (!isMMIXNativeAtomicStorageType(CGM.getContext(), StorageTy))
-      return diagnoseAtomicOperation(E->getExprLoc());
-    return true;
+    return diagnoseAtomicStorage(E->getExprLoc(), E->getOpAsString(),
+                                 StorageTy);
   }
 };
 

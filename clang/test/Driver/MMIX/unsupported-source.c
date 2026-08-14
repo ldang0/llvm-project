@@ -109,9 +109,9 @@
 // COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex double'
 // VECTOR: error: MMIX GNU ABI does not support vector value CodeGen involving type 'int2'
 // ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
-// ATOMIC-OPERATION: error: MMIX GNU ABI does not support atomic operation CodeGen
-// ATOMIC-RMW: error: MMIX GNU ABI does not support atomic operation CodeGen
-// ATOMIC-EXTENSION: error: MMIX GNU ABI does not support atomic operation CodeGen
+// ATOMIC-OPERATION: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_add
+// ATOMIC-RMW: error: MMIX GNU ABI does not support atomic operation +=
+// ATOMIC-EXTENSION: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_uinc
 // WIDE-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct SixteenBytes)'
 // UNALIGNED-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct EightBytes)'
 // VLA: error: variable length arrays are not supported for the current target
