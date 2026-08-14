@@ -19,7 +19,7 @@ using namespace lld::elf;
 namespace {
 class MMIX final : public TargetInfo {
 public:
-  MMIX(Ctx &ctx) : TargetInfo(ctx) {}
+  MMIX(Ctx &ctx);
 
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
@@ -33,6 +33,31 @@ public:
                 uint64_t val) const override;
 };
 } // namespace
+
+MMIX::MMIX(Ctx &ctx) : TargetInfo(ctx) {
+  if (ctx.arg.ekind != ELF64BEKind)
+    ErrAlways(ctx) << "MMIX supports only ELF64 big-endian input and output";
+
+  if (ctx.arg.shared)
+    ErrAlways(ctx) << "MMIX does not support shared object output";
+  else if (ctx.arg.pie)
+    ErrAlways(ctx) << "MMIX does not support PIE output";
+  else if (ctx.arg.relocatable)
+    ErrAlways(ctx) << "MMIX lld supports only static executable output";
+
+  if (!ctx.arg.dynamicLinker.empty())
+    ErrAlways(ctx) << "MMIX does not support a dynamic linker";
+  if (ctx.arg.oFormatBinary)
+    ErrAlways(ctx) << "MMIX lld supports only ELF output";
+  if (ctx.arg.osabi != ELFOSABI_NONE)
+    ErrAlways(ctx) << "MMIX supports only the System V ELF OSABI";
+  if (!ctx.sharedFiles.empty())
+    ErrAlways(ctx) << "MMIX does not support dynamic shared object inputs";
+  for (InputFile *file : ctx.objectFiles)
+    if (file->abiVersion != 0)
+      ErrAlways(ctx) << file << ": unsupported MMIX ELF ABI version "
+                     << static_cast<unsigned>(file->abiVersion);
+}
 
 RelExpr MMIX::getRelExpr(RelType type, const Symbol &s,
                          const uint8_t *loc) const {
