@@ -49,7 +49,7 @@ public:
     TLSSupported = false;
     VLASupported = false;
     MaxAtomicPromoteWidth = 0;
-    MaxAtomicInlineWidth = 0;
+    MaxAtomicInlineWidth = 64;
 
     UseBitFieldTypeAlignment = false;
     UseZeroLengthBitfieldAlignment = true;
