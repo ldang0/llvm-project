@@ -1,0 +1,54 @@
+# RUN: rm -rf %t.dir
+# RUN: mkdir -p %t.dir
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -fno-pie -O2 \
+# RUN:   -I %S/../../../../compiler-rt/lib/builtins \
+# RUN:   -c %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
+# RUN:   -o %t.dir/ffsdi2.c.obj
+# RUN: llvm-ar qcD %t.dir/libclang_rt.builtins.a %t.dir/ffsdi2.c.obj
+# RUN: llvm-ranlib -D %t.dir/libclang_rt.builtins.a
+
+# The public C ABI call must extract the compiler-rt member without startup,
+# libc, a GCC runtime, or any host library.
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -fno-pie -O2 \
+# RUN:   -c %S/Inputs/compiler-runtime/ffsdi2-call.c \
+# RUN:   -o %t.dir/ffsdi2-call.o
+# RUN: ld.lld -static -e _start %t.dir/ffsdi2-call.o \
+# RUN:   %t.dir/libclang_rt.builtins.a -o %t.dir/ffsdi2-call
+# RUN: llvm-readobj --file-headers %t.dir/ffsdi2-call \
+# RUN:   | FileCheck %s --check-prefix=ELF
+# RUN: llvm-nm --undefined-only %t.dir/ffsdi2-call | count 0
+# RUN: llvm-nm --defined-only %t.dir/ffsdi2-call \
+# RUN:   | FileCheck %s --check-prefix=FFS
+
+# The remaining selected libcalls are newlib-owned. Supplying only the
+# compiler-rt archive must leave every one unresolved, while __ffsdi2 from the
+# same input is resolved by that archive.
+# RUN: llc -mtriple=mmix-unknown-elf -filetype=obj \
+# RUN:   %S/../../CodeGen/MMIX/memory-libcalls.ll -o %t.dir/memory.o
+# RUN: llc -mtriple=mmix-unknown-elf -filetype=obj \
+# RUN:   %S/../../CodeGen/MMIX/floating-libcalls.ll -o %t.dir/floating.o
+# RUN: not ld.lld -static --error-limit=0 -e explicit_ffsdi2 \
+# RUN:   %t.dir/memory.o %t.dir/floating.o \
+# RUN:   %t.dir/libclang_rt.builtins.a -o %t.dir/newlib-helpers 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=NEWLIB --implicit-check-not=__ffsdi2
+
+# ELF:      Format: elf64-mmix
+# ELF-NEXT: Arch: mmix
+# ELF:      DataEncoding: BigEndian
+# ELF:      Type: Executable
+# ELF:      Machine: EM_MMIX
+# FFS: T __ffsdi2
+
+# NEWLIB-DAG: undefined symbol: memcpy
+# NEWLIB-DAG: undefined symbol: memmove
+# NEWLIB-DAG: undefined symbol: memset
+# NEWLIB-DAG: undefined symbol: fmodf
+# NEWLIB-DAG: undefined symbol: fmod
+# NEWLIB-DAG: undefined symbol: fmaf
+# NEWLIB-DAG: undefined symbol: fma
+# NEWLIB-DAG: undefined symbol: roundf
+# NEWLIB-DAG: undefined symbol: round
+# NEWLIB-DAG: undefined symbol: nearbyintf
+# NEWLIB-DAG: undefined symbol: nearbyint
