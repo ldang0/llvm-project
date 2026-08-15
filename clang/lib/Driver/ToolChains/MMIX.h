@@ -26,6 +26,16 @@ public:
   }
   bool isPICDefaultForced() const override { return false; }
   bool SupportsProfiling() const override { return false; }
+  RuntimeLibType GetDefaultRuntimeLibType() const override {
+    return ToolChain::RLT_CompilerRT;
+  }
+  RuntimeLibType
+  GetRuntimeLibType(const llvm::opt::ArgList &Args) const override;
+  std::string getCompilerRTPath() const override;
+  std::string getCompilerRT(const llvm::opt::ArgList &Args,
+                            llvm::StringRef Component,
+                            FileType Type = ToolChain::FT_Static,
+                            bool IsFortran = false) const override;
 
 protected:
   Tool *buildAssembler() const override;

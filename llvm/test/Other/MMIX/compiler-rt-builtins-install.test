@@ -1,0 +1,33 @@
+# RUN: rm -rf %t.dir
+# RUN: cmake -G Ninja -S %S/../../../../compiler-rt -B %t.dir/build \
+# RUN:   -C %S/../../../../compiler-rt/cmake/caches/MMIX.cmake \
+# RUN:   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang \
+# RUN:   -DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib \
+# RUN:   -DLLVM_CONFIG_PATH=llvm-config \
+# RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/resource > %t.dir-configure.log
+# RUN: ninja -C %t.dir/build install-builtins > %t.dir-install.log
+# RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: test ! -e %S/../../../../compiler-rt/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: cp %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
+# RUN:   %t.dir/installed.a
+# RUN: ninja -C %t.dir/build install-builtins > %t.dir-reinstall.log
+# RUN: cmp %t.dir/installed.a \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: find %t.dir/resource -type f | count 1
+# RUN: llvm-readobj --file-headers \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
+# RUN:   | FileCheck %s --check-prefix=ELF
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
+# RUN:   | FileCheck %s --check-prefix=SYMBOL
+
+# ELF:      File: {{.*}}resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a(ffsdi2.c.obj)
+# ELF:      Format: elf64-mmix
+# ELF:      Arch: mmix
+# ELF:      DataEncoding: BigEndian
+# ELF:      Type: Relocatable
+# ELF:      Machine: EM_MMIX
+# SYMBOL: T __ffsdi2

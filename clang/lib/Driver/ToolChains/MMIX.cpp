@@ -15,6 +15,8 @@
 #include "clang/Driver/Tool.h"
 #include "clang/Options/Options.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/VirtualFileSystem.h"
 
 using namespace clang;
 using namespace clang::driver;
@@ -124,6 +126,37 @@ MMIXToolChain::MMIXToolChain(const Driver &D, const llvm::Triple &Triple,
                              const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   getProgramPaths().push_back(getDriver().Dir);
+}
+
+ToolChain::RuntimeLibType
+MMIXToolChain::GetRuntimeLibType(const ArgList &Args) const {
+  if (const Arg *A = Args.getLastArg(options::OPT_rtlib_EQ)) {
+    if (StringRef(A->getValue()) != "compiler-rt")
+      getDriver().Diag(diag::err_drv_clang_unsupported)
+          << "non-compiler-rt runtime selection for MMIX";
+  }
+  return ToolChain::RLT_CompilerRT;
+}
+
+std::string MMIXToolChain::getCompilerRTPath() const {
+  SmallString<128> Path(getDriver().ResourceDir);
+  llvm::sys::path::append(Path, "lib", "mmix-unknown-unknown");
+  return std::string(Path);
+}
+
+std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
+                                         StringRef Component, FileType Type,
+                                         bool IsFortran) const {
+  if (Type != ToolChain::FT_Static || IsFortran)
+    return ToolChain::getCompilerRT(Args, Component, Type, IsFortran);
+
+  SmallString<128> Path(getCompilerRTPath());
+  llvm::sys::path::append(
+      Path, buildCompilerRTBasename(Args, Component, Type,
+                                    /*AddArch=*/false, IsFortran));
+  if (!getVFS().exists(Path))
+    getDriver().Diag(diag::err_drv_no_such_file) << Path;
+  return std::string(Path);
 }
 
 Tool *MMIXToolChain::buildAssembler() const {
