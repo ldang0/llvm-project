@@ -8,7 +8,7 @@
 // RUN:   | FileCheck --check-prefix=STATIC %s \
 // RUN:       --implicit-check-not=crt --implicit-check-not=libclang_rt \
 // RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
-// RUN: %clang --target=mmix-unknown-unknown -ffreestanding \
+// RUN: env PATH=/usr/bin:/bin %clang --target=mmix-unknown-unknown -ffreestanding \
 // RUN:   -nostdlib -nostartfiles -nodefaultlibs \
 // RUN:   %t-input.o -e mmix_driver_fixture -o %t-executable
 // RUN: llvm-readobj --file-headers %t-executable \

@@ -122,7 +122,9 @@ public:
 
 MMIXToolChain::MMIXToolChain(const Driver &D, const llvm::Triple &Triple,
                              const ArgList &Args)
-    : ToolChain(D, Triple, Args) {}
+    : ToolChain(D, Triple, Args) {
+  getProgramPaths().push_back(getDriver().Dir);
+}
 
 Tool *MMIXToolChain::buildAssembler() const {
   return new UnsupportedAssembler(*this);
