@@ -1,0 +1,32 @@
+# RUN: rm -rf %t.dir
+# RUN: mkdir -p %t.dir/a %t.dir/b
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O2 -I %S/../../../../compiler-rt/lib/builtins \
+# RUN:   -c %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
+# RUN:   -o %t.dir/a/ffsdi2.c.obj
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O2 -I %S/../../../../compiler-rt/lib/builtins \
+# RUN:   -c %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
+# RUN:   -o %t.dir/b/ffsdi2.c.obj
+# RUN: llvm-ar qcD %t.dir/a/libclang_rt.builtins.a %t.dir/a/ffsdi2.c.obj
+# RUN: llvm-ranlib -D %t.dir/a/libclang_rt.builtins.a
+# RUN: llvm-ar qcD %t.dir/b/libclang_rt.builtins.a %t.dir/b/ffsdi2.c.obj
+# RUN: llvm-ranlib -D %t.dir/b/libclang_rt.builtins.a
+# RUN: cmp %t.dir/a/libclang_rt.builtins.a %t.dir/b/libclang_rt.builtins.a
+# RUN: llvm-ar t %t.dir/a/libclang_rt.builtins.a | count 1
+# RUN: llvm-ar t %t.dir/a/libclang_rt.builtins.a \
+# RUN:   | FileCheck %s --check-prefix=MEMBER
+# RUN: llvm-readobj --file-headers %t.dir/a/libclang_rt.builtins.a \
+# RUN:   | FileCheck %s --check-prefix=ELF
+# RUN: llvm-nm --defined-only --extern-only %t.dir/a/libclang_rt.builtins.a \
+# RUN:   | FileCheck %s --check-prefix=SYMBOL
+# RUN: llvm-nm --undefined-only %t.dir/a/ffsdi2.c.obj | count 0
+
+# MEMBER: ffsdi2.c.obj
+# ELF:      File: {{.*}}libclang_rt.builtins.a(ffsdi2.c.obj)
+# ELF:      Format: elf64-mmix
+# ELF:      Arch: mmix
+# ELF:      DataEncoding: BigEndian
+# ELF:      Type: Relocatable
+# ELF:      Machine: EM_MMIX
+# SYMBOL: T __ffsdi2
