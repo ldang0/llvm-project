@@ -1,0 +1,29 @@
+# RUN: cmake -DCOMPILER_RT_BUILD_BUILTINS=ON -P %s
+# RUN: not cmake -DCOMPILER_RT_BUILD_BUILTINS=OFF -P %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=NO-BUILTINS
+# RUN: not cmake -DCOMPILER_RT_BUILD_BUILTINS=ON \
+# RUN:   -DCOMPILER_RT_BUILD_SANITIZERS=ON -P %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=SANITIZER
+
+# NO-BUILTINS: The MMIX compiler-rt configuration requires builtins
+# SANITIZER: COMPILER_RT_BUILD_SANITIZERS is not supported by the MMIX compiler-rt
+
+foreach(runtime
+    COMPILER_RT_BUILD_CRT
+    COMPILER_RT_BUILD_SANITIZERS
+    COMPILER_RT_BUILD_XRAY
+    COMPILER_RT_BUILD_LIBFUZZER
+    COMPILER_RT_BUILD_PROFILE
+    COMPILER_RT_BUILD_CTX_PROFILE
+    COMPILER_RT_BUILD_MEMPROF
+    COMPILER_RT_BUILD_ORC
+    COMPILER_RT_BUILD_GWP_ASAN
+    COMPILER_RT_BUILD_PROFILE_ROCM
+    COMPILER_RT_BUILD_STANDALONE_LIBATOMIC)
+  if(NOT DEFINED ${runtime})
+    set(${runtime} OFF)
+  endif()
+endforeach()
+
+include(${CMAKE_CURRENT_LIST_DIR}/../../../../compiler-rt/cmake/Modules/CompilerRTMMIXUtils.cmake)
+compiler_rt_validate_mmix_runtime_selection()
