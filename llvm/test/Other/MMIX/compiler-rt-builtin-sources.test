@@ -1,0 +1,20 @@
+# RUN: cmake -P %s
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O2 -I %S/../../../../compiler-rt/lib/builtins \
+# RUN:   -c %S/../../../../compiler-rt/lib/builtins/ffsdi2.c -o %t.o
+# RUN: llvm-readobj --file-headers %t.o | FileCheck %s --check-prefix=ELF
+# RUN: llvm-nm --defined-only --extern-only %t.o \
+# RUN:   | FileCheck %s --check-prefix=SYMBOL
+# RUN: llvm-nm --undefined-only %t.o | count 0
+
+# ELF:      Format: elf64-mmix
+# ELF:      Arch: mmix
+# ELF:      DataEncoding: BigEndian
+# ELF:      Machine: EM_MMIX
+# SYMBOL: T __ffsdi2
+
+include(${CMAKE_CURRENT_LIST_DIR}/../../../../compiler-rt/lib/builtins/mmix/builtins.cmake)
+list(JOIN mmix_SOURCES ";" actual_sources)
+if(NOT actual_sources STREQUAL "ffsdi2.c")
+  message(FATAL_ERROR "unexpected MMIX builtin sources: ${actual_sources}")
+endif()

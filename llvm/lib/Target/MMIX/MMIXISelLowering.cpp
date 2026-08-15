@@ -635,10 +635,11 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   // through the explicit conversion actions below. Type legalization promotes
   // narrower integer values and splits wider scalar and vector values.
   static constexpr unsigned IntegerOperations[] = {
-      ISD::ROTL, ISD::ROTR, ISD::BSWAP, ISD::CTLZ, ISD::CTTZ};
+      ISD::ROTL, ISD::ROTR, ISD::BSWAP, ISD::CTLZ};
   for (unsigned Opcode : IntegerOperations)
     RejectOperation(Opcode, MVT::i64);
 
+  setOperationAction(ISD::CTTZ, MVT::i64, Expand);
   setOperationAction(ISD::CTPOP, MVT::i64, Legal);
   setOperationAction(ISD::USUBSAT, MVT::i64, Legal);
 
