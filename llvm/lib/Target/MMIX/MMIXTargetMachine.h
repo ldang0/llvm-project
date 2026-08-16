@@ -46,6 +46,8 @@ public:
   const MMIXSubtarget *getSubtargetImpl(const Function &) const override {
     return &Subtarget;
   }
+
+  TargetTransformInfo getTargetTransformInfo(const Function &F) const override;
 };
 
 } // namespace llvm

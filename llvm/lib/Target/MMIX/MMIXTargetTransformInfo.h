@@ -1,0 +1,42 @@
+//===-- MMIXTargetTransformInfo.h - MMIX specific TTI ----------*- C++ -*-===//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef LLVM_LIB_TARGET_MMIX_MMIXTARGETTRANSFORMINFO_H
+#define LLVM_LIB_TARGET_MMIX_MMIXTARGETTRANSFORMINFO_H
+
+#include "MMIXSubtarget.h"
+#include "MMIXTargetMachine.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/CodeGen/BasicTTIImpl.h"
+#include "llvm/IR/Function.h"
+
+namespace llvm {
+
+class MMIXTTIImpl final : public BasicTTIImplBase<MMIXTTIImpl> {
+  using BaseT = BasicTTIImplBase<MMIXTTIImpl>;
+
+  friend BaseT;
+
+  const MMIXSubtarget *ST;
+  const MMIXTargetLowering *TLI;
+
+  const MMIXSubtarget *getST() const { return ST; }
+  const MMIXTargetLowering *getTLI() const { return TLI; }
+
+public:
+  explicit MMIXTTIImpl(const MMIXTargetMachine *TM, const Function &F)
+      : BaseT(TM, F.getDataLayout()), ST(TM->getSubtargetImpl(F)),
+        TLI(ST->getTargetLowering()) {}
+
+  // FIXME: Enable this promotion once the MMIX backend implements fastcc.
+  bool useFastCCForInternalCall(Function &) const override { return false; }
+};
+
+} // namespace llvm
+
+#endif // LLVM_LIB_TARGET_MMIX_MMIXTARGETTRANSFORMINFO_H

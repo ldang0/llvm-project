@@ -11,6 +11,7 @@
 #include "MMIX.h"
 #include "MMIXALModuleValidator.h"
 #include "MMIXMachineFunctionInfo.h"
+#include "MMIXTargetTransformInfo.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/CodeGen/AtomicExpand.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -56,6 +57,11 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
 }
 
 MMIXTargetMachine::~MMIXTargetMachine() = default;
+
+TargetTransformInfo
+MMIXTargetMachine::getTargetTransformInfo(const Function &F) const {
+  return TargetTransformInfo(std::make_unique<MMIXTTIImpl>(this, F));
+}
 
 bool MMIXTargetMachine::addPassesToEmitFile(
     PassManagerBase &PM, raw_pwrite_stream &Out, raw_pwrite_stream *DwoOut,
