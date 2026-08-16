@@ -29,14 +29,22 @@
 // RUN:   -DTEST_SUPPORTED_BUILTINS %s | FileCheck %s --check-prefix=SUPPORTED
 
 #if defined(TEST_ATOMIC_VALUE)
-_Atomic int value;
-// ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(int)'
+struct ThreeBytes {
+  unsigned char bytes[3];
+};
+_Atomic(struct ThreeBytes) value;
+// ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
 #elif defined(TEST_ATOMIC_BOUNDARY)
-int consume(_Atomic int value) { return 0; }
-// ATOMIC-BOUNDARY: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(int)'
+struct ThreeBytes {
+  unsigned char bytes[3];
+};
+int consume(_Atomic(struct ThreeBytes) value) { return 0; }
+// ATOMIC-BOUNDARY: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
 #elif defined(TEST_ATOMIC_BUILTIN)
-int load(int *value) { return __atomic_load_n(value, __ATOMIC_SEQ_CST); }
-// BUILTIN: error: MMIX GNU ABI does not support atomic operation CodeGen
+float fetch_add(float *value) {
+  return __atomic_fetch_add(value, 1.0f, __ATOMIC_SEQ_CST);
+}
+// BUILTIN: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_add
 #elif defined(TEST_VECTOR)
 typedef int int2 __attribute__((ext_vector_type(2)));
 int2 value;
