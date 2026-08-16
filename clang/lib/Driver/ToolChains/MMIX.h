@@ -31,6 +31,9 @@ public:
   }
   RuntimeLibType
   GetRuntimeLibType(const llvm::opt::ArgList &Args) const override;
+  std::string ComputeEffectiveClangTriple(
+      const llvm::opt::ArgList &Args, BoundArch BA = {},
+      types::ID InputType = types::TY_INVALID) const override;
   std::string getCompilerRTPath() const override;
   std::string getCompilerRT(const llvm::opt::ArgList &Args,
                             llvm::StringRef Component,

@@ -3,7 +3,7 @@ _Float16 value;
 #elif defined(TEST_BITINT)
 _BitInt(17) value;
 #elif defined(TEST_COMPLEX)
-_Complex double consume(_Complex double value) { return value; }
+_Complex int consume(_Complex int value) { return value; }
 #elif defined(TEST_VECTOR)
 typedef int int2 __attribute__((ext_vector_type(2)));
 int2 value;

@@ -4,6 +4,9 @@
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -emit-llvm -o /dev/null \
 // RUN:   -DTEST_COMPLEX %s 2>&1 | FileCheck %s --check-prefix=COMPLEX
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -emit-llvm -o /dev/null \
+// RUN:   -DTEST_VARIADIC_COMPLEX %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=VARIADIC-COMPLEX
+// RUN: not %clang_cc1 -triple mmix-unknown-unknown -emit-llvm -o /dev/null \
 // RUN:   -DTEST_VECTOR %s 2>&1 | FileCheck %s --check-prefix=VECTOR
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -emit-llvm -o /dev/null \
 // RUN:   -DTEST_ADDRESS_SPACE %s 2>&1 | FileCheck %s --check-prefix=AS
@@ -15,9 +18,13 @@ __int128 unsupported(__int128 value) { return value; }
 // INT128: error: MMIX GNU ABI does not support return type '__int128'
 // INT128: error: MMIX GNU ABI does not support argument type '__int128'
 #elif defined(TEST_COMPLEX)
-_Complex double unsupported(_Complex double value) { return value; }
-// COMPLEX: error: MMIX GNU ABI does not support return type '_Complex double'
-// COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex double'
+_Complex int unsupported(_Complex int value) { return value; }
+// COMPLEX: error: MMIX GNU ABI does not support return type '_Complex int'
+// COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex int'
+#elif defined(TEST_VARIADIC_COMPLEX)
+extern void variadic_sink(int, ...);
+void unsupported(_Complex double value) { variadic_sink(0, value); }
+// VARIADIC-COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex double'
 #elif defined(TEST_VECTOR)
 typedef int int2 __attribute__((ext_vector_type(2)));
 int2 unsupported(int2 value) { return value; }

@@ -138,6 +138,17 @@ MMIXToolChain::GetRuntimeLibType(const ArgList &Args) const {
   return ToolChain::RLT_CompilerRT;
 }
 
+std::string
+MMIXToolChain::ComputeEffectiveClangTriple(const ArgList &Args, BoundArch BA,
+                                           types::ID InputType) const {
+  StringRef RequestedTriple = getDriver().getTargetTriple();
+  if (const Arg *A = Args.getLastArg(options::OPT_target))
+    RequestedTriple = A->getValue();
+  if (RequestedTriple == "mmix-unknown-elf")
+    return "mmix-unknown-unknown";
+  return ComputeLLVMTriple(Args, BA, InputType);
+}
+
 std::string MMIXToolChain::getCompilerRTPath() const {
   SmallString<128> Path(getDriver().ResourceDir);
   llvm::sys::path::append(Path, "lib", "mmix-unknown-unknown");
