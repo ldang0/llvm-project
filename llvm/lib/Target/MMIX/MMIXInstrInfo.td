@@ -33,6 +33,9 @@ def MMIXret
 def MMIXret_value
     : SDNode<"MMIXISD::RET_VALUE_GLUE", SDTNone,
              [SDNPHasChain, SDNPInGlue]>;
+def MMIXret_pair
+    : SDNode<"MMIXISD::RET_PAIR_GLUE", SDTNone,
+             [SDNPHasChain, SDNPInGlue]>;
 def SDT_MMIXLoadAddr : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>]>;
 class MMIXAddressProducerNode<string Use, string Opcode>
     : SDNode<Opcode, SDT_MMIXLoadAddr> {
@@ -1372,6 +1375,7 @@ class MMIXReturn<list<Register> ResultUses>
 
 def RET : MMIXReturn<[]>;
 def RET_VALUE : MMIXReturn<[R231]>;
+def RET_PAIR : MMIXReturn<[R231, R232]>;
 
 // Floating-point arithmetic operates on the 64-bit floating-point view of
 // the general-purpose register file. These operations have no immediate

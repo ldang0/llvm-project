@@ -23,7 +23,7 @@ def CC_MMIX : CallingConv<[
 def RetCC_MMIX : CallingConv<[
   CCIfType<[i1, i8, i16, i32], CCPromoteToType<i64>>,
   CCIfType<[f32], CCBitConvertToType<i64>>,
-  CCIfType<[i64, f64], CCAssignToReg<[R231]>>
+  CCIfType<[i64, f64], CCAssignToReg<[R231, R232]>>
 ]>;
 
 def CSR_MMIX : CalleeSavedRegs<

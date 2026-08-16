@@ -1202,6 +1202,13 @@ static bool hasUnsupportedABIFlags(const ISD::ArgFlagsTy &Flags) {
          Flags.isSecArgPass();
 }
 
+static bool isMMIXWideComplexResultType(Type *Ty) {
+  auto *StructTy = dyn_cast_or_null<StructType>(Ty);
+  return StructTy && !StructTy->isPacked() && StructTy->getNumElements() == 2 &&
+         StructTy->getElementType(0)->isDoubleTy() &&
+         StructTy->getElementType(1)->isDoubleTy();
+}
+
 static MMIXAggregateABIClassification classifyMMIXABIValue(
     MMIXAggregateABIRole Role, const ISD::ArgFlagsTy &Flags,
     const DataLayout &DL, Type *AggregateTy = nullptr,
@@ -1239,7 +1246,19 @@ static MMIXAggregateABIClassification classifyMMIXABIValue(
     }
   }
 
-  return classifyMMIXAggregateABI(Value);
+  MMIXAggregateABIClassification Classification =
+      classifyMMIXAggregateABI(Value);
+  // Clang selects { double, double } as the direct IR result for the standard
+  // binary64 complex types. Ordinary two-double C records use sret and never
+  // reach this direct-result exception.
+  if (Role == MMIXAggregateABIRole::Result &&
+      isMMIXWideComplexResultType(AggregateTy) && Value.Size == 16 &&
+      Value.Alignment <= Align(8) && Value.AddressSpace == 0 &&
+      !Value.IsByVal && !Value.IsSRet && !Value.IsSplit &&
+      !Value.IsInConsecutiveRegs && !Value.HasUnsupportedFlags)
+    return {MMIXAggregateABIKind::DirectResult,
+            MMIXAggregateABIError::None};
+  return Classification;
 }
 
 static bool isSupportedMMIXABIType(Type *Ty) {
@@ -1491,6 +1510,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   MMIXAggregateABIClassification ResultClassification = classifyMMIXABIValue(
       MMIXAggregateABIRole::Result, ResultFlags, CLI.DAG.getDataLayout(),
       CLI.OrigRetTy, CLI.Ins.size());
+  bool IsWideComplexResult = isMMIXWideComplexResultType(CLI.OrigRetTy);
   if (!ResultClassification.isValid())
     reportMMIXABIClassificationError(ResultClassification, "call results",
                                      MF.getName());
@@ -1520,14 +1540,25 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     ResultAggregateSize =
         getMMIXAggregateSize(CLI.OrigRetTy, DAG.getDataLayout());
 
-    bool Used = llvm::any_of(CLI.Ins,
-                             [](const ISD::InputArg &Arg) { return Arg.Used; });
-    ISD::ArgFlagsTy PackedFlags;
-    PackedFlags.setOrigAlign(
-        DAG.getDataLayout().getABITypeAlign(CLI.OrigRetTy));
-    Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
-    ABIIns.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, Used,
-                        ISD::InputArg::NoArgIndex, 0);
+    if (IsWideComplexResult) {
+      if (CLI.Ins.size() != 2 ||
+          llvm::any_of(CLI.Ins, [](const ISD::InputArg &Arg) {
+            return Arg.VT != MVT::f64;
+          }))
+        reportFatalUsageError(
+            Twine("MMIX cannot lower this wide complex call result in ") +
+            "function '" + MF.getName() + "'");
+      ABIIns.append(CLI.Ins.begin(), CLI.Ins.end());
+    } else {
+      bool Used = llvm::any_of(
+          CLI.Ins, [](const ISD::InputArg &Arg) { return Arg.Used; });
+      ISD::ArgFlagsTy PackedFlags;
+      PackedFlags.setOrigAlign(
+          DAG.getDataLayout().getABITypeAlign(CLI.OrigRetTy));
+      Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+      ABIIns.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, Used,
+                          ISD::InputArg::NoArgIndex, 0);
+    }
   } else if (ResultClassification.Kind == MMIXAggregateABIKind::Empty) {
     if (!CLI.Ins.empty())
       report_fatal_error("MMIX empty aggregate call result has value parts");
@@ -1734,7 +1765,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
   Glue = Chain.getValue(1);
 
-  SmallVector<CCValAssign, 1> ResultLocs;
+  SmallVector<CCValAssign, 2> ResultLocs;
   CCState ResultCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ResultLocs,
                        *DAG.getContext());
   ResultCCInfo.AnalyzeCallResult(ABIIns, RetCC_MMIX);
@@ -1766,7 +1797,8 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     default:
       report_fatal_error("MMIX does not support this call result conversion");
     }
-    if (ResultClassification.Kind == MMIXAggregateABIKind::DirectResult) {
+    if (ResultClassification.Kind == MMIXAggregateABIKind::DirectResult &&
+        !IsWideComplexResult) {
       for (unsigned Part = 0; Part != CLI.Ins.size(); ++Part)
         InVals.push_back(unpackMMIXDirectAggregatePart(
             Value, CLI.Ins[Part], ResultPartOffsets[Part], ResultAggregateSize,
@@ -2038,13 +2070,22 @@ bool MMIXTargetLowering::CanLowerReturn(
             .size() != Outs.size())
       return false;
 
-    ISD::ArgFlagsTy PackedFlags;
-    PackedFlags.setOrigAlign(
-        MF.getDataLayout().getABITypeAlign(const_cast<Type *>(RetTy)));
-    SmallVector<ISD::OutputArg, 1> ABIOuts;
-    ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64,
-                         Type::getInt64Ty(Context), 0, 0);
-    SmallVector<CCValAssign, 1> RetLocs;
+    SmallVector<ISD::OutputArg, 2> ABIOuts;
+    if (isMMIXWideComplexResultType(const_cast<Type *>(RetTy))) {
+      if (Outs.size() != 2 ||
+          llvm::any_of(Outs, [](const ISD::OutputArg &Arg) {
+            return Arg.VT != MVT::f64;
+          }))
+        return false;
+      ABIOuts.append(Outs.begin(), Outs.end());
+    } else {
+      ISD::ArgFlagsTy PackedFlags;
+      PackedFlags.setOrigAlign(
+          MF.getDataLayout().getABITypeAlign(const_cast<Type *>(RetTy)));
+      ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64,
+                           Type::getInt64Ty(Context), 0, 0);
+    }
+    SmallVector<CCValAssign, 2> RetLocs;
     CCState CCInfo(CallConv, IsVarArg, MF, RetLocs, Context);
     return CallConv == CallingConv::C &&
            CCInfo.CheckReturn(ABIOuts, RetCC_MMIX);
@@ -2103,8 +2144,8 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
         Twine("MMIX does not support this aggregate function result form in ") +
         "function '" + F.getName() + "'");
 
-  SmallVector<ISD::OutputArg, 1> ABIOuts;
-  SmallVector<SDValue, 1> ABIOutVals;
+  SmallVector<ISD::OutputArg, 2> ABIOuts;
+  SmallVector<SDValue, 2> ABIOutVals;
   if (Classification.Kind == MMIXAggregateABIKind::DirectResult) {
     SmallVector<uint64_t, 4> PartOffsets =
         getMMIXAggregatePartOffsets(F.getReturnType(), DAG.getDataLayout());
@@ -2113,16 +2154,28 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
           Twine(
               "MMIX cannot map direct aggregate result fields in function '") +
           F.getName() + "'");
-    uint64_t AggregateSize =
-        getMMIXAggregateSize(F.getReturnType(), DAG.getDataLayout());
-    ABIOutVals.push_back(packMMIXDirectAggregate(Outs, OutVals, PartOffsets,
-                                                 AggregateSize, DL, DAG));
+    if (isMMIXWideComplexResultType(F.getReturnType())) {
+      if (Outs.size() != 2 ||
+          llvm::any_of(Outs, [](const ISD::OutputArg &Arg) {
+            return Arg.VT != MVT::f64;
+          }))
+        reportFatalUsageError(
+            Twine("MMIX cannot lower this wide complex function result in ") +
+            "function '" + F.getName() + "'");
+      ABIOuts.append(Outs.begin(), Outs.end());
+      ABIOutVals.append(OutVals.begin(), OutVals.end());
+    } else {
+      uint64_t AggregateSize =
+          getMMIXAggregateSize(F.getReturnType(), DAG.getDataLayout());
+      ABIOutVals.push_back(packMMIXDirectAggregate(
+          Outs, OutVals, PartOffsets, AggregateSize, DL, DAG));
 
-    ISD::ArgFlagsTy PackedFlags;
-    PackedFlags.setOrigAlign(
-        DAG.getDataLayout().getABITypeAlign(F.getReturnType()));
-    Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
-    ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, 0, 0);
+      ISD::ArgFlagsTy PackedFlags;
+      PackedFlags.setOrigAlign(
+          DAG.getDataLayout().getABITypeAlign(F.getReturnType()));
+      Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+      ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, 0, 0);
+    }
   } else if (Classification.Kind == MMIXAggregateABIKind::Empty) {
     if (!Outs.empty())
       report_fatal_error(
@@ -2132,7 +2185,7 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     ABIOutVals.append(OutVals.begin(), OutVals.end());
   }
 
-  SmallVector<CCValAssign, 1> RetLocs;
+  SmallVector<CCValAssign, 2> RetLocs;
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), RetLocs,
                  *DAG.getContext());
   CCInfo.AnalyzeReturn(ABIOuts, RetCC_MMIX);
@@ -2179,8 +2232,12 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   RetOps[0] = Chain;
   if (Glue)
     RetOps.push_back(Glue);
-  unsigned Opcode = RetLocs.empty() && !F.hasStructRetAttr()
-                        ? MMIXISD::RET_GLUE
-                        : MMIXISD::RET_VALUE_GLUE;
+  unsigned Opcode;
+  if (RetLocs.size() == 2)
+    Opcode = MMIXISD::RET_PAIR_GLUE;
+  else if (RetLocs.empty() && !F.hasStructRetAttr())
+    Opcode = MMIXISD::RET_GLUE;
+  else
+    Opcode = MMIXISD::RET_VALUE_GLUE;
   return DAG.getNode(Opcode, DL, MVT::Other, RetOps);
 }

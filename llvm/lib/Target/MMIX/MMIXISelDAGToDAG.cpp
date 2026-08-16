@@ -347,6 +347,12 @@ private:
       return;
     }
 
+    if (Node->getOpcode() == MMIXISD::RET_PAIR_GLUE) {
+      CurDAG->SelectNodeTo(Node, MMIX::RET_PAIR, MVT::Other,
+                           Node->getOperand(0), Node->getOperand(1));
+      return;
+    }
+
     SelectCode(Node);
   }
 };

@@ -52,6 +52,7 @@ enum NodeType : unsigned {
   DIRECT_CALL,
   RET_GLUE,
   RET_VALUE_GLUE,
+  RET_PAIR_GLUE,
 };
 
 } // namespace MMIXISD
