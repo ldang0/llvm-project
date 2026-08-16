@@ -429,9 +429,11 @@ void MMIXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
 static bool isOctaSpillClass(const TargetRegisterClass *RC) {
   // FPR64 holds the full 64-bit floating representation. LDSF and STSF
-  // perform conversions and therefore cannot preserve an FPR64 spill value.
+  // perform conversions and therefore cannot preserve FPR64 values or the
+  // raw low-tetra encoding held by F32BitsCodeGen.
   return MMIX::GPR64RegClass.hasSubClassEq(RC) ||
-         MMIX::FPR64RegClass.hasSubClassEq(RC);
+         MMIX::FPR64RegClass.hasSubClassEq(RC) ||
+         MMIX::F32BitsCodeGenRegClass.hasSubClassEq(RC);
 }
 
 void MMIXInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,

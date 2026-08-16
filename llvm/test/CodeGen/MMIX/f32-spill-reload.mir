@@ -1,0 +1,42 @@
+# RUN: llc -mtriple=mmix -run-pass=greedy,virtregrewriter \
+# RUN:   -stress-regalloc=2 -verify-machineinstrs -o - %s | FileCheck %s
+
+--- |
+  define void @spill_f32_bits() {
+    ret void
+  }
+...
+---
+name:            spill_f32_bits
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: f32bitscodegen }
+  - { id: 1, class: f32bitscodegen }
+  - { id: 2, class: f32bitscodegen }
+  - { id: 3, class: gpr64codegen }
+  - { id: 4, class: gpr64codegen }
+  - { id: 5, class: gpr64codegen }
+  - { id: 6, class: gpr64codegen }
+  - { id: 7, class: gpr64codegen }
+body:             |
+  bb.0:
+    ; Binary32 register values are raw encodings, so spills must preserve the
+    ; complete register bits instead of converting through STSF and LDSF.
+    ; CHECK-LABEL: name: spill_f32_bits
+    ; CHECK-NOT: STSFI
+    ; CHECK-NOT: LDSFI
+    ; CHECK: STOUI {{.*}}, %stack.{{[0-9]+}}, 0 :: (store (s64)
+    ; CHECK-NOT: STSFI
+    ; CHECK-NOT: LDSFI
+    ; CHECK: {{.*}} = LDOUI %stack.{{[0-9]+}}, 0 :: (load (s64)
+    ; CHECK-NOT: STSFI
+    ; CHECK-NOT: LDSFI
+    %0:f32bitscodegen = IMPLICIT_DEF
+    %1:f32bitscodegen = IMPLICIT_DEF
+    %2:f32bitscodegen = IMPLICIT_DEF
+    %3:gpr64codegen = COPY %0
+    %4:gpr64codegen = COPY %1
+    %5:gpr64codegen = COPY %2
+    %6:gpr64codegen = ADDU %3, %4
+    %7:gpr64codegen = ADDU %6, %5
+...
