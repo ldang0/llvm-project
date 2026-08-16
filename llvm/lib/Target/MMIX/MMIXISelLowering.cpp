@@ -635,10 +635,11 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   // through the explicit conversion actions below. Type legalization promotes
   // narrower integer values and splits wider scalar and vector values.
   static constexpr unsigned IntegerOperations[] = {
-      ISD::ROTL, ISD::ROTR, ISD::BSWAP, ISD::CTLZ};
+      ISD::ROTL, ISD::ROTR, ISD::BSWAP};
   for (unsigned Opcode : IntegerOperations)
     RejectOperation(Opcode, MVT::i64);
 
+  setOperationAction(ISD::CTLZ, MVT::i64, Expand);
   setOperationAction(ISD::CTTZ, MVT::i64, Expand);
   setOperationAction(ISD::CTPOP, MVT::i64, Legal);
   setOperationAction(ISD::USUBSAT, MVT::i64, Legal);
@@ -679,16 +680,20 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationPromotedToType(ISD::SETCC, MVT::f32, MVT::f64);
 
   for (unsigned Opcode : {ISD::SINT_TO_FP, ISD::UINT_TO_FP})
-    setOperationAction(Opcode, MVT::i64, Legal);
+    setOperationAction(Opcode, MVT::i64, Custom);
   for (unsigned Opcode : {ISD::FP_TO_SINT, ISD::FP_TO_UINT})
-    setOperationAction(Opcode, MVT::i64, Legal);
+    setOperationAction(Opcode, MVT::i64, Custom);
   for (unsigned Opcode :
        {ISD::FTRUNC, ISD::FCEIL, ISD::FFLOOR, ISD::FROUNDEVEN, ISD::FRINT})
     setOperationAction(Opcode, MVT::f64, Legal);
 
   for (unsigned Opcode : {ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN})
     setOperationAction(Opcode, MVT::f64, Expand);
+  setOperationPromotedToType({ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN},
+                             MVT::f32, MVT::f64);
   setOperationAction(ISD::SELECT, MVT::f64, Custom);
+  setOperationPromotedToType(ISD::SELECT, MVT::f32, MVT::f64);
+  setOperationAction(ISD::SELECT_CC, MVT::f32, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::f64, Expand);
 
   static constexpr unsigned FloatingLibcallOperations[] = {
@@ -949,6 +954,37 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
     SDValue Bits = DAG.getExtLoad(ISD::ZEXTLOAD, DL, MVT::i64, Chain, Slot,
                                   PtrInfo, MVT::i32, Align(4));
     return DAG.getNode(MMIXISD::BITS_TO_F32, DL, MVT::f32, Bits);
+  }
+  if (Op.getOpcode() == ISD::SINT_TO_FP ||
+      Op.getOpcode() == ISD::UINT_TO_FP) {
+    SDValue Integer = Op.getOperand(0);
+    EVT IntegerVT = Integer.getValueType();
+    if (IntegerVT != MVT::i64) {
+      unsigned ExtendOpcode = Op.getOpcode() == ISD::SINT_TO_FP
+                                  ? ISD::SIGN_EXTEND
+                                  : ISD::ZERO_EXTEND;
+      Integer = DAG.getNode(ExtendOpcode, DL, MVT::i64, Integer);
+    }
+    bool IsSigned = Op.getOpcode() == ISD::SINT_TO_FP;
+    if (Op.getValueType() == MVT::f64)
+      return DAG.getNode(IsSigned ? MMIXISD::FLOT : MMIXISD::FLOTU, DL,
+                         MVT::f64, Integer);
+
+    assert(Op.getValueType() == MVT::f32 &&
+           "unexpected MMIX integer-to-floating result type");
+    unsigned Opcode = IsSigned ? MMIXISD::SFLOT : MMIXISD::SFLOTU;
+    SDValue Rounded = DAG.getNode(Opcode, DL, MVT::f64, Integer);
+    return DAG.getNode(ISD::FP_ROUND, DL, MVT::f32, Rounded,
+                       DAG.getIntPtrConstant(1, DL, /*isTarget=*/true));
+  }
+  if (Op.getOpcode() == ISD::FP_TO_SINT ||
+      Op.getOpcode() == ISD::FP_TO_UINT) {
+    SDValue Floating = Op.getOperand(0);
+    if (Floating.getValueType() == MVT::f32)
+      Floating = DAG.getNode(ISD::FP_EXTEND, DL, MVT::f64, Floating);
+    assert(Floating.getValueType() == MVT::f64 &&
+           "unexpected MMIX floating-to-integer source type");
+    return DAG.getNode(MMIXISD::FIXU, DL, MVT::i64, Floating);
   }
   if (Op.getOpcode() == ISD::FP16_TO_FP || Op.getOpcode() == ISD::FP_TO_FP16)
     report_fatal_error("unsupported library call operation");

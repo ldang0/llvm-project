@@ -7,10 +7,18 @@
 // RUN:   %t.ll -o %t.o
 // RUN: %clang --target=mmix-unknown-elf -ffreestanding -std=c17 -O1 \
 // RUN:   -c -o %t.driver.o %s
+// RUN: llvm-readobj --relocations --symbols %t.driver.o \
+// RUN:   | FileCheck %s --check-prefix=ELF \
+// RUN:     --implicit-check-not=__multc3 --implicit-check-not=__divtc3
 
 typedef _Complex float complex_float;
 typedef _Complex double complex_double;
 typedef _Complex long double complex_long_double;
+
+// ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __mulsc3
+// ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __divsc3
+// ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __muldc3
+// ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __divdc3
 
 struct ComplexMember {
   int tag;

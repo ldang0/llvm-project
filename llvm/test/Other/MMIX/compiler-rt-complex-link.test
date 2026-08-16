@@ -1,0 +1,39 @@
+# RUN: rm -rf %t.dir
+# RUN: mkdir -p %t.dir
+# RUN: cd %t.dir && clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -ffp-contract=off -fno-stack-protector -fno-pie -O2 \
+# RUN:   -I %S/../../../../compiler-rt/lib/builtins -c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/divdc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/divsc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/muldc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mulsc3.c
+# RUN: llvm-ar qcD %t.dir/libclang_rt.builtins.a %t.dir/divdc3.o \
+# RUN:   %t.dir/divsc3.o %t.dir/muldc3.o %t.dir/mulsc3.o
+# RUN: llvm-ranlib -D %t.dir/libclang_rt.builtins.a
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -fno-pie -O1 \
+# RUN:   -c %S/Inputs/compiler-runtime/complex-arithmetic-call.c \
+# RUN:   -o %t.dir/caller.o
+# RUN: llvm-readobj --relocations --symbols %t.dir/caller.o \
+# RUN:   | FileCheck %s --check-prefix=CALLER
+# RUN: ld.lld -static -e _start %t.dir/caller.o \
+# RUN:   %t.dir/libclang_rt.builtins.a -o %t.dir/complex-arithmetic
+# RUN: llvm-readobj --file-headers %t.dir/complex-arithmetic \
+# RUN:   | FileCheck %s --check-prefix=ELF
+# RUN: llvm-nm --undefined-only %t.dir/complex-arithmetic | count 0
+# RUN: llvm-nm --defined-only %t.dir/complex-arithmetic \
+# RUN:   | FileCheck %s --check-prefix=SYMBOL \
+# RUN:     --implicit-check-not=__multc3 --implicit-check-not=__divtc3
+
+# CALLER-DAG: R_MMIX_PUSHJ_STUBBABLE __mulsc3
+# CALLER-DAG: R_MMIX_PUSHJ_STUBBABLE __divsc3
+# CALLER-DAG: R_MMIX_PUSHJ_STUBBABLE __muldc3
+# CALLER-DAG: R_MMIX_PUSHJ_STUBBABLE __divdc3
+# ELF:      Format: elf64-mmix
+# ELF-NEXT: Arch: mmix
+# ELF:      Type: Executable
+# ELF:      Machine: EM_MMIX
+# SYMBOL-DAG: T __mulsc3
+# SYMBOL-DAG: T __divsc3
+# SYMBOL-DAG: T __muldc3
+# SYMBOL-DAG: T __divdc3

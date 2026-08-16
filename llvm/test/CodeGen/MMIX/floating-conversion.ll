@@ -238,6 +238,26 @@ define void @signed_i32_to_short_float(ptr %address, i32 %value) {
   ret void
 }
 
+; A reusable f32 result takes the same short-rounding path even without the
+; store combine above.
+; CHECK-LABEL: signed_to_short_float_value:
+; CHECK:       SFLOT [[ROUNDED:r[0-9]+]], 4, r231
+; CHECK:       STSF [[ROUNDED]], r254,
+; CHECK:       LDTU r231, r254,
+define float @signed_to_short_float_value(i64 %value) {
+  %result = sitofp i64 %value to float
+  ret float %result
+}
+
+; CHECK-LABEL: unsigned_to_short_float_value:
+; CHECK:       SFLOTU [[ROUNDED:r[0-9]+]], 4, r231
+; CHECK:       STSF [[ROUNDED]], r254,
+; CHECK:       LDTU r231, r254,
+define float @unsigned_to_short_float_value(i64 %value) {
+  %result = uitofp i64 %value to float
+  ret float %result
+}
+
 ; Conversion from memory follows the explicit LDSF promotion path.
 ; CHECK-LABEL: short_float_to_signed:
 ; CHECK:       LDSF [[VALUE:r[0-9]+]], r231, 0
@@ -246,6 +266,16 @@ define i64 @short_float_to_signed(ptr %address) {
   %short = load float, ptr %address, align 4
   %value = fpext float %short to double
   %result = fptosi double %value to i64
+  ret i64 %result
+}
+
+; A direct f32 conversion promotes the source numerically before FIXU.
+; CHECK-LABEL: short_float_value_to_signed:
+; CHECK:       STTU r231, r254,
+; CHECK:       LDSF [[VALUE:r[0-9]+]], r254,
+; CHECK:       FIXU r231, 1, [[VALUE]]
+define i64 @short_float_value_to_signed(float %value) {
+  %result = fptosi float %value to i64
   ret i64 %result
 }
 

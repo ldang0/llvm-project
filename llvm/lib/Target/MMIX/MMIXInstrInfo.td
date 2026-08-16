@@ -52,10 +52,15 @@ def SDT_MMIXFPCompare
 def MMIXfcmp : SDNode<"MMIXISD::FCMP", SDT_MMIXFPCompare>;
 def MMIXfeql : SDNode<"MMIXISD::FEQL", SDT_MMIXFPCompare>;
 def MMIXfun : SDNode<"MMIXISD::FUN", SDT_MMIXFPCompare>;
-def SDT_MMIXShortFloatFromInt
+def SDT_MMIXFloatFromInt
     : SDTypeProfile<1, 1, [SDTCisVT<0, f64>, SDTCisVT<1, i64>]>;
-def MMIXsflot : SDNode<"MMIXISD::SFLOT", SDT_MMIXShortFloatFromInt>;
-def MMIXsflotu : SDNode<"MMIXISD::SFLOTU", SDT_MMIXShortFloatFromInt>;
+def MMIXflot : SDNode<"MMIXISD::FLOT", SDT_MMIXFloatFromInt>;
+def MMIXflotu : SDNode<"MMIXISD::FLOTU", SDT_MMIXFloatFromInt>;
+def MMIXsflot : SDNode<"MMIXISD::SFLOT", SDT_MMIXFloatFromInt>;
+def MMIXsflotu : SDNode<"MMIXISD::SFLOTU", SDT_MMIXFloatFromInt>;
+def SDT_MMIXIntFromFloat
+    : SDTypeProfile<1, 1, [SDTCisVT<0, i64>, SDTCisVT<1, f64>]>;
+def MMIXfixu : SDNode<"MMIXISD::FIXU", SDT_MMIXIntFromFloat>;
 def SDT_MMIXF32ToBits
     : SDTypeProfile<1, 1, [SDTCisVT<0, i64>, SDTCisVT<1, f32>]>;
 def SDT_MMIXBitsToF32
@@ -1578,20 +1583,19 @@ def SFLOTI : MMIXFloatFromIntImmOpcode<0x0D, "SFLOT">;
 def SFLOTU : MMIXFloatFromIntRegOpcode<0x0E, "SFLOTU">;
 def SFLOTUI : MMIXFloatFromIntImmOpcode<0x0F, "SFLOTU">;
 
+def : Pat<(MMIXflot mmix_uimm8:$src), (FLOTI 4, mmix_uimm8:$src)>;
+def : Pat<(MMIXflot i64:$src), (FLOT 4, $src)>;
+def : Pat<(MMIXflotu mmix_uimm8:$src), (FLOTUI 4, mmix_uimm8:$src)>;
+def : Pat<(MMIXflotu i64:$src), (FLOTU 4, $src)>;
+def : Pat<(MMIXsflot mmix_uimm8:$src), (SFLOTI 4, mmix_uimm8:$src)>;
 def : Pat<(MMIXsflot i64:$src), (SFLOT 4, $src)>;
+def : Pat<(MMIXsflotu mmix_uimm8:$src), (SFLOTUI 4, mmix_uimm8:$src)>;
 def : Pat<(MMIXsflotu i64:$src), (SFLOTU 4, $src)>;
+def : Pat<(MMIXfixu f64:$src), (FIXU 1, $src)>;
 
 // Unconstrained LLVM integer-to-floating conversions always round to nearest,
 // while floating-to-integer conversions truncate toward zero. FIXU avoids the
 // float-to-fix trap of FIX for LLVM's poison-producing out-of-range inputs.
-def : Pat<(f64 (sint_to_fp mmix_uimm8:$src)),
-          (FLOTI 4, mmix_uimm8:$src)>;
-def : Pat<(f64 (sint_to_fp i64:$src)), (FLOT 4, $src)>;
-def : Pat<(f64 (uint_to_fp mmix_uimm8:$src)),
-          (FLOTUI 4, mmix_uimm8:$src)>;
-def : Pat<(f64 (uint_to_fp i64:$src)), (FLOTU 4, $src)>;
-def : Pat<(i64 (fp_to_sint f64:$src)), (FIXU 1, $src)>;
-def : Pat<(i64 (fp_to_uint f64:$src)), (FIXU 1, $src)>;
 
 // Short floating-point values are converted to and from the 64-bit floating
 // representation when crossing memory.

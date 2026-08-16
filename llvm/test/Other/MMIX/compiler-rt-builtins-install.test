@@ -23,11 +23,20 @@
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   | FileCheck %s --check-prefix=SYMBOL
+# RUN: llvm-ar t \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
+# RUN:   | count 5
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
+# RUN:   | not grep ' U '
 
-# ELF:      File: {{.*}}resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a(ffsdi2.c.obj)
-# ELF:      Format: elf64-mmix
-# ELF:      Arch: mmix
-# ELF:      DataEncoding: BigEndian
-# ELF:      Type: Relocatable
-# ELF:      Machine: EM_MMIX
-# SYMBOL: T __ffsdi2
+# ELF-COUNT-5: Format: elf64-mmix
+# ELF: Arch: mmix
+# ELF: DataEncoding: BigEndian
+# ELF: Type: Relocatable
+# ELF: Machine: EM_MMIX
+# SYMBOL-DAG: T __divdc3
+# SYMBOL-DAG: T __divsc3
+# SYMBOL-DAG: T __ffsdi2
+# SYMBOL-DAG: T __muldc3
+# SYMBOL-DAG: T __mulsc3

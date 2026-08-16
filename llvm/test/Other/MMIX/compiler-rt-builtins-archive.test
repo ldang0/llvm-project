@@ -1,32 +1,53 @@
 # RUN: rm -rf %t.dir
 # RUN: mkdir -p %t.dir/a %t.dir/b
-# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
-# RUN:   -fno-stack-protector -O2 -I %S/../../../../compiler-rt/lib/builtins \
-# RUN:   -c %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
-# RUN:   -o %t.dir/a/ffsdi2.c.obj
-# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
-# RUN:   -fno-stack-protector -O2 -I %S/../../../../compiler-rt/lib/builtins \
-# RUN:   -c %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
-# RUN:   -o %t.dir/b/ffsdi2.c.obj
-# RUN: llvm-ar qcD %t.dir/a/libclang_rt.builtins.a %t.dir/a/ffsdi2.c.obj
+# RUN: cd %t.dir/a && clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -ffp-contract=off -fno-stack-protector -O2 \
+# RUN:   -I %S/../../../../compiler-rt/lib/builtins -c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/divdc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/divsc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/muldc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mulsc3.c
+# RUN: cd %t.dir/b && clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -ffp-contract=off -fno-stack-protector -O2 \
+# RUN:   -I %S/../../../../compiler-rt/lib/builtins -c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/divdc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/divsc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/ffsdi2.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/muldc3.c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mulsc3.c
+# RUN: llvm-ar qcD %t.dir/a/libclang_rt.builtins.a %t.dir/a/divdc3.o \
+# RUN:   %t.dir/a/divsc3.o %t.dir/a/ffsdi2.o %t.dir/a/muldc3.o \
+# RUN:   %t.dir/a/mulsc3.o
 # RUN: llvm-ranlib -D %t.dir/a/libclang_rt.builtins.a
-# RUN: llvm-ar qcD %t.dir/b/libclang_rt.builtins.a %t.dir/b/ffsdi2.c.obj
+# RUN: llvm-ar qcD %t.dir/b/libclang_rt.builtins.a %t.dir/b/divdc3.o \
+# RUN:   %t.dir/b/divsc3.o %t.dir/b/ffsdi2.o %t.dir/b/muldc3.o \
+# RUN:   %t.dir/b/mulsc3.o
 # RUN: llvm-ranlib -D %t.dir/b/libclang_rt.builtins.a
 # RUN: cmp %t.dir/a/libclang_rt.builtins.a %t.dir/b/libclang_rt.builtins.a
-# RUN: llvm-ar t %t.dir/a/libclang_rt.builtins.a | count 1
+# RUN: llvm-ar t %t.dir/a/libclang_rt.builtins.a | count 5
 # RUN: llvm-ar t %t.dir/a/libclang_rt.builtins.a \
 # RUN:   | FileCheck %s --check-prefix=MEMBER
 # RUN: llvm-readobj --file-headers %t.dir/a/libclang_rt.builtins.a \
 # RUN:   | FileCheck %s --check-prefix=ELF
 # RUN: llvm-nm --defined-only --extern-only %t.dir/a/libclang_rt.builtins.a \
 # RUN:   | FileCheck %s --check-prefix=SYMBOL
-# RUN: llvm-nm --undefined-only %t.dir/a/ffsdi2.c.obj | count 0
+# RUN: llvm-nm --undefined-only %t.dir/a/divdc3.o %t.dir/a/divsc3.o \
+# RUN:   %t.dir/a/ffsdi2.o %t.dir/a/muldc3.o %t.dir/a/mulsc3.o \
+# RUN:   | not grep ' U '
 
-# MEMBER: ffsdi2.c.obj
-# ELF:      File: {{.*}}libclang_rt.builtins.a(ffsdi2.c.obj)
-# ELF:      Format: elf64-mmix
-# ELF:      Arch: mmix
-# ELF:      DataEncoding: BigEndian
-# ELF:      Type: Relocatable
-# ELF:      Machine: EM_MMIX
-# SYMBOL: T __ffsdi2
+# MEMBER-DAG: divdc3.o
+# MEMBER-DAG: divsc3.o
+# MEMBER-DAG: ffsdi2.o
+# MEMBER-DAG: muldc3.o
+# MEMBER-DAG: mulsc3.o
+# ELF-COUNT-5: Format: elf64-mmix
+# ELF: Arch: mmix
+# ELF: DataEncoding: BigEndian
+# ELF: Type: Relocatable
+# ELF: Machine: EM_MMIX
+# SYMBOL-DAG: T __divdc3
+# SYMBOL-DAG: T __divsc3
+# SYMBOL-DAG: T __ffsdi2
+# SYMBOL-DAG: T __muldc3
+# SYMBOL-DAG: T __mulsc3

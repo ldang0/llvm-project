@@ -124,3 +124,28 @@ define float @add_nan_f32(float %value) {
 }
 
 declare float @llvm.sqrt.f32(float)
+declare float @llvm.fabs.f32(float)
+declare float @llvm.copysign.f32(float, float)
+
+; Unary and selection operations promote through binary64 without acquiring
+; helper dependencies.
+; CHECK-LABEL: absolute_f32:
+; CHECK-NOT:   __
+define float @absolute_f32(float %value) {
+  %result = call float @llvm.fabs.f32(float %value)
+  ret float %result
+}
+
+; CHECK-LABEL: copy_sign_f32:
+; CHECK-NOT:   __
+define float @copy_sign_f32(float %magnitude, float %sign) {
+  %result = call float @llvm.copysign.f32(float %magnitude, float %sign)
+  ret float %result
+}
+
+; CHECK-LABEL: select_f32:
+; CHECK-NOT:   __
+define float @select_f32(i1 %condition, float %true, float %false) {
+  %result = select i1 %condition, float %true, float %false
+  ret float %result
+}

@@ -3,7 +3,9 @@ set(CMAKE_SYSTEM_NAME Generic CACHE STRING "")
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY CACHE STRING "")
 set(CMAKE_C_COMPILER_TARGET mmix-unknown-unknown CACHE STRING "")
 set(CMAKE_CXX_COMPILER_TARGET mmix-unknown-unknown CACHE STRING "")
-set(CMAKE_C_FLAGS "--target=mmix-unknown-unknown -ffreestanding" CACHE STRING "")
+set(CMAKE_C_FLAGS
+  "--target=mmix-unknown-unknown -ffreestanding -ffp-contract=off -O2"
+  CACHE STRING "")
 set(CMAKE_CXX_FLAGS "--target=mmix-unknown-unknown -ffreestanding" CACHE STRING "")
 set(CMAKE_ASM_FLAGS "--target=mmix-unknown-unknown" CACHE STRING "")
 set(CMAKE_CXX_COMPILER_FORCED ON CACHE BOOL "")
