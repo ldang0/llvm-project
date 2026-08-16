@@ -73,6 +73,23 @@ define i1 @ordered_greater_equal_f32(float %lhs, float %rhs) {
   ret i1 %result
 }
 
+; Binary32 comparisons must expand before branching, just like their promoted
+; binary64 SETCC representation.
+; CHECK-LABEL: branch_unordered_f32:
+; CHECK:       FUN [[UN:r[0-9]+]], {{r[0-9]+}}, {{r[0-9]+}}
+; CHECK:       CMPU [[UN]], [[UN]], 0
+; CHECK:       {{P?B}}NZ [[UN]],
+define i64 @branch_unordered_f32(float %lhs, float %rhs) {
+  %condition = fcmp uno float %lhs, %rhs
+  br i1 %condition, label %true, label %false
+
+true:
+  ret i64 1
+
+false:
+  ret i64 0
+}
+
 ; Ordinary finite constants are extended exactly before the operation.
 ; CHECK-LABEL: add_finite_f32:
 ; CHECK:       FADD

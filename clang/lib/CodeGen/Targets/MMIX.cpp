@@ -218,8 +218,8 @@ class MMIXCodeGenBoundaryVisitor
 
   bool diagnoseExtendedScalarOperation(SourceLocation Loc, QualType Ty) {
     if (!Ty->isScalarType() ||
-        !isUnsupportedMMIXScalarType(CGM.getContext(), Ty,
-                                     /*AllowVoid=*/true))
+        !isUnsupportedMMIXBoundaryScalarType(CGM.getContext(), Ty,
+                                             /*AllowVoid=*/true))
       return true;
     return diagnoseType(Loc, "extended scalar operation", Ty);
   }
@@ -298,10 +298,6 @@ public:
   }
 
   bool VisitCastExpr(CastExpr *E) {
-    if (E->getCastKind() == CK_LValueToRValue &&
-        isSupportedMMIXComplexType(E->getType()) &&
-        isSupportedMMIXComplexType(E->getSubExpr()->getType()))
-      return true;
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getSubExpr()->getType());

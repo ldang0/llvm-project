@@ -17,6 +17,10 @@
 // RUN:   -DTEST_WIDE_OPERATION %s 2>&1 | FileCheck %s --check-prefix=WIDE
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
+// RUN:   -DTEST_COMPLEX_INTEGER_OPERATION %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=COMPLEX-INTEGER
+// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
+// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_ADDRESS_SPACE %s 2>&1 | FileCheck %s --check-prefix=AS
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
@@ -56,6 +60,13 @@ long multiply(long value) {
   return (long)wide;
 }
 // WIDE: error: MMIX GNU ABI does not support extended scalar operation CodeGen involving type '__int128'
+#elif defined(TEST_COMPLEX_INTEGER_OPERATION)
+_Complex int add_complex_integer(_Complex int lhs, _Complex int rhs) {
+  return lhs + rhs;
+}
+// COMPLEX-INTEGER: error: MMIX GNU ABI does not support return type '_Complex int'
+// COMPLEX-INTEGER: error: MMIX GNU ABI does not support argument type '_Complex int'
+// COMPLEX-INTEGER: error: MMIX GNU ABI does not support extended scalar operation CodeGen involving type '_Complex int'
 #elif defined(TEST_ADDRESS_SPACE)
 int __attribute__((address_space(1))) value;
 // AS: error: MMIX GNU ABI does not support nonzero-address-space value CodeGen involving type '__attribute__((address_space(1))) int'
