@@ -23,8 +23,8 @@ _Complex int unsupported(_Complex int value) { return value; }
 // COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex int'
 #elif defined(TEST_VARIADIC_COMPLEX)
 extern void variadic_sink(int, ...);
-void unsupported(_Complex double value) { variadic_sink(0, value); }
-// VARIADIC-COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex double'
+void unsupported(_Complex int value) { variadic_sink(0, value); }
+// VARIADIC-COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex int'
 #elif defined(TEST_VECTOR)
 typedef int int2 __attribute__((ext_vector_type(2)));
 int2 unsupported(int2 value) { return value; }

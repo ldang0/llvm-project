@@ -23,12 +23,13 @@ long unsupported(int named, ...) {
 }
 // INT128-ERR: error: MMIX GNU ABI does not support va_arg type '__int128'
 #elif defined(COMPLEX)
-_Complex double unsupported(int named, ...) {
+long unsupported(int named, ...) {
   __builtin_va_list ap;
   __builtin_va_start(ap, named);
-  return __builtin_va_arg(ap, _Complex double);
+  _Complex int value = __builtin_va_arg(ap, _Complex int);
+  return 0;
 }
-// COMPLEX-ERR: error: MMIX GNU ABI does not support va_arg type '_Complex double'
+// COMPLEX-ERR: error: MMIX GNU ABI does not support va_arg type '_Complex int'
 #elif defined(VECTOR)
 int2 unsupported(int named, ...) {
   __builtin_va_list ap;

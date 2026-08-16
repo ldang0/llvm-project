@@ -67,9 +67,8 @@ static bool isSupportedMMIXComplexType(QualType Ty) {
          ElementTy->isSpecificBuiltinType(BuiltinType::LongDouble);
 }
 
-static bool isUnsupportedMMIXFixedBoundaryScalarType(const ASTContext &Context,
-                                                     QualType Ty,
-                                                     bool AllowVoid) {
+static bool isUnsupportedMMIXBoundaryScalarType(const ASTContext &Context,
+                                                QualType Ty, bool AllowVoid) {
   return !isSupportedMMIXComplexType(Ty) &&
          isUnsupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
@@ -576,7 +575,7 @@ private:
   ABIArgInfo classifyAggregateArgument(QualType Ty) const;
   ABIArgInfo classifyAggregateReturn(QualType Ty) const;
   ABIArgInfo classifyReturnType(QualType Ty) const;
-  ABIArgInfo classifyArgumentType(QualType Ty, bool IsFixed) const;
+  ABIArgInfo classifyArgumentType(QualType Ty) const;
   void computeInfo(CGFunctionInfo &FI) const override;
   RValue EmitVAArg(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
                    AggValueSlot Slot) const override;
@@ -669,11 +668,9 @@ ABIArgInfo MMIXABIInfo::classifyAggregateArgument(QualType Ty) const {
       /*CanBeFlattened=*/false);
 }
 
-ABIArgInfo MMIXABIInfo::classifyArgumentType(QualType Ty, bool IsFixed) const {
+ABIArgInfo MMIXABIInfo::classifyArgumentType(QualType Ty) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
   if (isSupportedMMIXComplexType(Ty)) {
-    if (!IsFixed)
-      return ABIArgInfo::getDirect();
     QualType ElementTy = Ty->castAs<ComplexType>()->getElementType();
     if (ElementTy->isSpecificBuiltinType(BuiltinType::Float))
       return ABIArgInfo::getDirect(llvm::Type::getInt64Ty(getVMContext()));
@@ -734,18 +731,15 @@ void MMIXABIInfo::createCoercedStore(llvm::Value *Val, Address Dst,
 void MMIXABIInfo::computeInfo(CGFunctionInfo &FI) const {
   if (!getCXXABI().classifyReturnType(FI))
     FI.getReturnInfo() = classifyReturnType(FI.getReturnType());
-  unsigned ArgIndex = 0;
-  for (auto &Arg : FI.arguments()) {
-    Arg.info =
-        classifyArgumentType(Arg.type, ArgIndex < FI.getNumRequiredArgs());
-    ++ArgIndex;
-  }
+  for (auto &Arg : FI.arguments())
+    Arg.info = classifyArgumentType(Arg.type);
 }
 
 RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                               QualType Ty, AggValueSlot Slot) const {
   if (Ty->isAtomicType() ||
-      isUnsupportedMMIXScalarType(getContext(), Ty, /*AllowVoid=*/false)) {
+      (!isSupportedMMIXComplexType(Ty) &&
+       isUnsupportedMMIXScalarType(getContext(), Ty, /*AllowVoid=*/false))) {
     unsigned DiagID = CGF.CGM.getDiags().getCustomDiagID(
         DiagnosticsEngine::Error,
         "MMIX GNU ABI does not support va_arg type %0");
@@ -759,6 +753,16 @@ RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
       return RValue::getComplex(Poison, Poison);
     }
     return RValue::get(llvm::PoisonValue::get(CGF.ConvertType(Ty)));
+  }
+
+  if (isSupportedMMIXComplexType(Ty)) {
+    QualType ElementTy = Ty->castAs<ComplexType>()->getElementType();
+    bool IsIndirect =
+        !ElementTy->isSpecificBuiltinType(BuiltinType::Float);
+    return emitVoidPtrVAArg(
+        CGF, VAListAddr, Ty, IsIndirect, getContext().getTypeInfoInChars(Ty),
+        CharUnits::fromQuantity(8), /*AllowHigherAlign=*/false, Slot,
+        /*ForceRightAdjust=*/true);
   }
 
   if (isAggregateTypeForABI(Ty)) {
@@ -806,8 +810,8 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
         diagnoseUnsupportedMMIXObject(CGM, FD->getLocation(), ReturnType)) &&
       !diagnoseUnsupportedMMIXAggregateResult(CGM, FD->getLocation(),
                                               ReturnType) &&
-      isUnsupportedMMIXFixedBoundaryScalarType(Context, ReturnType,
-                                               /*AllowVoid=*/true))
+      isUnsupportedMMIXBoundaryScalarType(Context, ReturnType,
+                                          /*AllowVoid=*/true))
     diagnoseUnsupportedMMIXScalar(CGM, FD->getLocation(), "return", ReturnType);
 
   for (const ParmVarDecl *Param : FD->parameters()) {
@@ -817,8 +821,8 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
       continue;
     if (diagnoseUnsupportedMMIXAggregateArgument(CGM, Param->getLocation(), Ty))
       continue;
-    if (isUnsupportedMMIXFixedBoundaryScalarType(Context, Ty,
-                                                 /*AllowVoid=*/false))
+    if (isUnsupportedMMIXBoundaryScalarType(Context, Ty,
+                                            /*AllowVoid=*/false))
       diagnoseUnsupportedMMIXScalar(CGM, Param->getLocation(), "argument", Ty);
   }
 
@@ -838,24 +842,19 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
   if (!(isDeferredMMIXBoundaryType(ReturnType) &&
         diagnoseUnsupportedMMIXObject(CGM, CallLoc, ReturnType)) &&
       !diagnoseUnsupportedMMIXAggregateResult(CGM, CallLoc, ReturnType) &&
-      isUnsupportedMMIXFixedBoundaryScalarType(Context, ReturnType,
-                                               /*AllowVoid=*/true))
+      isUnsupportedMMIXBoundaryScalarType(Context, ReturnType,
+                                          /*AllowVoid=*/true))
     diagnoseUnsupportedMMIXScalar(CGM, CallLoc, "return", ReturnType);
 
-  unsigned ArgIndex = 0;
-  unsigned NumFixedArgs = Callee ? Callee->getNumParams() : Args.size();
   for (const CallArg &Arg : Args) {
-    bool IsFixed = ArgIndex++ < NumFixedArgs;
     QualType Ty = Arg.getType();
     if (isDeferredMMIXBoundaryType(Ty) &&
         diagnoseUnsupportedMMIXObject(CGM, CallLoc, Ty))
       continue;
     if (diagnoseUnsupportedMMIXAggregateArgument(CGM, CallLoc, Ty))
       continue;
-    if (IsFixed ? isUnsupportedMMIXFixedBoundaryScalarType(
-                      Context, Ty, /*AllowVoid=*/false)
-                : isUnsupportedMMIXScalarType(Context, Ty,
-                                              /*AllowVoid=*/false))
+    if (isUnsupportedMMIXBoundaryScalarType(Context, Ty,
+                                            /*AllowVoid=*/false))
       diagnoseUnsupportedMMIXScalar(CGM, CallLoc, "argument", Ty);
   }
 }
