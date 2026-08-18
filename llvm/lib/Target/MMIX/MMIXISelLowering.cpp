@@ -731,6 +731,9 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::FrameIndex, MVT::i64, Legal);
   setOperationAction(ISD::LOAD, MVT::i64, Legal);
   setOperationAction(ISD::STORE, MVT::i64, Legal);
+  for (ISD::LoadExtType ExtType :
+       {ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD})
+    setLoadExtAction(ExtType, MVT::i64, MVT::i1, Promote);
   for (MVT MemVT : {MVT::i8, MVT::i16, MVT::i32}) {
     setLoadExtAction(ISD::EXTLOAD, MVT::i64, MemVT, Legal);
     setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MemVT, Legal);

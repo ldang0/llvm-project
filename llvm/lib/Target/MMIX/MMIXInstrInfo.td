@@ -649,6 +649,8 @@ def : Pat<(srl i64:$value, mmix_uimm6:$amount),
           (SRUI $value, mmix_uimm6:$amount)>;
 def : Pat<(srl i64:$value, i64:$amount), (SRU $value, $amount)>;
 
+def : Pat<(sext_inreg i64:$value, i1),
+          (SRI (SLUI $value, 63), 63)>;
 def : Pat<(sext_inreg i64:$value, i8),
           (SRI (SLUI $value, 56), 56)>;
 def : Pat<(sext_inreg i64:$value, i16),
