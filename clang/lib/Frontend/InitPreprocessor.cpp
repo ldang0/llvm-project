@@ -1106,9 +1106,11 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     Builder.defineMacro("__ILP32__");
   }
 
-  // Define type sizing macros based on the target properties.
+  // Define type sizing macros and GCC-compatible width spellings from the
+  // target properties.
   assert(TI.getCharWidth() == 8 && "Only support 8-bit char so far");
   Builder.defineMacro("__CHAR_BIT__", Twine(TI.getCharWidth()));
+  Builder.defineMacro("__SCHAR_WIDTH__", Twine(TI.getCharWidth()));
 
   // The macro is specifying the number of bits in the width, not the number of
   // bits the object requires for its in-memory representation, which is what
@@ -1123,6 +1125,7 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   Builder.defineMacro("__INT_WIDTH__", Twine(TI.getIntWidth()));
   Builder.defineMacro("__LONG_WIDTH__", Twine(TI.getLongWidth()));
   Builder.defineMacro("__LLONG_WIDTH__", Twine(TI.getLongLongWidth()));
+  Builder.defineMacro("__LONG_LONG_WIDTH__", Twine(TI.getLongLongWidth()));
 
   size_t BitIntMaxWidth = TI.getMaxBitIntWidth();
   assert(BitIntMaxWidth <= llvm::IntegerType::MAX_INT_BITS &&
