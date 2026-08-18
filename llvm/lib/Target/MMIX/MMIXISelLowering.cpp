@@ -630,15 +630,14 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
     setOperationAction(Opcode, VT, Custom);
   };
 
-  // i64 and f64 are native register values. f32 uses a register class only as
-  // a raw low-tetra bit container; its supported numerical operations promote
-  // through the explicit conversion actions below. Type legalization promotes
-  // narrower integer values and splits wider scalar and vector values.
-  static constexpr unsigned IntegerOperations[] = {
-      ISD::ROTL, ISD::ROTR, ISD::BSWAP};
-  for (unsigned Opcode : IntegerOperations)
-    RejectOperation(Opcode, MVT::i64);
-
+  // i64 and f64 are native register values. Type legalization promotes narrow
+  // integers and splits wider scalar and vector values. f32 registers contain
+  // raw low-tetra bits, and supported f32 operations use the explicit
+  // promotion actions below. MMIX has no rotate or byte-swap instructions, so
+  // expand those i64 operations into supported shifts and Boolean operations.
+  setOperationAction(ISD::ROTL, MVT::i64, Expand);
+  setOperationAction(ISD::ROTR, MVT::i64, Expand);
+  setOperationAction(ISD::BSWAP, MVT::i64, Expand);
   setOperationAction(ISD::CTLZ, MVT::i64, Expand);
   setOperationAction(ISD::CTTZ, MVT::i64, Expand);
   setOperationAction(ISD::CTPOP, MVT::i64, Legal);
