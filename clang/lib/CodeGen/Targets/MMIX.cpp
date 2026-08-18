@@ -524,13 +524,8 @@ static bool diagnoseUnsupportedMMIXAggregateResult(CodeGenModule &CGM,
     Reason = "variable-size";
   else if (Context.getTypeAlign(Ty) > 64)
     Reason = "over-aligned";
-  else {
-    MMIXGCCMode Mode = getMMIXGCCTypeMode(Context, Ty);
-    if (Mode.Kind == MMIXGCCModeKind::Scalar && Mode.SizeInBits > 64)
-      Reason = "wide scalar-mode";
-    else
-      return false;
-  }
+  else
+    return false;
 
   unsigned DiagID = CGM.getDiags().getCustomDiagID(
       DiagnosticsEngine::Error,
@@ -625,7 +620,7 @@ ABIArgInfo MMIXABIInfo::classifyAggregateReturn(QualType Ty) const {
     return ABIArgInfo::getIgnore();
 
   MMIXGCCMode Mode = getMMIXGCCTypeMode(getContext(), Ty);
-  if (Mode.Kind != MMIXGCCModeKind::Scalar)
+  if (Mode.Kind != MMIXGCCModeKind::Scalar || Mode.SizeInBits > 64)
     return getNaturalAlignIndirect(Ty, getDataLayout().getAllocaAddrSpace(),
                                    /*ByVal=*/false);
 

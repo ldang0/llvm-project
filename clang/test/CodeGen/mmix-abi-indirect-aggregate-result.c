@@ -20,6 +20,10 @@ struct Triple {
 struct PackedWord {
   int value;
 } __attribute__((packed));
+typedef struct {
+  long quot;
+  long rem;
+} imaxdiv_t;
 
 struct PackedThree make_packed(char a, char b, char c) {
   return (struct PackedThree){{a, b, c}};
@@ -56,6 +60,34 @@ struct PackedWord make_packed_word(int value) {
 // CHECK-LABEL: define dso_local void @make_packed_word(
 // CHECK-SAME: ptr dead_on_unwind noalias writable sret(%struct.PackedWord) align 1 %agg.result,
 // CHECK-SAME: i32 noundef signext %value)
+
+imaxdiv_t imaxdiv(long numerator, long denominator) {
+  imaxdiv_t result;
+  result.quot = numerator / denominator;
+  result.rem = numerator % denominator;
+  return result;
+}
+
+// CHECK-LABEL: define dso_local void @imaxdiv(
+// CHECK-SAME: ptr dead_on_unwind noalias writable sret(%struct.imaxdiv_t) align 8 %agg.result,
+// CHECK-SAME: i64 noundef %numerator, i64 noundef %denominator)
+// CHECK: sdiv i64
+// CHECK: store i64 %{{[^, ]+}}, ptr %quot, align 8
+// CHECK: srem i64
+// CHECK: store i64 %{{[^, ]+}}, ptr %rem{{[0-9]*}}, align 8
+
+imaxdiv_t external_imaxdiv(long numerator, long denominator);
+
+long call_imaxdiv(long numerator, long denominator) {
+  imaxdiv_t result = external_imaxdiv(numerator, denominator);
+  return result.quot + result.rem;
+}
+
+// CHECK-LABEL: define dso_local i64 @call_imaxdiv(
+// CHECK: %result = alloca %struct.imaxdiv_t, align 8
+// CHECK: call void @external_imaxdiv(
+// CHECK-SAME: ptr dead_on_unwind writable sret(%struct.imaxdiv_t) align 8 %result,
+// CHECK-SAME: i64 noundef %{{[^,]+}}, i64 noundef %{{[^)]+}})
 
 struct PackedThree external_packed(char value);
 
