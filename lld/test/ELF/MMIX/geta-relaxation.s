@@ -7,9 +7,10 @@
 # RUN: llvm-objdump --no-print-imm-hex -d %t/valid \
 # RUN:   | FileCheck %s --check-prefix=DIS
 # RUN: llvm-readobj --relocations %t/valid | FileCheck %s --check-prefix=RELOCS
-# RUN: yaml2obj %t/invalid.yaml -o %t/invalid.o
-# RUN: not ld.lld -e 0 -T %t/layout.lds %t/invalid.o -o /dev/null 2>&1 \
-# RUN:   | FileCheck %s --check-prefix=INVALID
+# RUN: yaml2obj %t/unaligned.yaml -o %t/unaligned.o
+# RUN: ld.lld -e 0 -T %t/layout.lds %t/unaligned.o -o %t/unaligned
+# RUN: llvm-objdump --no-print-imm-hex -d %t/unaligned \
+# RUN:   | FileCheck %s --check-prefix=UNALIGNED
 
 # CHECK:      Contents of section .text:
 # CHECK-NEXT: 1000 f4010001 fd000000 fd000000 fd000000
@@ -27,7 +28,10 @@
 # DIS: GETAB r5, -1040
 # RELOCS:      Relocations [
 # RELOCS-NEXT: ]
-# INVALID: relocation R_MMIX_GETA against symbol unaligned has a target that is not 4-byte aligned: 0x1002
+# UNALIGNED: SETL r1, 4098
+# UNALIGNED: INCML r1, 0
+# UNALIGNED: INCMH r1, 0
+# UNALIGNED: INCH r1, 0
 
 #--- layout.lds
 SECTIONS { .text 0x1000 : { *(.text) } }
@@ -62,7 +66,7 @@ Symbols:
   - { Name: far,     Index: SHN_ABS, Value: 0x1122334455667780 }
   - { Name: weak,    Index: SHN_UNDEF, Binding: STB_WEAK }
 
-#--- invalid.yaml
+#--- unaligned.yaml
 --- !ELF
 FileHeader:
   Class:   ELFCLASS64

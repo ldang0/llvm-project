@@ -1072,7 +1072,8 @@ bool MMIX::relaxOnce(int) const {
     Relocation &rel = site.section->relocs()[site.relocationIndex];
     uint64_t target = rel.sym->getVA(ctx, rel.addend);
     uint64_t place = site.section->getVA(rel.offset);
-    if (target & 3) {
+    // GETA can materialize an unaligned data address through its expansion.
+    if ((target & 3) && rel.type != R_MMIX_GETA) {
       const uint8_t *loc = site.section->content().data() + rel.offset;
       Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
                << " against symbol " << rel.sym
