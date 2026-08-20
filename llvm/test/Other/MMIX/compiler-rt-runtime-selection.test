@@ -4,9 +4,17 @@
 # RUN: not cmake -DCOMPILER_RT_BUILD_BUILTINS=ON \
 # RUN:   -DCOMPILER_RT_BUILD_SANITIZERS=ON -P %s 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=SANITIZER
+# RUN: not cmake -DCOMPILER_RT_BUILD_BUILTINS=ON \
+# RUN:   -DCOMPILER_RT_BUILD_PROFILE=ON -P %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=PROFILE
+# RUN: not cmake -DCOMPILER_RT_BUILD_BUILTINS=ON \
+# RUN:   -DCOMPILER_RT_BUILD_XRAY=ON -P %s 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=XRAY
 
 # NO-BUILTINS: The MMIX compiler-rt configuration requires builtins
 # SANITIZER: COMPILER_RT_BUILD_SANITIZERS is not supported by the MMIX compiler-rt
+# PROFILE: COMPILER_RT_BUILD_PROFILE is not supported by the MMIX compiler-rt
+# XRAY: COMPILER_RT_BUILD_XRAY is not supported by the MMIX compiler-rt
 
 foreach(runtime
     COMPILER_RT_BUILD_CRT

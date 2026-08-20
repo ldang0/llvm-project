@@ -173,10 +173,29 @@ std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
 void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
                                           ArgStringList &, BoundArch,
                                           Action::OffloadKind) const {
-  if (const Arg *A = DriverArgs.getLastArg(
-          options::OPT_mstack_protector_guard_symbol_EQ))
+  auto DiagnoseUnsupported = [&](const Arg *A) {
     getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
         << A->getAsString(DriverArgs) << getTripleString();
+  };
+
+  if (const Arg *A = DriverArgs.getLastArg(
+          options::OPT_mstack_protector_guard_symbol_EQ))
+    DiagnoseUnsupported(A);
+
+  if (const Arg *A = DriverArgs.getLastArg(
+          options::OPT_fprofile_instr_generate,
+          options::OPT_fprofile_instr_generate_EQ,
+          options::OPT_fprofile_generate, options::OPT_fprofile_generate_EQ,
+          options::OPT_fcs_profile_generate,
+          options::OPT_fcs_profile_generate_EQ, options::OPT_coverage,
+          options::OPT_fprofile_arcs, options::OPT_ftest_coverage))
+    DiagnoseUnsupported(A);
+
+  if (const Arg *A = DriverArgs.getLastArg(
+          options::OPT_funwind_tables, options::OPT_funwind_tables_EQ,
+          options::OPT_fasynchronous_unwind_tables, options::OPT_fexceptions,
+          options::OPT_fcxx_exceptions))
+    DiagnoseUnsupported(A);
 }
 
 Tool *MMIXToolChain::buildAssembler() const {

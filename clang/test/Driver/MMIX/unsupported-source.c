@@ -76,9 +76,9 @@
 // RUN:   | FileCheck %s --check-prefix=TLS
 // RUN: not test -s %t.tls.o
 
-// MMIX has no C++ ABI or unwind producer.  Exception-bearing and ordinary
-// target-dependent C++ inputs therefore stop at the broader C++ CodeGen
-// boundary before personality, landing-pad, vtable, or object emission.
+// MMIX has no C++ ABI or unwind producer. Explicit exception producers stop
+// at the target Driver boundary, while ordinary target-dependent C++ inputs
+// stop at the broader C++ CodeGen boundary. Neither path emits an object.
 // RUN: not %clangxx --target=mmix-unknown-unknown -ffreestanding -std=c++17 \
 // RUN:   -fexceptions -fcxx-exceptions -DTEST_EXCEPTION \
 // RUN:   -c %S/Inputs/unsupported-source.cpp -o %t.exception.o 2>&1 \
@@ -106,5 +106,5 @@
 // MULTIVERSIONING: error: function multiversioning is not supported on the current target
 // CALLING-CONVENTION: error: 'fastcall' calling convention is not supported for this target
 // TLS: error: thread-local storage is not supported for the current target
-// EXCEPTION: error: MMIX does not support C++ CodeGen
+// EXCEPTION: error: unsupported option '-fcxx-exceptions' for target 'mmix-unknown-unknown'
 // CXX: error: MMIX does not support C++ CodeGen
