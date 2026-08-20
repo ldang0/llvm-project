@@ -170,6 +170,40 @@ std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
   return std::string(Path);
 }
 
+void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
+                                              ArgStringList &CC1Args) const {
+  const Driver &D = getDriver();
+  if (D.SysRoot.empty() || DriverArgs.hasArg(options::OPT_nostdinc))
+    return;
+
+  auto IsDirectory = [&](StringRef Path) {
+    auto Status = getVFS().status(Path);
+    return Status && Status->isDirectory();
+  };
+
+  if (!IsDirectory(D.SysRoot)) {
+    D.Diag(diag::err_missing_sysroot) << D.SysRoot;
+    return;
+  }
+
+  if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
+    SmallString<128> ResourceInclude(D.ResourceDir);
+    llvm::sys::path::append(ResourceInclude, "include");
+    addSystemInclude(DriverArgs, CC1Args, ResourceInclude);
+  }
+
+  if (DriverArgs.hasArg(options::OPT_nostdlibinc))
+    return;
+
+  SmallString<128> NewlibInclude(D.SysRoot);
+  llvm::sys::path::append(NewlibInclude, "usr", "include");
+  if (!IsDirectory(NewlibInclude)) {
+    D.Diag(diag::err_drv_no_such_file) << NewlibInclude;
+    return;
+  }
+  addSystemInclude(DriverArgs, CC1Args, NewlibInclude);
+}
+
 void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
                                           ArgStringList &, BoundArch,
                                           Action::OffloadKind) const {
