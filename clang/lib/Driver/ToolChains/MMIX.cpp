@@ -42,6 +42,7 @@ public:
 
 static bool diagnoseUnsupportedLinkMode(Compilation &C, const ArgList &Args) {
   const Driver &D = C.getDriver();
+  const bool IsHosted = !D.SysRoot.empty();
   auto Diagnose = [&](StringRef Mode) {
     D.Diag(diag::err_drv_clang_unsupported) << Mode;
     return true;
@@ -67,16 +68,16 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ArgList &Args) {
   }
   if (Args.hasArg(options::OPT_flto, options::OPT_flto_EQ))
     return Diagnose("LTO linking for MMIX");
-  if (!D.SysRoot.empty())
-    return Diagnose("sysroot selection for MMIX freestanding linking");
-  if (Args.hasArg(options::OPT_rtlib_EQ, options::OPT_unwindlib_EQ))
-    return Diagnose("runtime library selection for MMIX freestanding linking");
   if (Args.hasArg(options::OPT_ld_path_EQ))
     return Diagnose("custom linker selection for MMIX");
   if (const Arg *A = Args.getLastArg(options::OPT_fuse_ld_EQ)) {
     if (StringRef(A->getValue()) != "lld")
       return Diagnose("non-lld linker selection for MMIX");
   }
+  if (IsHosted)
+    return false;
+  if (Args.hasArg(options::OPT_rtlib_EQ, options::OPT_unwindlib_EQ))
+    return Diagnose("runtime library selection for MMIX freestanding linking");
   if (!Args.hasArg(options::OPT_ffreestanding))
     return Diagnose("implicit hosted linking for MMIX");
   if (!Args.hasArg(options::OPT_nostdlib) ||
@@ -84,6 +85,24 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ArgList &Args) {
       !Args.hasArg(options::OPT_nodefaultlibs))
     return Diagnose("implicit runtime files for MMIX freestanding linking");
 
+  return false;
+}
+
+static std::string getSysrootLibraryPath(const Driver &D) {
+  SmallString<128> Path(D.SysRoot);
+  llvm::sys::path::append(Path, "usr", "lib", "mmix");
+  return std::string(Path);
+}
+
+static bool isDirectory(const ToolChain &TC, StringRef Path) {
+  auto Status = TC.getVFS().status(Path);
+  return Status && Status->isDirectory();
+}
+
+static bool requireFile(Compilation &C, const ToolChain &TC, StringRef Path) {
+  if (TC.getVFS().exists(Path))
+    return true;
+  C.getDriver().Diag(diag::err_drv_no_such_file) << Path;
   return false;
 }
 
@@ -102,14 +121,110 @@ public:
       return;
 
     const ToolChain &TC = getToolChain();
+    const Driver &D = TC.getDriver();
+    const bool IsHosted = !D.SysRoot.empty();
+    const bool AddStartFiles =
+        IsHosted &&
+        !Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles);
+    const bool AddDefaultLibraries =
+        IsHosted &&
+        !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
+
+    if (IsHosted && !isDirectory(TC, D.SysRoot)) {
+      D.Diag(diag::err_missing_sysroot) << D.SysRoot;
+      return;
+    }
+
+    std::string LibraryPath;
+    std::string DefaultScript;
+    std::string CRT0;
+    std::string TripVectors;
+    std::string CRTI;
+    std::string CRTN;
+    std::string LibC;
+    std::string LibGloss;
+    std::string Builtins;
+    std::string Atomic;
+    std::string StackProtector;
+    bool InputsValid = true;
+
+    auto GetSysrootFile = [&](StringRef Name, bool Required) {
+      SmallString<128> Path(LibraryPath);
+      llvm::sys::path::append(Path, Name);
+      if (Required)
+        InputsValid &= requireFile(C, TC, Path);
+      return std::string(Path);
+    };
+
+    if (IsHosted) {
+      LibraryPath = getSysrootLibraryPath(D);
+      if (!isDirectory(TC, LibraryPath)) {
+        D.Diag(diag::err_drv_no_such_file) << LibraryPath;
+        return;
+      }
+
+      if (!Args.hasArg(options::OPT_T_Group))
+        DefaultScript = GetSysrootFile("mmix-qemu.ld", /*Required=*/true);
+
+      if (AddStartFiles) {
+        CRT0 = GetSysrootFile("crt0.o", /*Required=*/true);
+        TripVectors = GetSysrootFile("trip-vectors.o", /*Required=*/true);
+        std::string Candidate = GetSysrootFile("crti.o", /*Required=*/false);
+        if (TC.getVFS().exists(Candidate))
+          CRTI = std::move(Candidate);
+        Candidate = GetSysrootFile("crtn.o", /*Required=*/false);
+        if (TC.getVFS().exists(Candidate))
+          CRTN = std::move(Candidate);
+      }
+
+      if (AddDefaultLibraries) {
+        LibC = GetSysrootFile("libc.a", /*Required=*/true);
+        LibGloss = GetSysrootFile("libgloss.a", /*Required=*/true);
+        Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
+        Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
+        StackProtector =
+            TC.getCompilerRT(Args, "stack_protector", ToolChain::FT_Static);
+        InputsValid &= TC.getVFS().exists(Builtins);
+        InputsValid &= TC.getVFS().exists(Atomic);
+        InputsValid &= TC.getVFS().exists(StackProtector);
+      }
+    }
+
+    if (!InputsValid)
+      return;
+
     ArgStringList CmdArgs;
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf64mmix");
     CmdArgs.push_back("-static");
-    Args.addAllArgs(CmdArgs, {options::OPT_L, options::OPT_T_Group,
-                              options::OPT_s, options::OPT_t,
+    Args.addAllArgs(CmdArgs, {options::OPT_L, options::OPT_s, options::OPT_t,
                               options::OPT_u_Group});
+    if (IsHosted)
+      CmdArgs.push_back(Args.MakeArgString(llvm::Twine("-L") + LibraryPath));
+    if (!DefaultScript.empty()) {
+      CmdArgs.push_back("-T");
+      CmdArgs.push_back(Args.MakeArgString(DefaultScript));
+    } else {
+      Args.addAllArgs(CmdArgs, {options::OPT_T_Group});
+    }
+    if (AddStartFiles) {
+      CmdArgs.push_back(Args.MakeArgString(CRT0));
+      CmdArgs.push_back(Args.MakeArgString(TripVectors));
+      if (!CRTI.empty())
+        CmdArgs.push_back(Args.MakeArgString(CRTI));
+    }
     tools::AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
+    if (AddDefaultLibraries) {
+      CmdArgs.push_back("--start-group");
+      CmdArgs.push_back(Args.MakeArgString(LibC));
+      CmdArgs.push_back(Args.MakeArgString(LibGloss));
+      CmdArgs.push_back(Args.MakeArgString(Builtins));
+      CmdArgs.push_back(Args.MakeArgString(Atomic));
+      CmdArgs.push_back(Args.MakeArgString(StackProtector));
+      CmdArgs.push_back("--end-group");
+    }
+    if (!CRTN.empty())
+      CmdArgs.push_back(Args.MakeArgString(CRTN));
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
 
@@ -176,12 +291,7 @@ void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   if (D.SysRoot.empty() || DriverArgs.hasArg(options::OPT_nostdinc))
     return;
 
-  auto IsDirectory = [&](StringRef Path) {
-    auto Status = getVFS().status(Path);
-    return Status && Status->isDirectory();
-  };
-
-  if (!IsDirectory(D.SysRoot)) {
+  if (!isDirectory(*this, D.SysRoot)) {
     D.Diag(diag::err_missing_sysroot) << D.SysRoot;
     return;
   }
@@ -197,7 +307,7 @@ void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
 
   SmallString<128> NewlibInclude(D.SysRoot);
   llvm::sys::path::append(NewlibInclude, "usr", "include");
-  if (!IsDirectory(NewlibInclude)) {
+  if (!isDirectory(*this, NewlibInclude)) {
     D.Diag(diag::err_drv_no_such_file) << NewlibInclude;
     return;
   }

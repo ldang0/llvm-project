@@ -41,11 +41,6 @@
 // RUN:   -nostdlib -nostartfiles -nodefaultlibs -rdynamic \
 // RUN:   %t-input.o -o %t 2>&1 | FileCheck --check-prefix=DYNAMIC %s \
 // RUN:     --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
-// RUN: not %clang -### --target=mmix-unknown-unknown \
-// RUN:   --sysroot=%t-sysroot -nostdlib -nostartfiles -nodefaultlibs \
-// RUN:   -rtlib=compiler-rt -fuse-ld=lld %S/Inputs/freestanding.c \
-// RUN:   -ffreestanding -o %t 2>&1 | FileCheck --check-prefix=SYSROOT %s \
-// RUN:     --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
 // RUN: not %clang -### --target=mmix-unknown-unknown -ffreestanding \
 // RUN:   -nostdlib -nostartfiles -nodefaultlibs -rtlib=compiler-rt \
 // RUN:   %t-input.o -o %t 2>&1 | FileCheck --check-prefix=RUNTIME-LIB %s \
@@ -87,7 +82,6 @@
 // DYNAMIC: error: the clang compiler does not support 'dynamic linking for MMIX'
 // PIE: error: the clang compiler does not support 'PIE linking for MMIX'
 // PIC: error: the clang compiler does not support 'position-independent linking for MMIX'
-// SYSROOT: error: the clang compiler does not support 'sysroot selection for MMIX freestanding linking'
 // RUNTIME-LIB: error: the clang compiler does not support 'runtime library selection for MMIX freestanding linking'
 // LTO: error: the clang compiler does not support 'LTO linking for MMIX'
 // LINKER: error: the clang compiler does not support 'non-lld linker selection for MMIX'
