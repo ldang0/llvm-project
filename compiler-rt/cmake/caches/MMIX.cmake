@@ -1,4 +1,5 @@
-# This cache configures a standalone builtins-only MMIX compiler-rt build.
+# This cache configures standalone MMIX compiler-rt builtins and atomic
+# fallback archives.
 set(CMAKE_SYSTEM_NAME Generic CACHE STRING "")
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY CACHE STRING "")
 set(CMAKE_C_COMPILER_TARGET mmix-unknown-unknown CACHE STRING "")

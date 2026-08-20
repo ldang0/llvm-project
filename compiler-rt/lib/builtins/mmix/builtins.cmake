@@ -4,3 +4,6 @@ set(mmix_SOURCES
   ffsdi2.c
   muldc3.c
   mulsc3.c)
+
+set(mmix_ATOMIC_SOURCES
+  mmix/atomic.c)

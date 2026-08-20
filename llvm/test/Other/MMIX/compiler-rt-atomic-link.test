@@ -1,0 +1,31 @@
+# RUN: rm -rf %t.dir
+# RUN: mkdir -p %t.dir
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding -fno-stack-protector \
+# RUN:   -Wno-address-of-packed-member -O1 -c \
+# RUN:   %S/Inputs/atomic-fallback.c -o %t.dir/fallback.o
+# RUN: llvm-nm --undefined-only %t.dir/fallback.o \
+# RUN:   | FileCheck %s --check-prefix=REFERENCE
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding -fno-stack-protector \
+# RUN:   -O2 -I %S/../../../../compiler-rt/lib/builtins -c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mmix/atomic.c \
+# RUN:   -o %t.dir/atomic.o
+# RUN: llvm-ar qcD %t.dir/libclang_rt.atomic.a %t.dir/atomic.o
+# RUN: llvm-ranlib -D %t.dir/libclang_rt.atomic.a
+# RUN: ld.lld -static -e native_add %t.dir/fallback.o \
+# RUN:   %t.dir/libclang_rt.atomic.a -o %t.dir/resolved
+# RUN: llvm-nm --undefined-only %t.dir/resolved | not grep ' U '
+# RUN: llvm-nm --defined-only --extern-only %t.dir/resolved \
+# RUN:   | FileCheck %s --check-prefix=RESOLVED
+
+# REFERENCE-DAG: U __atomic_compare_exchange
+# REFERENCE-DAG: U __atomic_exchange
+# REFERENCE-DAG: U __atomic_is_lock_free
+# REFERENCE-DAG: U __atomic_load
+# REFERENCE-DAG: U __atomic_store
+# REFERENCE-NOT: __atomic_fetch_add_8
+
+# RESOLVED-DAG: T __atomic_compare_exchange
+# RESOLVED-DAG: T __atomic_exchange
+# RESOLVED-DAG: T __atomic_is_lock_free
+# RESOLVED-DAG: T __atomic_load
+# RESOLVED-DAG: T __atomic_store

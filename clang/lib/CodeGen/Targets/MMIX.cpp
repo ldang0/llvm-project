@@ -92,7 +92,6 @@ static bool isSupportedMMIXAtomicRMWType(QualType Ty) {
 
 enum class MMIXUnsupportedObjectKind {
   None,
-  Atomic,
   Vector,
   AddressSpace,
 };
@@ -103,13 +102,7 @@ classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
   if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)
     return MMIXUnsupportedObjectKind::AddressSpace;
   if (const auto *AT = Ty->getAs<AtomicType>()) {
-    MMIXUnsupportedObjectKind ValueKind =
-        classifyUnsupportedMMIXObjectType(Context, AT->getValueType());
-    if (ValueKind != MMIXUnsupportedObjectKind::None)
-      return ValueKind;
-    return isMMIXNativeAtomicStorageType(Context, Ty)
-               ? MMIXUnsupportedObjectKind::None
-               : MMIXUnsupportedObjectKind::Atomic;
+    return classifyUnsupportedMMIXObjectType(Context, AT->getValueType());
   }
   if (Ty->isVectorType())
     return MMIXUnsupportedObjectKind::Vector;
@@ -139,8 +132,6 @@ classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
 static StringRef
 getMMIXUnsupportedObjectDescription(MMIXUnsupportedObjectKind Kind) {
   switch (Kind) {
-  case MMIXUnsupportedObjectKind::Atomic:
-    return "atomic value";
   case MMIXUnsupportedObjectKind::Vector:
     return "vector value";
   case MMIXUnsupportedObjectKind::AddressSpace:
@@ -243,24 +234,6 @@ class MMIXCodeGenBoundaryVisitor
       return false;
     }
 
-    uint64_t Size = Context.getTypeSize(Ty);
-    uint64_t Align = Context.getTypeAlign(Ty);
-    if (Size != 8 && Size != 16 && Size != 32 && Size != 64) {
-      unsigned DiagID = CGM.getDiags().getCustomDiagID(
-          DiagnosticsEngine::Error,
-          "MMIX atomic operation %0 requires a 1, 2, 4, or 8-byte object; "
-          "type %1 is %2 bits wide");
-      CGM.getDiags().Report(Loc, DiagID) << Operation << Ty << Size;
-      return false;
-    }
-    if (Align < Size) {
-      unsigned DiagID = CGM.getDiags().getCustomDiagID(
-          DiagnosticsEngine::Error,
-          "MMIX atomic operation %0 requires at least %1-bit alignment for "
-          "type %2");
-      CGM.getDiags().Report(Loc, DiagID) << Operation << Size << Ty;
-      return false;
-    }
     return true;
   }
 
@@ -315,14 +288,8 @@ public:
       return true;
     if (Name == "__atomic_always_lock_free")
       return true;
-    if (Name == "__atomic_is_lock_free" ||
-        Name == "__c11_atomic_is_lock_free") {
-      unsigned DiagID = CGM.getDiags().getCustomDiagID(
-          DiagnosticsEngine::Error,
-          "MMIX atomic lock-free query requires an unavailable atomic runtime");
-      CGM.getDiags().Report(E->getExprLoc(), DiagID);
-      return false;
-    }
+    if (Name == "__atomic_is_lock_free" || Name == "__c11_atomic_is_lock_free")
+      return true;
     if (isSupportedMMIXLegacySyncBuiltinName(Name)) {
       if (Name == "__sync_synchronize")
         return true;

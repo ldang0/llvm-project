@@ -1,19 +1,20 @@
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
-// RUN:   -DWIDE -c %s -o %t.wide.o 2>&1 \
+// RUN: %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
+// RUN:   -DWIDE -Wno-atomic-alignment -c %s -o %t.wide.o
+// RUN: llvm-nm --undefined-only %t.wide.o \
 // RUN:   | FileCheck %s --check-prefix=WIDE
-// RUN: not test -s %t.wide.o
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
+// RUN: %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
 // RUN:   -DUNALIGNED -Wno-address-of-packed-member -c %s \
-// RUN:   -o %t.unaligned.o 2>&1 | FileCheck %s --check-prefix=UNALIGNED
-// RUN: not test -s %t.unaligned.o
+// RUN:   -o %t.unaligned.o
+// RUN: llvm-nm --undefined-only %t.unaligned.o \
+// RUN:   | FileCheck %s --check-prefix=UNALIGNED
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
 // RUN:   -DADDRESS_SPACE -c %s -o %t.address-space.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=ADDRESS-SPACE
 // RUN: not test -s %t.address-space.o
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
-// RUN:   -DRUNTIME_QUERY -c %s -o %t.runtime-query.o 2>&1 \
+// RUN: %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
+// RUN:   -DRUNTIME_QUERY -c %s -o %t.runtime-query.o
+// RUN: llvm-nm --undefined-only %t.runtime-query.o \
 // RUN:   | FileCheck %s --check-prefix=RUNTIME-QUERY
-// RUN: not test -s %t.runtime-query.o
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu17 \
 // RUN:   -DWIDE_SYNC -c %s -o %t.wide-sync.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=WIDE-SYNC
@@ -23,11 +24,11 @@
 // RUN:   -o %t.invalid-order.o 2>&1 | FileCheck %s --check-prefix=ORDER
 // RUN: not test -s %t.invalid-order.o
 
-// WIDE: error: MMIX atomic operation __atomic_load requires a 1, 2, 4, or 8-byte object
-// UNALIGNED: error: unsupported atomic load: instruction alignment 1 is smaller than the required 4-byte alignment for this atomic operation
-// UNALIGNED: error: unsupported atomicrmw add: instruction alignment 1 is smaller than the required 4-byte alignment for this atomic operation
+// WIDE: U __atomic_load
+// UNALIGNED-DAG: U __atomic_compare_exchange
+// UNALIGNED-DAG: U __atomic_load
 // ADDRESS-SPACE: error: MMIX GNU ABI does not support argument type 'address_space_one *'
-// RUNTIME-QUERY: error: MMIX atomic lock-free query requires an unavailable atomic runtime
+// RUNTIME-QUERY: U __atomic_is_lock_free
 // WIDE-SYNC: error: MMIX GNU ABI does not support atomic builtin __sync_fetch_and_add_16
 // ORDER: error: memory order argument to atomic operation is invalid
 

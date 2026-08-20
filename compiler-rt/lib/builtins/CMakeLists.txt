@@ -1143,6 +1143,18 @@ else ()
                               CXX_STANDARD 17
                               PARENT_TARGET builtins)
 
+      if (arch STREQUAL "mmix")
+        add_compiler_rt_runtime(clang_rt.atomic
+                                STATIC
+                                ARCHS ${arch}
+                                DEPS ${deps_${arch}}
+                                SOURCES ${mmix_ATOMIC_SOURCES}
+                                DEFS ${BUILTIN_DEFS}
+                                CFLAGS ${BUILTIN_CFLAGS_${arch}}
+                                C_STANDARD 11
+                                PARENT_TARGET builtins)
+      endif()
+
       # Write out the sources that were used to compile the builtins so that tests can be run in
       # an independent compiler-rt build (see: compiler-rt/test/builtins/CMakeLists.txt)
       get_compiler_rt_output_dir(${arch} BUILTIN_LIB_OUTPUT_DIR)

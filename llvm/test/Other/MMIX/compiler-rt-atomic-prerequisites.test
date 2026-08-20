@@ -1,0 +1,12 @@
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding -O2 \
+# RUN:   -I %S/../../../../compiler-rt/lib/builtins -S -emit-llvm \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mmix/atomic.c -o - \
+# RUN:   | FileCheck %s --implicit-check-not='i128' \
+# RUN:       --implicit-check-not='declare{{.*}}memcpy' \
+# RUN:       --implicit-check-not='declare{{.*}}memcmp'
+
+# CHECK: @locks = internal global [1024 x i64] zeroinitializer, align 8
+# CHECK: define{{.*}}i1 @__atomic_is_lock_free(i64
+# CHECK: define{{.*}}void @__atomic_load(i64
+# CHECK: cmpxchg weak ptr {{.*}}, i64 0, i64 1 acquire monotonic, align 8
+# CHECK: store atomic i64 0, ptr {{.*}} release, align 8

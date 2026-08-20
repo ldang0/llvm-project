@@ -18,10 +18,6 @@
 // RUN:   | FileCheck %s --check-prefix=VECTOR
 // RUN: not test -s %t.vector.o
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
-// RUN:   -DTEST_ATOMIC -c %S/Inputs/unsupported-source.c -o %t.atomic.o 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=ATOMIC
-// RUN: not test -s %t.atomic.o
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
 // RUN:   -DTEST_ATOMIC_OPERATION -c %S/Inputs/unsupported-source.c \
 // RUN:   -o %t.atomic-operation.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=ATOMIC-OPERATION
@@ -36,16 +32,6 @@
 // RUN:   -o %t.atomic-extension.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=ATOMIC-EXTENSION
 // RUN: not test -s %t.atomic-extension.o
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
-// RUN:   -DTEST_WIDE_ATOMIC -c %S/Inputs/unsupported-source.c \
-// RUN:   -o %t.wide-atomic.o 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=WIDE-ATOMIC
-// RUN: not test -s %t.wide-atomic.o
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
-// RUN:   -DTEST_UNALIGNED_ATOMIC -c %S/Inputs/unsupported-source.c \
-// RUN:   -o %t.unaligned-atomic.o 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=UNALIGNED-ATOMIC
-// RUN: not test -s %t.unaligned-atomic.o
 
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
 // RUN:   -DTEST_VLA -c %S/Inputs/unsupported-source.c -o %t.vla.o 2>&1 \
@@ -108,12 +94,9 @@
 // COMPLEX: error: MMIX GNU ABI does not support return type '_Complex int'
 // COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex int'
 // VECTOR: error: MMIX GNU ABI does not support vector value CodeGen involving type 'int2'
-// ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
 // ATOMIC-OPERATION: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_add
 // ATOMIC-RMW: error: MMIX GNU ABI does not support atomic operation +=
 // ATOMIC-EXTENSION: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_uinc
-// WIDE-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct SixteenBytes)'
-// UNALIGNED-ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct EightBytes)'
 // VLA: error: variable length arrays are not supported for the current target
 // OVERALIGNED-ARGUMENT: error: MMIX GNU ABI does not support over-aligned aggregate argument type 'struct OverAligned'
 // OVERALIGNED-RESULT: error: MMIX GNU ABI does not support over-aligned aggregate return type 'struct OverAligned'

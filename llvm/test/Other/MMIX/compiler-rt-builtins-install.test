@@ -7,16 +7,21 @@
 # RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/resource > %t.dir-configure.log
 # RUN: ninja -C %t.dir/build install-builtins > %t.dir-install.log
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: test ! -e %S/../../../../compiler-rt/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: cp %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   %t.dir/installed.a
 # RUN: ninja -C %t.dir/build install-builtins > %t.dir-reinstall.log
 # RUN: cmp %t.dir/installed.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
-# RUN: find %t.dir/resource -type f | count 1
+# RUN: find %t.dir/resource -type f | count 2
+# RUN: find %t.dir/resource -name libatomic.a | count 0
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   | FileCheck %s --check-prefix=ELF
@@ -26,6 +31,18 @@
 # RUN: llvm-ar t \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   | count 5
+# RUN: llvm-readobj --file-headers \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
+# RUN:   | FileCheck %s --check-prefix=ATOMIC-ELF
+# RUN: llvm-ar t \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
+# RUN:   | count 1
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
+# RUN:   | FileCheck %s --check-prefix=ATOMIC-SYMBOL
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
+# RUN:   | not grep ' U '
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   | not grep ' U '
@@ -40,3 +57,17 @@
 # SYMBOL-DAG: T __ffsdi2
 # SYMBOL-DAG: T __muldc3
 # SYMBOL-DAG: T __mulsc3
+# ATOMIC-ELF: Format: elf64-mmix
+# ATOMIC-ELF: Arch: mmix
+# ATOMIC-ELF: DataEncoding: BigEndian
+# ATOMIC-ELF: Type: Relocatable
+# ATOMIC-ELF: Machine: EM_MMIX
+# ATOMIC-SYMBOL-DAG: T __atomic_load
+# ATOMIC-SYMBOL-DAG: T __atomic_store
+# ATOMIC-SYMBOL-DAG: T __atomic_exchange
+# ATOMIC-SYMBOL-DAG: T __atomic_compare_exchange
+# ATOMIC-SYMBOL-DAG: T __atomic_is_lock_free
+# ATOMIC-SYMBOL-DAG: T __atomic_load_1
+# ATOMIC-SYMBOL-DAG: T __atomic_load_2
+# ATOMIC-SYMBOL-DAG: T __atomic_load_4
+# ATOMIC-SYMBOL-DAG: T __atomic_load_8

@@ -33,3 +33,8 @@ list(JOIN mmix_SOURCES ";" actual_sources)
 if(NOT actual_sources STREQUAL "divdc3.c;divsc3.c;ffsdi2.c;muldc3.c;mulsc3.c")
   message(FATAL_ERROR "unexpected MMIX builtin sources: ${actual_sources}")
 endif()
+list(JOIN mmix_ATOMIC_SOURCES ";" actual_atomic_sources)
+if(NOT actual_atomic_sources STREQUAL "mmix/atomic.c")
+  message(FATAL_ERROR
+    "unexpected MMIX atomic fallback sources: ${actual_atomic_sources}")
+endif()
