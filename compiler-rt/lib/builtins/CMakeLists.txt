@@ -1153,6 +1153,15 @@ else ()
                                 CFLAGS ${BUILTIN_CFLAGS_${arch}}
                                 C_STANDARD 11
                                 PARENT_TARGET builtins)
+        add_compiler_rt_runtime(clang_rt.stack_protector
+                                STATIC
+                                ARCHS ${arch}
+                                DEPS ${deps_${arch}}
+                                SOURCES ${mmix_STACK_PROTECTOR_SOURCES}
+                                DEFS ${BUILTIN_DEFS}
+                                CFLAGS ${BUILTIN_CFLAGS_${arch}}
+                                C_STANDARD 11
+                                PARENT_TARGET builtins)
       endif()
 
       # Write out the sources that were used to compile the builtins so that tests can be run in

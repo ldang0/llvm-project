@@ -38,3 +38,9 @@ if(NOT actual_atomic_sources STREQUAL "mmix/atomic.c")
   message(FATAL_ERROR
     "unexpected MMIX atomic fallback sources: ${actual_atomic_sources}")
 endif()
+list(JOIN mmix_STACK_PROTECTOR_SOURCES ";" actual_stack_protector_sources)
+if(NOT actual_stack_protector_sources STREQUAL
+   "mmix/stack_protector_fail.c;mmix/stack_protector_guard.c")
+  message(FATAL_ERROR
+    "unexpected MMIX stack protector sources: ${actual_stack_protector_sources}")
+endif()

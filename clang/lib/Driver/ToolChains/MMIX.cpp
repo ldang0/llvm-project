@@ -170,6 +170,15 @@ std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
   return std::string(Path);
 }
 
+void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
+                                          ArgStringList &, BoundArch,
+                                          Action::OffloadKind) const {
+  if (const Arg *A = DriverArgs.getLastArg(
+          options::OPT_mstack_protector_guard_symbol_EQ))
+    getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
+        << A->getAsString(DriverArgs) << getTripleString();
+}
+
 Tool *MMIXToolChain::buildAssembler() const {
   return new UnsupportedAssembler(*this);
 }

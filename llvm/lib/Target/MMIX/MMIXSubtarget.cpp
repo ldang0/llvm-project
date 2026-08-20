@@ -54,4 +54,9 @@ void MMIXSubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
   Info.setLibcallImpl(RTLIB::ATOMIC_EXCHANGE, RTLIB::impl___atomic_exchange);
   Info.setLibcallImpl(RTLIB::ATOMIC_COMPARE_EXCHANGE,
                       RTLIB::impl___atomic_compare_exchange);
+
+  Info.setLibcallImpl(RTLIB::STACKPROTECTOR_CHECK_FAIL,
+                      RTLIB::impl___stack_chk_fail);
+  Info.setLibcallImpl(RTLIB::STACK_CHECK_GUARD,
+                      RTLIB::impl___stack_chk_guard);
 }

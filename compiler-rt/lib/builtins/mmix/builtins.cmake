@@ -7,3 +7,7 @@ set(mmix_SOURCES
 
 set(mmix_ATOMIC_SOURCES
   mmix/atomic.c)
+
+set(mmix_STACK_PROTECTOR_SOURCES
+  mmix/stack_protector_fail.c
+  mmix/stack_protector_guard.c)

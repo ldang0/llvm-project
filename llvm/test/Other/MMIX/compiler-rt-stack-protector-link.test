@@ -1,0 +1,91 @@
+# RUN: rm -rf %t.dir
+# RUN: mkdir -p %t.dir
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O2 -c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mmix/stack_protector_fail.c \
+# RUN:   -o %t.dir/fail.o
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O2 -c \
+# RUN:   %S/../../../../compiler-rt/lib/builtins/mmix/stack_protector_guard.c \
+# RUN:   -o %t.dir/guard.o
+# RUN: llvm-ar qcD %t.dir/libclang_rt.stack_protector.a \
+# RUN:   %t.dir/fail.o %t.dir/guard.o
+# RUN: llvm-ranlib -D %t.dir/libclang_rt.stack_protector.a
+# RUN: llvm-nm --undefined-only %t.dir/fail.o %t.dir/guard.o \
+# RUN:   | not grep ' U '
+# RUN: llvm-readelf --symbols %t.dir/fail.o %t.dir/guard.o \
+# RUN:   | FileCheck %s --check-prefix=ABI
+# RUN: llvm-readobj --sections %t.dir/guard.o \
+# RUN:   | FileCheck %s --check-prefix=GUARD-SECTION
+# RUN: llvm-objdump -s %t.dir/guard.o \
+# RUN:   | FileCheck %s --check-prefix=GUARD-VALUE
+# RUN: llvm-readobj --relocations %t.dir/fail.o \
+# RUN:   | FileCheck %s --check-prefix=FAIL-RELOC
+# RUN: llvm-objdump -d %t.dir/fail.o \
+# RUN:   | FileCheck %s --check-prefix=FAIL-CODE
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/libclang_rt.stack_protector.a \
+# RUN:   | FileCheck %s --check-prefix=ARCHIVE
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fstack-protector-all -O1 -c %S/Inputs/stack-protector.c \
+# RUN:   -o %t.dir/protected.o
+# RUN: ld.lld -static -e protected_entry %t.dir/protected.o \
+# RUN:   %t.dir/libclang_rt.stack_protector.a -o %t.dir/protected
+# RUN: llvm-nm --undefined-only %t.dir/protected | not grep ' U '
+# RUN: llvm-nm --defined-only --extern-only %t.dir/protected \
+# RUN:   | FileCheck %s --check-prefix=LINKED
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fstack-protector-all -DPROVIDE_GUARD -O1 -c \
+# RUN:   %S/Inputs/stack-protector.c -o %t.dir/crt-guard.o
+# RUN: ld.lld -static -e protected_entry %t.dir/crt-guard.o \
+# RUN:   %t.dir/libclang_rt.stack_protector.a -o %t.dir/crt-guard
+# RUN: llvm-nm --defined-only --extern-only %t.dir/crt-guard \
+# RUN:   | FileCheck %s --check-prefix=CRT-GUARD
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O2 -c %S/Inputs/stack-protector-terminate.c \
+# RUN:   -o %t.dir/terminate.o
+# RUN: ld.lld -static -e protected_entry %t.dir/protected.o \
+# RUN:   %t.dir/terminate.o %t.dir/libclang_rt.stack_protector.a \
+# RUN:   -o %t.dir/strong-hook
+# RUN: llvm-nm --defined-only --extern-only %t.dir/strong-hook \
+# RUN:   | FileCheck %s --check-prefix=STRONG-HOOK
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding \
+# RUN:   -fno-stack-protector -O1 -c %S/Inputs/stack-protector.c \
+# RUN:   -o %t.dir/unprotected.o
+# RUN: ld.lld -static -e unprotected_entry %t.dir/unprotected.o \
+# RUN:   %t.dir/libclang_rt.stack_protector.a -o %t.dir/unprotected
+# RUN: llvm-nm --defined-only --extern-only %t.dir/unprotected \
+# RUN:   | FileCheck %s --check-prefix=UNUSED
+
+# ARCHIVE-DAG: W __mmix_stack_chk_terminate
+# ARCHIVE-DAG: T __stack_chk_fail
+# ARCHIVE-DAG: V __stack_chk_guard
+
+# ABI-DAG: 20 FUNC WEAK DEFAULT {{[0-9]+}} __mmix_stack_chk_terminate
+# ABI-DAG: 20 FUNC GLOBAL DEFAULT {{[0-9]+}} __stack_chk_fail
+# ABI-DAG: 8 OBJECT WEAK DEFAULT {{[0-9]+}} __stack_chk_guard
+# GUARD-SECTION: Name: .data
+# GUARD-SECTION: Size: 8
+# GUARD-SECTION: AddressAlignment: 8
+# GUARD-VALUE: Contents of section .data:
+# GUARD-VALUE-NEXT: 0000 4d4d4958 53535031
+# FAIL-RELOC: R_MMIX_PUSHJ_STUBBABLE __mmix_stack_chk_terminate
+# FAIL-CODE-LABEL: <__mmix_stack_chk_terminate>:
+# FAIL-CODE: SWYM 0x0, 0x0, 0x0
+# FAIL-CODE-NOT: TRAP
+# FAIL-CODE-LABEL: <__stack_chk_fail>:
+# FAIL-CODE: PUSHJ
+
+# LINKED-DAG: W __mmix_stack_chk_terminate
+# LINKED-DAG: T __stack_chk_fail
+# LINKED-DAG: V __stack_chk_guard
+
+# CRT-GUARD: D __stack_chk_guard
+# CRT-GUARD-NOT: V __stack_chk_guard
+
+# STRONG-HOOK: T __mmix_stack_chk_terminate
+# STRONG-HOOK-NOT: W __mmix_stack_chk_terminate
+
+# UNUSED-NOT: __mmix_stack_chk_terminate
+# UNUSED-NOT: __stack_chk_fail
+# UNUSED-NOT: __stack_chk_guard

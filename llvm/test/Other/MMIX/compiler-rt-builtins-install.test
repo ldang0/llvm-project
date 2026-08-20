@@ -8,19 +8,23 @@
 # RUN: ninja -C %t.dir/build install-builtins > %t.dir-install.log
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a
+# RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
 # RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
+# RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
 # RUN: test ! -e %S/../../../../compiler-rt/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
 # RUN: cp %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   %t.dir/installed.a
 # RUN: ninja -C %t.dir/build install-builtins > %t.dir-reinstall.log
 # RUN: cmp %t.dir/installed.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
-# RUN: find %t.dir/resource -type f | count 2
+# RUN: find %t.dir/resource -type f | count 3
 # RUN: find %t.dir/resource -name libatomic.a | count 0
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
@@ -42,6 +46,18 @@
 # RUN:   | FileCheck %s --check-prefix=ATOMIC-SYMBOL
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
+# RUN:   | not grep ' U '
+# RUN: llvm-readobj --file-headers \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
+# RUN:   | FileCheck %s --check-prefix=STACK-ELF
+# RUN: llvm-ar t \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
+# RUN:   | count 2
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
+# RUN:   | FileCheck %s --check-prefix=STACK-SYMBOL
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
 # RUN:   | not grep ' U '
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
@@ -71,3 +87,11 @@
 # ATOMIC-SYMBOL-DAG: T __atomic_load_2
 # ATOMIC-SYMBOL-DAG: T __atomic_load_4
 # ATOMIC-SYMBOL-DAG: T __atomic_load_8
+# STACK-ELF: Format: elf64-mmix
+# STACK-ELF: Arch: mmix
+# STACK-ELF: DataEncoding: BigEndian
+# STACK-ELF: Type: Relocatable
+# STACK-ELF: Machine: EM_MMIX
+# STACK-SYMBOL-DAG: W __mmix_stack_chk_terminate
+# STACK-SYMBOL-DAG: T __stack_chk_fail
+# STACK-SYMBOL-DAG: V __stack_chk_guard
