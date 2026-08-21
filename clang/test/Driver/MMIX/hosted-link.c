@@ -1,7 +1,8 @@
 // RUN: rm -rf %t.dir
 // RUN: mkdir -p %t.dir/sysroot/usr/include %t.dir/sysroot/usr/lib/mmix \
 // RUN:   %t.dir/resource/include \
-// RUN:   %t.dir/resource/lib/mmix-unknown-unknown %t.dir/explicit
+// RUN:   %t.dir/resource/lib/mmix-unknown-unknown %t.dir/explicit \
+// RUN:   %t.dir/host/bin %t.dir/host/lib
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/crt0.o \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/trip-vectors.o \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/crti.o \
@@ -15,6 +16,8 @@
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
 // RUN:   %t.dir/explicit/custom-start.o %t.dir/explicit/custom.ld \
 // RUN:   %t.dir/explicit/libcustom.a
+// RUN: touch %t.dir/host/bin/gcc %t.dir/host/bin/ld \
+// RUN:   %t.dir/host/lib/libm.a
 
 // RUN: %clang -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
@@ -117,6 +120,15 @@
 // RUN:   | FileCheck %s --check-prefix=MISSING-ATOMIC \
 // RUN:       --implicit-check-not=ld.lld
 // RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
+// RUN: rm %t.dir/sysroot/usr/lib/mmix/libm.a
+// RUN: env LIBRARY_PATH=%t.dir/host/lib COMPILER_PATH=%t.dir/host/bin \
+// RUN:   not %clang --target=mmix-unknown-unknown \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   -lm %s -o %t.dir/missing-libm 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=MISSING-LIBM \
+// RUN:       --implicit-check-not='%t.dir/host' --implicit-check-not=ld.lld
+// RUN: test ! -e %t.dir/missing-libm
+// RUN: touch %t.dir/sysroot/usr/lib/mmix/libm.a
 // RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
 // RUN: not %clang -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
@@ -168,6 +180,7 @@
 // MISSING-LIBGLOSS: error: no such file or directory: '{{.*}}libgloss.a'
 // MISSING-BUILTINS: error: no such file or directory: '{{.*}}libclang_rt.builtins.a'
 // MISSING-ATOMIC: error: no such file or directory: '{{.*}}libclang_rt.atomic.a'
+// MISSING-LIBM: error: no such file or directory: '{{.*}}libm.a'
 // MISSING-STACK-PROTECTOR: error: no such file or directory: '{{.*}}libclang_rt.stack_protector.a'
 
 int main(void) { return 0; }

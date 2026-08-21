@@ -14,6 +14,7 @@
 #include "clang/Driver/Job.h"
 #include "clang/Driver/Tool.h"
 #include "clang/Options/Options.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/VirtualFileSystem.h"
@@ -99,8 +100,13 @@ static bool isDirectory(const ToolChain &TC, StringRef Path) {
   return Status && Status->isDirectory();
 }
 
+static bool isRegularFile(const ToolChain &TC, StringRef Path) {
+  auto Status = TC.getVFS().status(Path);
+  return Status && Status->isRegularFile();
+}
+
 static bool requireFile(Compilation &C, const ToolChain &TC, StringRef Path) {
-  if (TC.getVFS().exists(Path))
+  if (isRegularFile(TC, Path))
     return true;
   C.getDriver().Diag(diag::err_drv_no_such_file) << Path;
   return false;
@@ -184,9 +190,23 @@ public:
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
         StackProtector =
             TC.getCompilerRT(Args, "stack_protector", ToolChain::FT_Static);
-        InputsValid &= TC.getVFS().exists(Builtins);
-        InputsValid &= TC.getVFS().exists(Atomic);
-        InputsValid &= TC.getVFS().exists(StackProtector);
+        InputsValid &= isRegularFile(TC, Builtins);
+        InputsValid &= isRegularFile(TC, Atomic);
+        InputsValid &= isRegularFile(TC, StackProtector);
+      }
+
+      if (llvm::is_contained(Args.getAllArgValues(options::OPT_l), "m")) {
+        bool FoundLibM = false;
+        for (StringRef SearchPath : Args.getAllArgValues(options::OPT_L)) {
+          SmallString<128> Candidate(SearchPath);
+          llvm::sys::path::append(Candidate, "libm.a");
+          FoundLibM |= isRegularFile(TC, Candidate);
+        }
+        SmallString<128> SysrootLibM(LibraryPath);
+        llvm::sys::path::append(SysrootLibM, "libm.a");
+        FoundLibM |= isRegularFile(TC, SysrootLibM);
+        if (!FoundLibM)
+          InputsValid &= requireFile(C, TC, SysrootLibM);
       }
     }
 
@@ -280,7 +300,7 @@ std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
   llvm::sys::path::append(
       Path, buildCompilerRTBasename(Args, Component, Type,
                                     /*AddArch=*/false, IsFortran));
-  if (!getVFS().exists(Path))
+  if (!isRegularFile(*this, Path))
     getDriver().Diag(diag::err_drv_no_such_file) << Path;
   return std::string(Path);
 }
