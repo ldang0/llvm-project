@@ -47,7 +47,6 @@ public:
 
     HasMustTail = false;
     TLSSupported = false;
-    VLASupported = false;
     MaxAtomicPromoteWidth = 0;
     MaxAtomicInlineWidth = 64;
 

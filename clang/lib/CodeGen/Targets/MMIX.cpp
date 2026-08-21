@@ -207,6 +207,19 @@ class MMIXCodeGenBoundaryVisitor
     return !diagnoseUnsupportedMMIXObject(CGM, Loc, Ty);
   }
 
+  bool diagnoseAutomaticObjectAlignment(VarDecl *VD) {
+    if (!VD->hasLocalStorage() ||
+        CGM.getContext().getDeclAlign(VD) <= CharUnits::fromQuantity(8))
+      return true;
+
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX does not support automatic object alignment greater than 8 "
+        "bytes");
+    CGM.getDiags().Report(VD->getLocation(), DiagID);
+    return false;
+  }
+
   bool diagnoseExtendedScalarOperation(SourceLocation Loc, QualType Ty) {
     if (!Ty->isScalarType() ||
         !isUnsupportedMMIXBoundaryScalarType(CGM.getContext(), Ty,
@@ -241,7 +254,8 @@ public:
   explicit MMIXCodeGenBoundaryVisitor(CodeGenModule &CGM) : CGM(CGM) {}
 
   bool VisitVarDecl(VarDecl *VD) {
-    return diagnoseObjectType(VD->getLocation(), VD->getType());
+    return diagnoseAutomaticObjectAlignment(VD) &&
+           diagnoseObjectType(VD->getLocation(), VD->getType());
   }
 
   bool VisitExpr(Expr *E) {

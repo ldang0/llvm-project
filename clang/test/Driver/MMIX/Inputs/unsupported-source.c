@@ -32,11 +32,6 @@ struct EightBytes {
   unsigned char bytes[8];
 };
 _Atomic(struct EightBytes) value;
-#elif defined(TEST_VLA)
-void variable_length_array(int count) {
-  int values[count];
-  (void)values;
-}
 #elif defined(TEST_OVERALIGNED_ARGUMENT)
 struct __attribute__((aligned(16))) OverAligned {
   long words[2];

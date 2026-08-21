@@ -346,6 +346,17 @@ void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
           options::OPT_mstack_protector_guard_symbol_EQ))
     DiagnoseUnsupported(A);
 
+  if (const Arg *A =
+          DriverArgs.getLastArg(options::OPT_fstack_clash_protection,
+                                options::OPT_fno_stack_clash_protection);
+      A && A->getOption().matches(options::OPT_fstack_clash_protection))
+    DiagnoseUnsupported(A);
+
+  if (const Arg *A = DriverArgs.getLastArg(options::OPT_fsplit_stack,
+                                           options::OPT_fno_split_stack);
+      A && A->getOption().matches(options::OPT_fsplit_stack))
+    DiagnoseUnsupported(A);
+
   if (const Arg *A = DriverArgs.getLastArg(
           options::OPT_fprofile_instr_generate,
           options::OPT_fprofile_instr_generate_EQ,

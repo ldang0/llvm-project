@@ -34,10 +34,6 @@
 // RUN: not test -s %t.atomic-extension.o
 
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
-// RUN:   -DTEST_VLA -c %S/Inputs/unsupported-source.c -o %t.vla.o 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=VLA
-// RUN: not test -s %t.vla.o
-// RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
 // RUN:   -DTEST_OVERALIGNED_ARGUMENT -c %S/Inputs/unsupported-source.c \
 // RUN:   -o %t.overaligned-argument.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=OVERALIGNED-ARGUMENT
@@ -97,7 +93,6 @@
 // ATOMIC-OPERATION: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_add
 // ATOMIC-RMW: error: MMIX GNU ABI does not support atomic operation +=
 // ATOMIC-EXTENSION: error: MMIX GNU ABI does not support atomic operation __atomic_fetch_uinc
-// VLA: error: variable length arrays are not supported for the current target
 // OVERALIGNED-ARGUMENT: error: MMIX GNU ABI does not support over-aligned aggregate argument type 'struct OverAligned'
 // OVERALIGNED-RESULT: error: MMIX GNU ABI does not support over-aligned aggregate return type 'struct OverAligned'
 // ADDRESS-SPACE: error: MMIX GNU ABI does not support nonzero-address-space value CodeGen involving type '__attribute__((address_space(1))) int'
