@@ -690,6 +690,9 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
     setOperationAction(Opcode, MVT::f64, Expand);
   setOperationPromotedToType({ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN},
                              MVT::f32, MVT::f64);
+  // Keep minnum/maxnum independent of libm and preserve signed-zero ordering.
+  for (unsigned Opcode : {ISD::FMINNUM, ISD::FMAXNUM})
+    setOperationAction(Opcode, {MVT::f32, MVT::f64}, Custom);
   setOperationAction(ISD::SELECT, MVT::f64, Custom);
   setOperationPromotedToType(ISD::SELECT, MVT::f32, MVT::f64);
   setOperationAction(ISD::SELECT_CC, MVT::f32, Expand);
@@ -1031,6 +1034,8 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   case ISD::SDIVREM:
   case ISD::SETCC:
   case ISD::SELECT:
+  case ISD::FMINNUM:
+  case ISD::FMAXNUM:
     break;
   default:
     report_fatal_error(
@@ -1076,6 +1081,99 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
     SDValue Selected = DAG.getNode(ISD::SELECT, DL, MVT::i64, Op.getOperand(0),
                                    TrueBits, FalseBits);
     return DAG.getNode(ISD::BITCAST, DL, MVT::f64, Selected);
+  }
+
+  if (Op.getOpcode() == ISD::FMINNUM || Op.getOpcode() == ISD::FMAXNUM) {
+    const bool IsMax = Op.getOpcode() == ISD::FMAXNUM;
+    EVT VT = Op.getValueType();
+    EVT BitsVT = MVT::i64;
+    SDValue LHS = Op.getOperand(0);
+    SDValue RHS = Op.getOperand(1);
+    SDValue LHSBits =
+        VT == MVT::f32
+            ? DAG.getNode(MMIXISD::F32_TO_BITS, DL, MVT::i64, LHS)
+            : DAG.getNode(ISD::BITCAST, DL, MVT::i64, LHS);
+    SDValue RHSBits =
+        VT == MVT::f32
+            ? DAG.getNode(MMIXISD::F32_TO_BITS, DL, MVT::i64, RHS)
+            : DAG.getNode(ISD::BITCAST, DL, MVT::i64, RHS);
+    SDValue Zero = DAG.getConstant(0, DL, BitsVT);
+    SDValue One = DAG.getConstant(1, DL, MVT::i64);
+    // Raw-bit classification preserves NaN kind and signed-zero ordering.
+    const uint64_t MagnitudeMaskValue =
+        VT == MVT::f32 ? UINT64_C(0x7fffffff)
+                       : UINT64_C(0x7fffffffffffffff);
+    const uint64_t ExponentMaskValue =
+        VT == MVT::f32 ? UINT64_C(0x7f800000)
+                       : UINT64_C(0x7ff0000000000000);
+    const uint64_t FractionMaskValue =
+        VT == MVT::f32 ? UINT64_C(0x007fffff)
+                       : UINT64_C(0x000fffffffffffff);
+    const uint64_t QuietMaskValue =
+        VT == MVT::f32 ? UINT64_C(0x00400000)
+                       : UINT64_C(0x0008000000000000);
+    SDValue MagnitudeMask = DAG.getConstant(MagnitudeMaskValue, DL, BitsVT);
+    SDValue ExponentMask = DAG.getConstant(ExponentMaskValue, DL, BitsVT);
+    SDValue FractionMask = DAG.getConstant(FractionMaskValue, DL, BitsVT);
+    SDValue QuietMask = DAG.getConstant(QuietMaskValue, DL, BitsVT);
+    auto IntTest = [&](SDValue Left, SDValue Right, ISD::CondCode CC) {
+      return DAG.getSetCC(DL, MVT::i64, Left, Right, CC);
+    };
+    auto SelectBits = [&](SDValue Condition, SDValue True, SDValue False) {
+      return DAG.getNode(ISD::SELECT, DL, BitsVT, Condition, True, False);
+    };
+    auto IsNaN = [&](SDValue Bits) {
+      SDValue HasMaxExponent = IntTest(
+          DAG.getNode(ISD::AND, DL, BitsVT, Bits, ExponentMask), ExponentMask,
+          ISD::SETEQ);
+      SDValue HasFraction = IntTest(
+          DAG.getNode(ISD::AND, DL, BitsVT, Bits, FractionMask), Zero,
+          ISD::SETNE);
+      return DAG.getNode(ISD::AND, DL, MVT::i64, HasMaxExponent, HasFraction);
+    };
+
+    SDValue LHSNaN = IsNaN(LHSBits);
+    SDValue RHSNaN = IsNaN(RHSBits);
+    SDValue LHSQuiet = IntTest(
+        DAG.getNode(ISD::AND, DL, BitsVT, LHSBits, QuietMask), Zero,
+        ISD::SETNE);
+    SDValue RHSQuiet = IntTest(
+        DAG.getNode(ISD::AND, DL, BitsVT, RHSBits, QuietMask), Zero,
+        ISD::SETNE);
+    SDValue LHSSignaling = DAG.getNode(
+        ISD::AND, DL, MVT::i64, LHSNaN,
+        DAG.getNode(ISD::XOR, DL, MVT::i64, LHSQuiet, One));
+    SDValue RHSSignaling = DAG.getNode(
+        ISD::AND, DL, MVT::i64, RHSNaN,
+        DAG.getNode(ISD::XOR, DL, MVT::i64, RHSQuiet, One));
+    SDValue QuietLHS =
+        DAG.getNode(ISD::OR, DL, BitsVT, LHSBits, QuietMask);
+    SDValue QuietRHS =
+        DAG.getNode(ISD::OR, DL, BitsVT, RHSBits, QuietMask);
+    SDValue QuietNaN = SelectBits(LHSSignaling, QuietLHS, QuietRHS);
+
+    SDValue Ordered = SelectBits(
+        DAG.getSetCC(DL, MVT::i64, LHS, RHS,
+                     IsMax ? ISD::SETOGT : ISD::SETOLT),
+        LHSBits, RHSBits);
+    SDValue BothZero = DAG.getNode(
+        ISD::AND, DL, MVT::i64,
+        IntTest(DAG.getNode(ISD::AND, DL, BitsVT, LHSBits, MagnitudeMask), Zero,
+                ISD::SETEQ),
+        IntTest(DAG.getNode(ISD::AND, DL, BitsVT, RHSBits, MagnitudeMask), Zero,
+                ISD::SETEQ));
+    SDValue ZeroBits = DAG.getNode(IsMax ? ISD::AND : ISD::OR, DL, BitsVT,
+                                   LHSBits, RHSBits);
+    SDValue Numeric = SelectBits(BothZero, ZeroBits, Ordered);
+
+    SDValue WithQuietNaNs = SelectBits(LHSNaN, RHSBits, Numeric);
+    WithQuietNaNs = SelectBits(RHSNaN, LHSBits, WithQuietNaNs);
+    SDValue AnySignaling = DAG.getNode(ISD::OR, DL, MVT::i64, LHSSignaling,
+                                       RHSSignaling);
+    SDValue ResultBits = SelectBits(AnySignaling, QuietNaN, WithQuietNaNs);
+    return VT == MVT::f32
+               ? DAG.getNode(MMIXISD::BITS_TO_F32, DL, MVT::f32, ResultBits)
+               : DAG.getNode(ISD::BITCAST, DL, MVT::f64, ResultBits);
   }
 
   if (Op.getOpcode() == ISD::SETCC) {
