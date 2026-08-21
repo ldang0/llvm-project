@@ -1548,8 +1548,11 @@ struct MMIXFormalArgMapping {
   SmallVector<unsigned, 4> OriginalParts;
   SmallVector<uint64_t, 4> PartOffsets;
   uint64_t AggregateSize = 0;
+  uint64_t LocalCopySize = 0;
+  Align LocalCopyAlignment = Align(1);
 
   bool isDirectAggregate() const { return !PartOffsets.empty(); }
+  bool needsLocalCopy() const { return LocalCopySize != 0; }
 };
 
 static bool isSupportedCallValueType(EVT VT) {
@@ -2017,6 +2020,8 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
                           Arg.getOrigArgIndex(), 0);
       MMIXFormalArgMapping &Mapping = ArgMappings.emplace_back();
       Mapping.OriginalParts.push_back(I);
+      Mapping.LocalCopySize = Arg.Flags.getByValSize();
+      Mapping.LocalCopyAlignment = Arg.Flags.getNonZeroByValAlign();
       ++I;
       continue;
     }
@@ -2162,6 +2167,21 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
       break;
     default:
       report_fatal_error("MMIX does not support this argument extension");
+    }
+    if (Mapping.needsLocalCopy()) {
+      int FI = MFI.CreateStackObject(Mapping.LocalCopySize,
+                                     Mapping.LocalCopyAlignment,
+                                     /*isSS=*/false);
+      SDValue CopyAddress =
+          DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue SizeNode =
+          DAG.getConstant(Mapping.LocalCopySize, DL, MVT::i64);
+      Chain = DAG.getMemcpy(
+          Chain, DL, CopyAddress, Arg, SizeNode, Mapping.LocalCopyAlignment,
+          Mapping.LocalCopyAlignment, /*isVol=*/false,
+          /*AlwaysInline=*/false, /*CI=*/nullptr, std::nullopt,
+          MachinePointerInfo(), MachinePointerInfo());
+      Arg = CopyAddress;
     }
     InVals.push_back(Arg);
   }

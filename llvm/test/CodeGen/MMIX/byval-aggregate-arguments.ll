@@ -90,23 +90,34 @@ define void @copy_in_first_stack_slot(ptr %source) {
   ret void
 }
 
-; The callee receives the caller-owned address in the ordinary register slot.
+; The callee receives the source address in the ordinary register slot and
+; initializes its own by-value object before exposing the parameter.
 ; ISEL-LABEL: name: read_register_copy
+; ISEL:       stack:
+; ISEL-NEXT:    - { id: 0, {{.*}}size: 16, alignment: 8,
 ; ISEL:       [[ADDRESS:%[0-9]+]]:{{[^ ]+}} = COPY $r231
+; ISEL:       LDOUI [[ADDRESS]], 0
+; ISEL:       STOUI {{.*}}%stack.0, 0
 ; ISEL:       LDOUI [[ADDRESS]], 8
+; ISEL:       STOUI {{.*}}%stack.0, 8
 define i64 @read_register_copy(ptr byval(%pair) align 8 %value) {
   %field = getelementptr %pair, ptr %value, i64 0, i32 1
   %loaded = load i64, ptr %field, align 8
   ret i64 %loaded
 }
 
-; The seventeenth ordinary slot is loaded as one pointer from the incoming
-; stack area and is then dereferenced normally.
+; A source address received in the seventeenth ordinary slot also initializes
+; an independent local object.
 ; ISEL-LABEL: name: read_stack_copy
 ; ISEL:       fixedStack:
 ; ISEL-NEXT:    - { id: 0, {{.*}}offset: 0, size: 8, alignment: 8,
+; ISEL:       stack:
+; ISEL-NEXT:    - { id: 0, {{.*}}size: 16, alignment: 8,
 ; ISEL:       [[ADDRESS:%[0-9]+]]:{{[^ ]+}} = LDOUI %fixed-stack.0, 0
-; ISEL:       LDOUI killed [[ADDRESS]], 8
+; ISEL:       LDOUI [[ADDRESS]], 0
+; ISEL:       STOUI {{.*}}%stack.0, 0
+; ISEL:       LDOUI [[ADDRESS]], 8
+; ISEL:       STOUI {{.*}}%stack.0, 8
 define i64 @read_stack_copy(
     i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4, i64 %a5,
     i64 %a6, i64 %a7, i64 %a8, i64 %a9, i64 %a10, i64 %a11,
@@ -115,6 +126,21 @@ define i64 @read_stack_copy(
   %field = getelementptr %pair, ptr %value, i64 0, i32 1
   %loaded = load i64, ptr %field, align 8
   ret i64 %loaded
+}
+
+; Writes through a byval parameter target the callee-owned object, not the
+; source address received from the caller.
+; ISEL-LABEL: name: mutate_register_copy
+; ISEL:       stack:
+; ISEL-NEXT:    - { id: 0, {{.*}}size: 16, alignment: 8,
+; ISEL:       COPY $r231
+; ISEL:       STOUI {{.*}}%stack.0, 0
+; ISEL:       STOUI {{.*}}%stack.0, 8
+; ISEL:       STOUI {{.*}}%stack.0, 0
+define void @mutate_register_copy(ptr byval(%pair) align 8 %value) {
+  %field = getelementptr %pair, ptr %value, i64 0, i32 0
+  store i64 99, ptr %field, align 8
+  ret void
 }
 
 ; Forwarding a byval parameter creates another distinct caller-owned copy.

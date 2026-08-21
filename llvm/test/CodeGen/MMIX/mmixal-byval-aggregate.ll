@@ -6,9 +6,16 @@ target triple = "mmix-unknown-elf"
 %pair = type { i64, i64 }
 
 ; The buffered MMIXAL layout emits the callee before the caller even though
-; their LLVM definitions have the opposite order.
+; their LLVM definitions have the opposite order. The callee initializes its
+; own by-value object before writing the field.
 ; CHECK: aggregate_target	IS @
-; CHECK: STOU {{\$[0-9]+}},$231,8
+; CHECK: SUBU $254,$254,16
+; CHECK: LDOU [[TARGET_HIGH:\$[0-9]+]],$231,8
+; CHECK: STOU [[TARGET_HIGH]],$254,8
+; CHECK: LDOU [[TARGET_LOW:\$[0-9]+]],$231,0
+; CHECK: STOU [[TARGET_LOW]],$254,0
+; CHECK: SETL [[VALUE:\$[0-9]+]],7
+; CHECK: STOU [[VALUE]],$254,8
 ; CHECK: aggregate_owner	IS @
 ; CHECK: SUBU $254,$254,16
 ; CHECK: LDOU [[HIGH:\$[0-9]+]],$231,8
