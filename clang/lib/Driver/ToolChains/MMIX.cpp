@@ -261,6 +261,7 @@ MMIXToolChain::MMIXToolChain(const Driver &D, const llvm::Triple &Triple,
                              const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   getProgramPaths().push_back(getDriver().Dir);
+  (void)GetCStdlibType(Args);
 }
 
 ToolChain::RuntimeLibType
@@ -271,6 +272,30 @@ MMIXToolChain::GetRuntimeLibType(const ArgList &Args) const {
           << "non-compiler-rt runtime selection for MMIX";
   }
   return ToolChain::RLT_CompilerRT;
+}
+
+ToolChain::CStdlibType
+MMIXToolChain::GetCStdlibType(const ArgList &Args) const {
+  const Arg *A = Args.getLastArg(options::OPT_cstdlib_EQ);
+  if (!A)
+    return ToolChain::CST_Newlib;
+
+  CStdlibType Type = ToolChain::GetCStdlibType(Args);
+  if (Type == ToolChain::CST_Newlib)
+    return Type;
+
+  StringRef Name = A->getValue();
+  bool IsKnownUnsupported = Type == ToolChain::CST_Picolibc ||
+                            Type == ToolChain::CST_LLVMLibC ||
+                            (Type == ToolChain::CST_System && Name == "system");
+  if (IsKnownUnsupported && !DiagnosedUnsupportedCStdlib) {
+    getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
+        << A->getAsString(Args) << getTripleString();
+    DiagnosedUnsupportedCStdlib = true;
+  }
+
+  // Keep later target-private policy dispatch on the only supported provider.
+  return ToolChain::CST_Newlib;
 }
 
 std::string

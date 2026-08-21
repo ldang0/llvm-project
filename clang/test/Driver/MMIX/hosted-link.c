@@ -25,6 +25,13 @@
 // RUN:   | FileCheck %s --check-prefix=HOSTED \
 // RUN:       --implicit-check-not='{{[/\\](gcc|libgcc|ld.bfd)[^/\\"]*}}' \
 // RUN:       --implicit-check-not=libm.a
+// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   --cstdlib=newlib %s -o %t.dir/explicit-newlib 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=HOSTED \
+// RUN:       --implicit-check-not='argument unused' \
+// RUN:       --implicit-check-not='{{[/\\](gcc|libgcc|ld.bfd)[^/\\"]*}}' \
+// RUN:       --implicit-check-not=libm.a
 // RUN: %clang -### --target=mmix-unknown-elf \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/explicit-elf 2>&1 \

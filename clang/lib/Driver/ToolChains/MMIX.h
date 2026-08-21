@@ -31,6 +31,7 @@ public:
   }
   RuntimeLibType
   GetRuntimeLibType(const llvm::opt::ArgList &Args) const override;
+  CStdlibType GetCStdlibType(const llvm::opt::ArgList &Args) const override;
   std::string ComputeEffectiveClangTriple(
       const llvm::opt::ArgList &Args, BoundArch BA = {},
       types::ID InputType = types::TY_INVALID) const override;
@@ -49,6 +50,9 @@ public:
 protected:
   Tool *buildAssembler() const override;
   Tool *buildLinker() const override;
+
+private:
+  mutable bool DiagnosedUnsupportedCStdlib = false;
 };
 
 } // namespace toolchains
