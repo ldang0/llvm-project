@@ -137,6 +137,43 @@ define double @rint_to_integral(double %value) {
   ret double %result
 }
 
+; Register-held f32 integral operations promote exactly to f64, use FINT, and
+; round back to binary32 when the result is stored or returned.
+; CHECK-LABEL: truncate_short_to_integral:
+; CHECK:       FINT {{r[0-9]+}}, 1, {{r[0-9]+}}
+define float @truncate_short_to_integral(float %value) {
+  %result = call float @llvm.trunc.f32(float %value)
+  ret float %result
+}
+
+; CHECK-LABEL: ceil_short_to_integral:
+; CHECK:       FINT {{r[0-9]+}}, 2, {{r[0-9]+}}
+define float @ceil_short_to_integral(float %value) {
+  %result = call float @llvm.ceil.f32(float %value)
+  ret float %result
+}
+
+; CHECK-LABEL: floor_short_to_integral:
+; CHECK:       FINT {{r[0-9]+}}, 3, {{r[0-9]+}}
+define float @floor_short_to_integral(float %value) {
+  %result = call float @llvm.floor.f32(float %value)
+  ret float %result
+}
+
+; CHECK-LABEL: round_even_short_to_integral:
+; CHECK:       FINT {{r[0-9]+}}, 4, {{r[0-9]+}}
+define float @round_even_short_to_integral(float %value) {
+  %result = call float @llvm.roundeven.f32(float %value)
+  ret float %result
+}
+
+; CHECK-LABEL: rint_short_to_integral:
+; CHECK:       FINT {{r[0-9]+}}, 4, {{r[0-9]+}}
+define float @rint_short_to_integral(float %value) {
+  %result = call float @llvm.rint.f32(float %value)
+  ret float %result
+}
+
 ; f32 is memory-only: LDSF promotes it to the exact f64 register
 ; representation and STSF performs the required short-float rounding.
 ; CHECK-LABEL: load_short_float:
@@ -284,3 +321,8 @@ declare double @llvm.ceil.f64(double)
 declare double @llvm.floor.f64(double)
 declare double @llvm.roundeven.f64(double)
 declare double @llvm.rint.f64(double)
+declare float @llvm.trunc.f32(float)
+declare float @llvm.ceil.f32(float)
+declare float @llvm.floor.f32(float)
+declare float @llvm.roundeven.f32(float)
+declare float @llvm.rint.f32(float)

@@ -682,9 +682,11 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
     setOperationAction(Opcode, MVT::i64, Custom);
   for (unsigned Opcode : {ISD::FP_TO_SINT, ISD::FP_TO_UINT})
     setOperationAction(Opcode, MVT::i64, Custom);
-  for (unsigned Opcode :
-       {ISD::FTRUNC, ISD::FCEIL, ISD::FFLOOR, ISD::FROUNDEVEN, ISD::FRINT})
+  static constexpr unsigned FloatingIntegralOperations[] = {
+      ISD::FTRUNC, ISD::FCEIL, ISD::FFLOOR, ISD::FROUNDEVEN, ISD::FRINT};
+  for (unsigned Opcode : FloatingIntegralOperations)
     setOperationAction(Opcode, MVT::f64, Legal);
+  setOperationPromotedToType(FloatingIntegralOperations, MVT::f32, MVT::f64);
 
   for (unsigned Opcode : {ISD::FNEG, ISD::FABS, ISD::FCOPYSIGN})
     setOperationAction(Opcode, MVT::f64, Expand);
