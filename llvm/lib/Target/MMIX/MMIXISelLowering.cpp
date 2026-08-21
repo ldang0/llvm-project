@@ -725,8 +725,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
     setOperationAction(Opcode, MVT::i64, Custom);
 
   static constexpr unsigned AddressOperations[] = {
-      ISD::FRAMEADDR, ISD::RETURNADDR, ISD::DYNAMIC_STACKALLOC,
-      ISD::ADDRSPACECAST};
+      ISD::FRAMEADDR, ISD::RETURNADDR, ISD::ADDRSPACECAST};
   for (unsigned Opcode : AddressOperations)
     RejectOperation(Opcode, MVT::i64);
 
@@ -768,8 +767,9 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction(ISD::VACOPY, MVT::Other, Expand);
   setOperationAction(ISD::VAEND, MVT::Other, Expand);
-  RejectOperation(ISD::STACKSAVE, MVT::Other);
-  RejectOperation(ISD::STACKRESTORE, MVT::Other);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64, Expand);
+  setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
+  setOperationAction(ISD::STACKRESTORE, MVT::Other, Expand);
 }
 
 bool MMIXTargetLowering::allowsMisalignedMemoryAccesses(
@@ -993,14 +993,6 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
   }
   if (Op.getOpcode() == ISD::FP16_TO_FP || Op.getOpcode() == ISD::FP_TO_FP16)
     report_fatal_error("unsupported library call operation");
-  if (Op.getOpcode() == ISD::DYNAMIC_STACKALLOC)
-    reportFatalUsageError(
-        Twine("MMIX does not support dynamic stack allocation ") +
-        "in function '" + F.getName() + "'");
-  if (Op.getOpcode() == ISD::STACKSAVE || Op.getOpcode() == ISD::STACKRESTORE)
-    reportFatalUsageError(
-        Twine("MMIX does not support nonlocal stack state in ") + "function '" +
-        F.getName() + "'");
   if (Op.getOpcode() == ISD::ADDRSPACECAST)
     reportFatalUsageError(
         Twine("MMIX does not support nonzero address spaces in function '") +

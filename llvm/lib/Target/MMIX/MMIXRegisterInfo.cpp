@@ -90,12 +90,11 @@ static unsigned getRegisterOffsetOpcode(unsigned Opcode) {
 bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                            int SPAdj, unsigned FIOperandNum,
                                            RegScavenger *) const {
-  if (SPAdj)
-    report_fatal_error("MMIX requires a reserved call frame");
-
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
   const auto *TFI = MF.getSubtarget().getFrameLowering();
+  if (SPAdj && !TFI->hasFP(MF))
+    report_fatal_error("MMIX cannot adjust an SP-relative frame index");
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   Register FrameReg;
   StackOffset Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg);

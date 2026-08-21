@@ -12,6 +12,7 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 
 #include <iterator>
@@ -22,8 +23,8 @@ MMIXFrameLowering::MMIXFrameLowering()
     : TargetFrameLowering(StackGrowsDown, Align(8), /*LocalAreaOffset=*/0,
                           Align(8)) {}
 
-bool MMIXFrameLowering::hasReservedCallFrame(const MachineFunction &) const {
-  return true;
+bool MMIXFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
+  return !MF.getFrameInfo().hasVarSizedObjects();
 }
 
 StackOffset
@@ -68,10 +69,6 @@ void MMIXFrameLowering::processFunctionBeforeFrameFinalized(
 static void validateFrame(const MachineFunction &MF,
                           const MMIXFrameLowering &TFI) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  if (MFI.hasVarSizedObjects())
-    reportFatalUsageError(
-        Twine("MMIX does not support dynamic stack allocation ") +
-        "in function '" + MF.getName() + "'");
   if (MFI.getMaxAlign() > TFI.getStackAlign())
     reportFatalUsageError(Twine("MMIX does not support stack realignment in ") +
                           "function '" + MF.getName() + "'");
@@ -127,8 +124,17 @@ void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
   DebugLoc DL = MBBI == MBB.end() ? DebugLoc() : MBBI->getDebugLoc();
   const auto &MMIXII =
       *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
-  MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254, int64_t(StackSize),
-                   MachineInstr::FrameDestroy);
+  if (MF.getFrameInfo().hasVarSizedObjects()) {
+    MachineBasicBlock::iterator FirstRestore = MBBI;
+    ArrayRef<CalleeSavedInfo> CSI = MF.getFrameInfo().getCalleeSavedInfo();
+    if (!CSI.empty())
+      FirstRestore = std::prev(MBBI, CSI.size());
+    MMIXII.adjustReg(MBB, FirstRestore, DL, MMIX::R254, MMIX::R253, 0,
+                     MachineInstr::FrameDestroy);
+  } else {
+    MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254,
+                     int64_t(StackSize), MachineInstr::FrameDestroy);
+  }
   if (MF.getFrameInfo().hasCalls())
     BuildMI(MBB, MBBI, DL, MMIXII.get(MMIX::PUT), MMIX::RJ)
         .addReg(MMIX::R30)
@@ -136,13 +142,22 @@ void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
 }
 
 MachineBasicBlock::iterator MMIXFrameLowering::eliminateCallFramePseudoInstr(
-    MachineFunction &, MachineBasicBlock &MBB,
+    MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI) const {
+  if (!hasReservedCallFrame(MF)) {
+    int64_t Amount = alignTo(MI->getOperand(0).getImm(), getStackAlign());
+    if (MI->getOpcode() == MMIX::ADJCALLSTACKDOWN)
+      Amount = -Amount;
+    const auto &MMIXII = *static_cast<const MMIXInstrInfo *>(
+        MF.getSubtarget().getInstrInfo());
+    MMIXII.adjustReg(MBB, MI, MI->getDebugLoc(), MMIX::R254, MMIX::R254,
+                     Amount);
+  }
   return MBB.erase(MI);
 }
 
 bool MMIXFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-         MFI.isFrameAddressTaken();
+         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
 }

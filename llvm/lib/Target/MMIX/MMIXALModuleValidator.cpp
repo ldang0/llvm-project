@@ -480,6 +480,11 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
   for (const Function &F : M)
     for (const BasicBlock &BB : F)
       for (const Instruction &I : BB) {
+        if (const auto *Alloca = dyn_cast<AllocaInst>(&I);
+            Alloca && !Alloca->isStaticAlloca())
+          return createStringError(
+              Twine("MMIXAL output variant 1 does not support dynamic stack ") +
+              "allocation in function '" + F.getName() + "'");
         if (isMMIXALExceptionInstruction(I))
           return createStringError(
               Twine("MMIXAL output variant 1 does not support exception ") +
@@ -492,6 +497,10 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
             return std::move(Err);
           if (const Function *Callee = Call->getCalledFunction()) {
             Intrinsic::ID ID = Callee->getIntrinsicID();
+            if (ID == Intrinsic::stacksave || ID == Intrinsic::stackrestore)
+              return createStringError(
+                  Twine("MMIXAL output variant 1 does not support dynamic ") +
+                  "stack state in function '" + F.getName() + "'");
             if (ID == Intrinsic::thread_pointer ||
                 ID == Intrinsic::threadlocal_address) {
               StringRef Name = ID == Intrinsic::thread_pointer

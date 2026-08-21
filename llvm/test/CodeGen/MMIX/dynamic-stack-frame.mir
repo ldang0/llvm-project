@@ -1,0 +1,48 @@
+# RUN: llc -mtriple=mmix -run-pass=prolog-epilog -verify-machineinstrs \
+# RUN:   -o - %s | FileCheck %s
+
+# CHECK-LABEL: name: dynamic_frame
+# CHECK: stackSize: 16
+# CHECK: maxCallFrameSize: 24
+# CHECK: body:
+# CHECK-NEXT: bb.0:
+# CHECK-NEXT: $r30 = frame-setup GET $rj
+# CHECK-NEXT: $r254 = frame-setup SUBUI $r254, 16
+# CHECK-NEXT: STOUI killed $r253, $r254, 8
+# CHECK-NEXT: $r253 = frame-setup ADDUI $r254, 16
+# CHECK: $r255 = NEGUI 0, 16
+# CHECK-NEXT: STOU $r250, $r253, killed $r255
+# CHECK: $r254 = SUBUI $r254, 24
+# CHECK-NEXT: CALL_STATE @callee, csr_mmix
+# CHECK-NEXT: $r254 = ADDUI $r254, 24
+# CHECK: $r254 = frame-destroy ORI $r253, 0
+# CHECK-NEXT: $r255 = NEGUI 0, 8
+# CHECK-NEXT: $r253 = LDOU $r253, killed $r255
+# CHECK-NEXT: $rj = frame-destroy PUT $r30
+# CHECK-NEXT: POP 0, 0
+
+--- |
+  declare void @callee()
+
+  define void @dynamic_frame() {
+    ret void
+  }
+...
+---
+name:            dynamic_frame
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+  adjustsStack: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+  - { id: 1, type: variable-sized, alignment: 8 }
+body:             |
+  bb.0:
+    $r250 = SETL 1
+    STOUI $r250, %stack.0, 0
+    ADJCALLSTACKDOWN 24, 0, implicit-def $r254, implicit $r254
+    CALL_STATE @callee, csr_mmix
+    ADJCALLSTACKUP 24, 0, implicit-def $r254, implicit $r254
+    POP 0, 0
+...
