@@ -65,6 +65,7 @@ void MMIXTargetInfo::getTargetDefines(const LangOptions &,
   Builder.defineMacro("__mmix__");
   Builder.defineMacro("__MMIX__");
   Builder.defineMacro("__MMIX_ABI_GNU__");
+  Builder.defineMacro("__STDC_NO_THREADS__");
 }
 
 bool MMIXTargetInfo::initFeatureMap(

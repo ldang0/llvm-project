@@ -15,8 +15,7 @@
 
 #if defined(TEST_INT128)
 __int128 unsupported(__int128 value) { return value; }
-// INT128: error: MMIX GNU ABI does not support return type '__int128'
-// INT128: error: MMIX GNU ABI does not support argument type '__int128'
+// INT128-COUNT-2: error: __int128 is not supported on this target
 #elif defined(TEST_COMPLEX)
 _Complex int unsupported(_Complex int value) { return value; }
 // COMPLEX: error: MMIX GNU ABI does not support return type '_Complex int'
@@ -38,6 +37,5 @@ as1_int *unsupported(as1_int *value) { return value; }
 #elif defined(TEST_INDIRECT_CALL)
 typedef __int128 (*unsupported_function)(__int128);
 void call_unsupported(unsupported_function fn) { (void)fn(0); }
-// CALL: error: MMIX GNU ABI does not support return type '__int128'
-// CALL: error: MMIX GNU ABI does not support argument type '__int128'
+// CALL-COUNT-2: error: __int128 is not supported on this target
 #endif

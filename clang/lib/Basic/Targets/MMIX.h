@@ -78,6 +78,8 @@ public:
 
   bool hasFeature(StringRef Feature) const override;
 
+  bool hasInt128Type() const override { return false; }
+
   bool isValidCPUName(StringRef Name) const override;
 
   void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override;

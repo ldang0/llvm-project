@@ -21,7 +21,7 @@ long unsupported(int named, ...) {
   __builtin_va_start(ap, named);
   return (long)__builtin_va_arg(ap, __int128);
 }
-// INT128-ERR: error: MMIX GNU ABI does not support va_arg type '__int128'
+// INT128-ERR: error: __int128 is not supported on this target
 #elif defined(COMPLEX)
 long unsupported(int named, ...) {
   __builtin_va_list ap;

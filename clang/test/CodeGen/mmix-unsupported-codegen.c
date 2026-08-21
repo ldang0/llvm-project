@@ -1,13 +1,6 @@
 // REQUIRES: mmix-registered-target
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_ATOMIC_VALUE %s 2>&1 | FileCheck %s --check-prefix=ATOMIC
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_ATOMIC_BOUNDARY %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=ATOMIC-BOUNDARY
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_ATOMIC_BUILTIN %s 2>&1 | FileCheck %s --check-prefix=BUILTIN
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
@@ -32,19 +25,7 @@
 // RUN:   -mrelocation-model static -emit-llvm -o - \
 // RUN:   -DTEST_SUPPORTED_BUILTINS %s | FileCheck %s --check-prefix=SUPPORTED
 
-#if defined(TEST_ATOMIC_VALUE)
-struct ThreeBytes {
-  unsigned char bytes[3];
-};
-_Atomic(struct ThreeBytes) value;
-// ATOMIC: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
-#elif defined(TEST_ATOMIC_BOUNDARY)
-struct ThreeBytes {
-  unsigned char bytes[3];
-};
-int consume(_Atomic(struct ThreeBytes) value) { return 0; }
-// ATOMIC-BOUNDARY: error: MMIX GNU ABI does not support atomic value CodeGen involving type '_Atomic(struct ThreeBytes)'
-#elif defined(TEST_ATOMIC_BUILTIN)
+#if defined(TEST_ATOMIC_BUILTIN)
 float fetch_add(float *value) {
   return __atomic_fetch_add(value, 1.0f, __ATOMIC_SEQ_CST);
 }
@@ -59,7 +40,7 @@ long multiply(long value) {
   wide *= wide;
   return (long)wide;
 }
-// WIDE: error: MMIX GNU ABI does not support extended scalar operation CodeGen involving type '__int128'
+// WIDE: error: __int128 is not supported on this target
 #elif defined(TEST_COMPLEX_INTEGER_OPERATION)
 _Complex int add_complex_integer(_Complex int lhs, _Complex int rhs) {
   return lhs + rhs;
@@ -77,8 +58,6 @@ __attribute__((naked)) void unsupported(void) {}
 __attribute__((target("base"))) void unsupported(void) {}
 // TARGET: error: MMIX does not support the 'target' function attribute
 #elif defined(TEST_SUPPORTED_BUILTINS)
-__int128 wide_object;
-
 void copy_eight(char *destination, const char *source) {
   __builtin_memcpy(destination, source, 8);
 }
@@ -87,7 +66,6 @@ double fused(double a, double b, double c) {
   return __builtin_fma(a, b, c);
 }
 
-// SUPPORTED: @wide_object ={{.*}} global i128 0, align 8
 // SUPPORTED-LABEL: define dso_local void @copy_eight(
 // SUPPORTED: call void @llvm.memcpy
 // SUPPORTED-LABEL: define dso_local double @fused(

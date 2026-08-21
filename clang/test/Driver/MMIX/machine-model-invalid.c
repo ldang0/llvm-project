@@ -27,7 +27,7 @@
 // RUN: not test -s %t.pie.o
 
 // Source types that cannot cross or inhabit the frozen C machine model retain
-// their frontend-owned diagnostics through the public Driver path.
+// their target or frontend-owned diagnostics through the public Driver path.
 // RUN: not %clang --target=mmix-unknown-unknown -ffreestanding -std=gnu2x \
 // RUN:   -DTEST_HALF -fsyntax-only %S/Inputs/machine-model-invalid.c 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=HALF
@@ -48,7 +48,6 @@
 // CODE-MODEL: error: unsupported argument 'large' to option '-mcmodel=' for target 'mmix-unknown-unknown'
 // PIC: fatal error: error in backend: MMIX supports only the static relocation model
 // HALF: error: _Float16 is not supported on this target
-// WIDE: error: MMIX GNU ABI does not support return type '__int128'
-// WIDE: error: MMIX GNU ABI does not support argument type '__int128'
+// WIDE-COUNT-2: error: __int128 is not supported on this target
 // ADDRESS-SPACE: error: MMIX GNU ABI does not support return type 'as1_int *'
 // ADDRESS-SPACE: error: MMIX GNU ABI does not support argument type 'as1_int *'
