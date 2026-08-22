@@ -17,9 +17,9 @@ namespace toolchains {
 namespace mmix {
 namespace qemu {
 
-std::optional<ExecutionPlatformLinkerInputs>
-getLinkerInputs(const ToolChain &TC, const llvm::opt::ArgList &Args,
-                llvm::StringRef LibraryPath);
+std::optional<ExecutionPlatformInputs> getInputs(const ToolChain &TC,
+                                                 const llvm::opt::ArgList &Args,
+                                                 llvm::StringRef LibraryPath);
 
 } // namespace qemu
 } // namespace mmix

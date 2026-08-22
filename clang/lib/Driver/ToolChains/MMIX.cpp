@@ -107,13 +107,6 @@ static bool isRegularFile(const ToolChain &TC, StringRef Path) {
   return Status && Status->isRegularFile();
 }
 
-static bool requireFile(Compilation &C, const ToolChain &TC, StringRef Path) {
-  if (isRegularFile(TC, Path))
-    return true;
-  C.getDriver().Diag(diag::err_drv_no_such_file) << Path;
-  return false;
-}
-
 class StaticLinker final : public Tool {
 public:
   StaticLinker(const ToolChain &TC)
@@ -144,8 +137,8 @@ public:
     std::string DefaultScript;
     SmallVector<std::string, 3> StartFiles;
     std::string TerminationFile;
+    SmallVector<std::string, 1> PlatformLibraries;
     std::string LibC;
-    std::string LibGloss;
     std::string Builtins;
     std::string Atomic;
     std::string StackProtector;
@@ -159,11 +152,12 @@ public:
       }
 
       mmix::ExecutionPlatform Platform = mmix::getExecutionPlatform();
-      if (auto LinkerInputs = mmix::getExecutionPlatformLinkerInputs(
+      if (auto PlatformInputs = mmix::getExecutionPlatformInputs(
               Platform, TC, Args, LibraryPath)) {
-        DefaultScript = std::move(LinkerInputs->DefaultLinkerScript);
-        StartFiles = std::move(LinkerInputs->StartFiles);
-        TerminationFile = std::move(LinkerInputs->TerminationFile);
+        DefaultScript = std::move(PlatformInputs->DefaultLinkerScript);
+        StartFiles = std::move(PlatformInputs->StartFiles);
+        TerminationFile = std::move(PlatformInputs->TerminationFile);
+        PlatformLibraries = std::move(PlatformInputs->ServiceLibraries);
       } else {
         InputsValid = false;
       }
@@ -186,9 +180,6 @@ public:
       }
 
       if (AddDefaultLibraries) {
-        LibGloss =
-            mmix::getExecutionPlatformServiceLibrary(Platform, LibraryPath);
-        InputsValid &= requireFile(C, TC, LibGloss);
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
         StackProtector =
@@ -222,7 +213,8 @@ public:
     if (AddDefaultLibraries) {
       CmdArgs.push_back("--start-group");
       CmdArgs.push_back(Args.MakeArgString(LibC));
-      CmdArgs.push_back(Args.MakeArgString(LibGloss));
+      for (const std::string &PlatformLibrary : PlatformLibraries)
+        CmdArgs.push_back(Args.MakeArgString(PlatformLibrary));
       CmdArgs.push_back(Args.MakeArgString(Builtins));
       CmdArgs.push_back(Args.MakeArgString(Atomic));
       CmdArgs.push_back(Args.MakeArgString(StackProtector));

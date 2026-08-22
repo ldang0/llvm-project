@@ -9,7 +9,9 @@
 #include "MMIXQEMU.h"
 #include "clang/Basic/DiagnosticDriver.h"
 #include "clang/Driver/Driver.h"
+#include "clang/Driver/ToolChain.h"
 #include "clang/Options/Options.h"
+#include "llvm/Option/ArgList.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/VirtualFileSystem.h"
 
@@ -36,10 +38,10 @@ static bool requireFile(const ToolChain &TC, StringRef Path) {
 
 } // namespace
 
-std::optional<mmix::ExecutionPlatformLinkerInputs>
-mmix::qemu::getLinkerInputs(const ToolChain &TC, const ArgList &Args,
-                            StringRef LibraryPath) {
-  ExecutionPlatformLinkerInputs Inputs;
+std::optional<mmix::ExecutionPlatformInputs>
+mmix::qemu::getInputs(const ToolChain &TC, const ArgList &Args,
+                      StringRef LibraryPath) {
+  ExecutionPlatformInputs Inputs;
   bool InputsValid = true;
 
   if (!Args.hasArg(options::OPT_T_Group)) {
@@ -62,6 +64,12 @@ mmix::qemu::getLinkerInputs(const ToolChain &TC, const ArgList &Args,
     std::string CRTN = getInputPath(LibraryPath, "crtn.o");
     if (TC.getVFS().exists(CRTN))
       Inputs.TerminationFile = std::move(CRTN);
+  }
+
+  if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
+    std::string LibGloss = getInputPath(LibraryPath, "libgloss.a");
+    InputsValid &= requireFile(TC, LibGloss);
+    Inputs.ServiceLibraries.push_back(std::move(LibGloss));
   }
 
   if (!InputsValid)
