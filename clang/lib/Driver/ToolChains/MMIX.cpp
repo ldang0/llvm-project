@@ -131,9 +131,6 @@ public:
     const ToolChain &TC = getToolChain();
     const Driver &D = TC.getDriver();
     const bool IsHosted = !D.SysRoot.empty();
-    const bool AddStartFiles =
-        IsHosted &&
-        !Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles);
     const bool AddDefaultLibraries =
         IsHosted &&
         !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
@@ -145,10 +142,8 @@ public:
 
     std::string LibraryPath;
     std::string DefaultScript;
-    std::string CRT0;
-    std::string TripVectors;
-    std::string CRTI;
-    std::string CRTN;
+    SmallVector<std::string, 3> StartFiles;
+    std::string TerminationFile;
     std::string LibC;
     std::string LibGloss;
     std::string Builtins;
@@ -163,24 +158,14 @@ public:
         return;
       }
 
-      mmix::ExecutionPlatformInputs PlatformInputs =
-          mmix::getExecutionPlatformInputs(mmix::getExecutionPlatform(),
-                                           LibraryPath);
-
-      if (!Args.hasArg(options::OPT_T_Group))
-        DefaultScript = PlatformInputs.DefaultLinkerScript;
-      if (!DefaultScript.empty())
-        InputsValid &= requireFile(C, TC, DefaultScript);
-
-      if (AddStartFiles) {
-        CRT0 = PlatformInputs.StartupObject;
-        TripVectors = PlatformInputs.TripVectorObject;
-        InputsValid &= requireFile(C, TC, CRT0);
-        InputsValid &= requireFile(C, TC, TripVectors);
-        if (TC.getVFS().exists(PlatformInputs.InitObject))
-          CRTI = PlatformInputs.InitObject;
-        if (TC.getVFS().exists(PlatformInputs.FiniObject))
-          CRTN = PlatformInputs.FiniObject;
+      mmix::ExecutionPlatform Platform = mmix::getExecutionPlatform();
+      if (auto LinkerInputs = mmix::getExecutionPlatformLinkerInputs(
+              Platform, TC, Args, LibraryPath)) {
+        DefaultScript = std::move(LinkerInputs->DefaultLinkerScript);
+        StartFiles = std::move(LinkerInputs->StartFiles);
+        TerminationFile = std::move(LinkerInputs->TerminationFile);
+      } else {
+        InputsValid = false;
       }
 
       switch (TC.GetCStdlibType(Args)) {
@@ -201,7 +186,8 @@ public:
       }
 
       if (AddDefaultLibraries) {
-        LibGloss = PlatformInputs.ServiceLibrary;
+        LibGloss =
+            mmix::getExecutionPlatformServiceLibrary(Platform, LibraryPath);
         InputsValid &= requireFile(C, TC, LibGloss);
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
@@ -230,12 +216,8 @@ public:
     } else {
       Args.addAllArgs(CmdArgs, {options::OPT_T_Group});
     }
-    if (AddStartFiles) {
-      CmdArgs.push_back(Args.MakeArgString(CRT0));
-      CmdArgs.push_back(Args.MakeArgString(TripVectors));
-      if (!CRTI.empty())
-        CmdArgs.push_back(Args.MakeArgString(CRTI));
-    }
+    for (const std::string &StartFile : StartFiles)
+      CmdArgs.push_back(Args.MakeArgString(StartFile));
     tools::AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
     if (AddDefaultLibraries) {
       CmdArgs.push_back("--start-group");
@@ -246,8 +228,8 @@ public:
       CmdArgs.push_back(Args.MakeArgString(StackProtector));
       CmdArgs.push_back("--end-group");
     }
-    if (!CRTN.empty())
-      CmdArgs.push_back(Args.MakeArgString(CRTN));
+    if (!TerminationFile.empty())
+      CmdArgs.push_back(Args.MakeArgString(TerminationFile));
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
 

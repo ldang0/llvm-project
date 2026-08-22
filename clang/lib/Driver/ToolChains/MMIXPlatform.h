@@ -9,8 +9,11 @@
 #ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXPLATFORM_H
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXPLATFORM_H
 
-#include "llvm/ADT/StringRef.h"
+#include "clang/Driver/ToolChain.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Option/ArgList.h"
 
+#include <optional>
 #include <string>
 
 namespace clang {
@@ -20,18 +23,18 @@ namespace mmix {
 
 enum class ExecutionPlatform { QEMU };
 
-struct ExecutionPlatformInputs {
+struct ExecutionPlatformLinkerInputs {
   std::string DefaultLinkerScript;
-  std::string StartupObject;
-  std::string TripVectorObject;
-  std::string InitObject;
-  std::string FiniObject;
-  std::string ServiceLibrary;
+  llvm::SmallVector<std::string, 3> StartFiles;
+  std::string TerminationFile;
 };
 
 ExecutionPlatform getExecutionPlatform();
-ExecutionPlatformInputs getExecutionPlatformInputs(ExecutionPlatform Platform,
-                                                   llvm::StringRef LibraryPath);
+std::optional<ExecutionPlatformLinkerInputs> getExecutionPlatformLinkerInputs(
+    ExecutionPlatform Platform, const ToolChain &TC,
+    const llvm::opt::ArgList &Args, llvm::StringRef LibraryPath);
+std::string getExecutionPlatformServiceLibrary(ExecutionPlatform Platform,
+                                               llvm::StringRef LibraryPath);
 
 } // namespace mmix
 } // namespace toolchains

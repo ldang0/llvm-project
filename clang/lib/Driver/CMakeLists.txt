@@ -82,6 +82,7 @@ add_clang_library(clangDriver
   ToolChains/MMIX.cpp
   ToolChains/MMIXNewlib.cpp
   ToolChains/MMIXPlatform.cpp
+  ToolChains/MMIXQEMU.cpp
   ToolChains/MSP430.cpp
   ToolChains/MSVC.cpp
   ToolChains/NetBSD.cpp
