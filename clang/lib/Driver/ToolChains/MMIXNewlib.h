@@ -11,6 +11,9 @@
 
 #include "clang/Driver/ToolChain.h"
 
+#include <optional>
+#include <string>
+
 namespace clang {
 namespace driver {
 namespace toolchains {
@@ -19,6 +22,11 @@ namespace mmix {
 void addNewlibSystemIncludeArgs(const ToolChain &TC,
                                 const llvm::opt::ArgList &DriverArgs,
                                 llvm::opt::ArgStringList &CC1Args);
+std::optional<std::string> getNewlibLibCPath(const ToolChain &TC,
+                                             StringRef LibraryPath);
+bool validateNewlibExplicitLibraries(const ToolChain &TC,
+                                     const llvm::opt::ArgList &Args,
+                                     StringRef LibraryPath);
 
 } // namespace mmix
 } // namespace toolchains

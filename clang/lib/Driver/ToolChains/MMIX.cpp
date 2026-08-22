@@ -15,7 +15,6 @@
 #include "clang/Driver/Job.h"
 #include "clang/Driver/Tool.h"
 #include "clang/Options/Options.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Path.h"
@@ -185,8 +184,24 @@ public:
           CRTN = std::move(Candidate);
       }
 
+      switch (TC.GetCStdlibType(Args)) {
+      case ToolChain::CST_Newlib:
+        if (AddDefaultLibraries) {
+          if (auto Path = mmix::getNewlibLibCPath(TC, LibraryPath))
+            LibC = std::move(*Path);
+          else
+            InputsValid = false;
+        }
+        InputsValid &=
+            mmix::validateNewlibExplicitLibraries(TC, Args, LibraryPath);
+        break;
+      case ToolChain::CST_Picolibc:
+      case ToolChain::CST_LLVMLibC:
+      case ToolChain::CST_System:
+        llvm_unreachable("unsupported MMIX C library survived validation");
+      }
+
       if (AddDefaultLibraries) {
-        LibC = GetSysrootFile("libc.a", /*Required=*/true);
         LibGloss = GetSysrootFile("libgloss.a", /*Required=*/true);
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
@@ -195,20 +210,6 @@ public:
         InputsValid &= isRegularFile(TC, Builtins);
         InputsValid &= isRegularFile(TC, Atomic);
         InputsValid &= isRegularFile(TC, StackProtector);
-      }
-
-      if (llvm::is_contained(Args.getAllArgValues(options::OPT_l), "m")) {
-        bool FoundLibM = false;
-        for (StringRef SearchPath : Args.getAllArgValues(options::OPT_L)) {
-          SmallString<128> Candidate(SearchPath);
-          llvm::sys::path::append(Candidate, "libm.a");
-          FoundLibM |= isRegularFile(TC, Candidate);
-        }
-        SmallString<128> SysrootLibM(LibraryPath);
-        llvm::sys::path::append(SysrootLibM, "libm.a");
-        FoundLibM |= isRegularFile(TC, SysrootLibM);
-        if (!FoundLibM)
-          InputsValid &= requireFile(C, TC, SysrootLibM);
       }
     }
 
