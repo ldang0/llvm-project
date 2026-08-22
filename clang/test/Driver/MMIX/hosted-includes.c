@@ -9,6 +9,11 @@
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=PATHS
+// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   --cstdlib=newlib -I %t.dir/explicit -fsyntax-only %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=PATHS \
+// RUN:       --implicit-check-not='argument unused'
 // RUN: %clang -### --target=mmix-unknown-elf \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \

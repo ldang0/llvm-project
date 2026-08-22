@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIX.h"
+#include "MMIXNewlib.h"
 #include "clang/Basic/DiagnosticDriver.h"
 #include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
@@ -16,6 +17,7 @@
 #include "clang/Options/Options.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/VirtualFileSystem.h"
 
@@ -347,16 +349,15 @@ void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
     addSystemInclude(DriverArgs, CC1Args, ResourceInclude);
   }
 
-  if (DriverArgs.hasArg(options::OPT_nostdlibinc))
+  switch (GetCStdlibType(DriverArgs)) {
+  case ToolChain::CST_Newlib:
+    mmix::addNewlibSystemIncludeArgs(*this, DriverArgs, CC1Args);
     return;
-
-  SmallString<128> NewlibInclude(D.SysRoot);
-  llvm::sys::path::append(NewlibInclude, "usr", "include");
-  if (!isDirectory(*this, NewlibInclude)) {
-    D.Diag(diag::err_drv_no_such_file) << NewlibInclude;
-    return;
+  case ToolChain::CST_Picolibc:
+  case ToolChain::CST_LLVMLibC:
+  case ToolChain::CST_System:
+    llvm_unreachable("unsupported MMIX C library survived validation");
   }
-  addSystemInclude(DriverArgs, CC1Args, NewlibInclude);
 }
 
 void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
