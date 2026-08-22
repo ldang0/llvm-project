@@ -8,6 +8,7 @@
 
 #include "MMIX.h"
 #include "MMIXNewlib.h"
+#include "MMIXPlatform.h"
 #include "clang/Basic/DiagnosticDriver.h"
 #include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
@@ -155,14 +156,6 @@ public:
     std::string StackProtector;
     bool InputsValid = true;
 
-    auto GetSysrootFile = [&](StringRef Name, bool Required) {
-      SmallString<128> Path(LibraryPath);
-      llvm::sys::path::append(Path, Name);
-      if (Required)
-        InputsValid &= requireFile(C, TC, Path);
-      return std::string(Path);
-    };
-
     if (IsHosted) {
       LibraryPath = getSysrootLibraryPath(D);
       if (!isDirectory(TC, LibraryPath)) {
@@ -170,18 +163,24 @@ public:
         return;
       }
 
+      mmix::ExecutionPlatformInputs PlatformInputs =
+          mmix::getExecutionPlatformInputs(mmix::getExecutionPlatform(),
+                                           LibraryPath);
+
       if (!Args.hasArg(options::OPT_T_Group))
-        DefaultScript = GetSysrootFile("mmix-qemu.ld", /*Required=*/true);
+        DefaultScript = PlatformInputs.DefaultLinkerScript;
+      if (!DefaultScript.empty())
+        InputsValid &= requireFile(C, TC, DefaultScript);
 
       if (AddStartFiles) {
-        CRT0 = GetSysrootFile("crt0.o", /*Required=*/true);
-        TripVectors = GetSysrootFile("trip-vectors.o", /*Required=*/true);
-        std::string Candidate = GetSysrootFile("crti.o", /*Required=*/false);
-        if (TC.getVFS().exists(Candidate))
-          CRTI = std::move(Candidate);
-        Candidate = GetSysrootFile("crtn.o", /*Required=*/false);
-        if (TC.getVFS().exists(Candidate))
-          CRTN = std::move(Candidate);
+        CRT0 = PlatformInputs.StartupObject;
+        TripVectors = PlatformInputs.TripVectorObject;
+        InputsValid &= requireFile(C, TC, CRT0);
+        InputsValid &= requireFile(C, TC, TripVectors);
+        if (TC.getVFS().exists(PlatformInputs.InitObject))
+          CRTI = PlatformInputs.InitObject;
+        if (TC.getVFS().exists(PlatformInputs.FiniObject))
+          CRTN = PlatformInputs.FiniObject;
       }
 
       switch (TC.GetCStdlibType(Args)) {
@@ -202,7 +201,8 @@ public:
       }
 
       if (AddDefaultLibraries) {
-        LibGloss = GetSysrootFile("libgloss.a", /*Required=*/true);
+        LibGloss = PlatformInputs.ServiceLibrary;
+        InputsValid &= requireFile(C, TC, LibGloss);
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
         StackProtector =
