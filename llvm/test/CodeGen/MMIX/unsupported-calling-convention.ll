@@ -3,8 +3,8 @@
 ; RUN: not llc -mtriple=mmix -filetype=obj %s -o %t.o 2>&1 | FileCheck %s
 ; RUN: test ! -s %t.o
 
-; CHECK: LLVM ERROR: MMIX supports only the C calling convention in function 'unsupported_fastcc'
+; CHECK: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'unsupported_coldcc'
 
-define fastcc void @unsupported_fastcc() {
+define coldcc void @unsupported_coldcc() {
   ret void
 }

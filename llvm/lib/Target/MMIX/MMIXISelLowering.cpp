@@ -9,6 +9,7 @@
 #include "MMIXISelLowering.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXAggregateABI.h"
+#include "MMIXCallingConv.h"
 #include "MMIXMachineFunctionInfo.h"
 #include "MMIXSubtarget.h"
 #include "llvm/CodeGen/Analysis.h"
@@ -1631,9 +1632,9 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     reportFatalUsageError(
         Twine("MMIX does not support required tail calls in ") + "function '" +
         MF.getName() + "'");
-  if (CLI.CallConv != CallingConv::C)
+  if (!isSupportedMMIXCallingConv(CLI.CallConv))
     reportFatalUsageError(
-        Twine("MMIX supports only the C calling convention in ") +
+        Twine("MMIX supports only C and Fast calling conventions in ") +
         "function '" + MF.getName() + "'");
   validateMMIXVariadicCallOperands(CLI, MF.getName());
   if (!isSupportedMMIXABIType(CLI.OrigRetTy))
@@ -1960,10 +1961,10 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
           Twine("MMIX does not support raw LLVM va_arg in function '") +
           F.getName() + "'; expand va_list traversal explicitly");
     if (const auto *Call = dyn_cast<CallBase>(&I)) {
-      if (Call->getCallingConv() != CallingConv::C)
-        reportFatalUsageError(
-            Twine("MMIX supports only the C calling convention in function '") +
-            F.getName() + "'");
+      if (!isSupportedMMIXCallingConv(Call->getCallingConv()))
+        reportFatalUsageError(Twine("MMIX supports only C and Fast calling "
+                                    "conventions in function '") +
+                              F.getName() + "'");
       if (const Function *Callee = Call->getCalledFunction()) {
         Intrinsic::ID ID = Callee->getIntrinsicID();
         if (isMMIXNonlocalControlIntrinsic(ID))
@@ -1977,9 +1978,10 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     reportFatalUsageError(
         Twine("MMIX does not support exception handling in function '") +
         F.getName() + "'");
-  if (CallConv != CallingConv::C)
+  if (!isSupportedMMIXCallingConv(CallConv))
     reportFatalUsageError(
-        Twine("MMIX supports only the C calling convention in function '") +
+        Twine(
+            "MMIX supports only C and Fast calling conventions in function '") +
         F.getName() + "'");
   SmallVector<ISD::InputArg, 16> ABIIns;
   SmallVector<MMIXFormalArgMapping, 16> ArgMappings;
@@ -2206,13 +2208,13 @@ bool MMIXTargetLowering::CanLowerReturn(
       const_cast<Type *>(RetTy), Outs.size());
   if (Classification.Kind == MMIXAggregateABIKind::Empty)
     return Classification.isValid() && Outs.empty() &&
-           CallConv == CallingConv::C;
+           isSupportedMMIXCallingConv(CallConv);
 
   if (Classification.Kind == MMIXAggregateABIKind::DirectResult) {
     // Do not let SelectionDAG silently demote an unsupported direct aggregate
     // to sret. LowerReturn owns the stable diagnostic for that ABI boundary.
     if (!Classification.isValid())
-      return CallConv == CallingConv::C;
+      return isSupportedMMIXCallingConv(CallConv);
     for (const ISD::OutputArg &Result : Outs)
       if (!isSupportedCallValueType(Result.VT))
         return false;
@@ -2238,7 +2240,7 @@ bool MMIXTargetLowering::CanLowerReturn(
     }
     SmallVector<CCValAssign, 2> RetLocs;
     CCState CCInfo(CallConv, IsVarArg, MF, RetLocs, Context);
-    return CallConv == CallingConv::C &&
+    return isSupportedMMIXCallingConv(CallConv) &&
            CCInfo.CheckReturn(ABIOuts, RetCC_MMIX);
   }
 
@@ -2248,9 +2250,9 @@ bool MMIXTargetLowering::CanLowerReturn(
        (RetTy->isIntegerTy() && RetTy->getIntegerBitWidth() <= 64) ||
        (RetTy->isPointerTy() && RetTy->getPointerAddressSpace() == 0) ||
        RetTy->isFloatTy() || RetTy->isDoubleTy());
-  if (CallConv != CallingConv::C)
+  if (!isSupportedMMIXCallingConv(CallConv))
     return false;
-  // Claim unsupported C results so LowerReturn owns the target diagnostic
+  // Claim unsupported results so LowerReturn owns the target diagnostic
   // instead of allowing SelectionDAG to silently demote them to sret.
   if (Outs.size() > 1 || !SupportedType)
     return true;
@@ -2267,9 +2269,10 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                 const SmallVectorImpl<SDValue> &OutVals,
                                 const SDLoc &DL, SelectionDAG &DAG) const {
   const Function &F = DAG.getMachineFunction().getFunction();
-  if (CallConv != CallingConv::C)
+  if (!isSupportedMMIXCallingConv(CallConv))
     reportFatalUsageError(
-        Twine("MMIX supports only the C calling convention in function '") +
+        Twine(
+            "MMIX supports only C and Fast calling conventions in function '") +
         F.getName() + "'");
 
   if (!isSupportedMMIXABIType(F.getReturnType()))

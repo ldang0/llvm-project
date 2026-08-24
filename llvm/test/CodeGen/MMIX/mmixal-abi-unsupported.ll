@@ -52,7 +52,7 @@
 ; WIDE: LLVM ERROR: MMIX does not support ABI type 'i128' for call arguments in function 'wide_owner'
 ; DIRECT-AGGREGATE: LLVM ERROR: MMIXAL output variant 1 does not support direct aggregate call arguments in function 'direct_aggregate_owner'
 ; SRET: LLVM ERROR: MMIXAL output variant 1 does not support indirect aggregate call results in function 'sret_owner'
-; ALTERNATE-CC: LLVM ERROR: MMIX supports only the C calling convention in function 'alternate_cc_owner'
+; ALTERNATE-CC: LLVM ERROR: MMIXAL output variant 1 requires the C calling convention for calls in function 'alternate_cc_owner'
 ; MUSTTAIL: LLVM ERROR: MMIX does not support required tail calls in function 'musttail_owner'
 ; DYNAMIC-ALLOCA: LLVM ERROR: MMIXAL output variant 1 does not support dynamic stack allocation in function 'dynamic_owner'
 ; STACK-REALIGNMENT: LLVM ERROR: MMIX does not support stack realignment in function 'realignment_owner'

@@ -426,6 +426,17 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
   for (const Function &F : M) {
     if (F.isIntrinsic())
       continue;
+    if (F.getCallingConv() != CallingConv::C)
+      return createStringError(
+          Twine("MMIXAL output variant 1 requires the C calling convention ") +
+          "in function '" + F.getName() + "'");
+    for (const BasicBlock &BB : F)
+      for (const Instruction &I : BB)
+        if (const auto *Call = dyn_cast<CallBase>(&I);
+            Call && Call->getCallingConv() != CallingConv::C)
+          return createStringError(
+              Twine("MMIXAL output variant 1 requires the C calling ") +
+              "convention for calls in function '" + F.getName() + "'");
     if (Error Err = validateMMIXALAggregateABI(F))
       return std::move(Err);
     if (Error Err = validateMMIXALVariadicABI(F))

@@ -17,7 +17,7 @@
 
 ; Unsupported ABI-level call forms are rejected before they can be mistaken
 ; for a relocation strategy.
-; CALLING-CONVENTION: LLVM ERROR: MMIX supports only the C calling convention in function 'owner'
+; CALLING-CONVENTION: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'owner'
 
 ;--- misaligned.ll
 target triple = "mmix-unknown-elf"
@@ -34,9 +34,9 @@ define void @owner() {
 ;--- calling-convention.ll
 target triple = "mmix-unknown-elf"
 
-declare fastcc void @callee()
+declare coldcc void @callee()
 
 define void @owner() {
-  call fastcc void @callee()
+  call coldcc void @callee()
   ret void
 }

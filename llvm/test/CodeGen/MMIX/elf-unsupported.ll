@@ -66,7 +66,7 @@
 ; CODE-MODEL: LLVM ERROR: MMIX supports only the small code model
 ; TLS: LLVM ERROR: MMIX does not support thread-local storage in function 'owner'
 ; ADDRESS-SPACE: LLVM ERROR: MMIX does not support nonzero address spaces in function 'owner'
-; CALLING-CONVENTION: LLVM ERROR: MMIX supports only the C calling convention in function 'owner'
+; CALLING-CONVENTION: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'owner'
 ; SYMBOLIC-I24: LLVM ERROR: MMIX symbolic initializer for global 'symbolic_i24'
 ; SYMBOLIC-I24-SAME: uses unreviewed i24 storage;
 ; SPLIT-ADDRESS: error: unresolved MMIX split-address expression is not supported; use GETA with '%geta(...)'
@@ -106,7 +106,7 @@ define i64 @owner() {
 ;--- calling-convention.ll
 target triple = "mmix-unknown-elf"
 
-define fastcc void @owner() {
+define coldcc void @owner() {
   ret void
 }
 

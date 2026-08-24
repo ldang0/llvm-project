@@ -8,6 +8,7 @@
 
 #include "MMIXRegisterInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIXCallingConv.h"
 #include "MMIXFrameLowering.h"
 #include "MMIXInstrInfo.h"
 #include "llvm/ADT/BitVector.h"
@@ -31,7 +32,7 @@ MMIXRegisterInfo::getCalleeSavedRegs(const MachineFunction *) const {
 const uint32_t *
 MMIXRegisterInfo::getCallPreservedMask(const MachineFunction &,
                                        CallingConv::ID CC) const {
-  return CC == CallingConv::C ? CSR_MMIX_RegMask : nullptr;
+  return isSupportedMMIXCallingConv(CC) ? CSR_MMIX_RegMask : nullptr;
 }
 
 BitVector MMIXRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
