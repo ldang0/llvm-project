@@ -1924,8 +1924,9 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   bool IsCanonicalAssembly =
       getTargetMachine().getMCAsmInfo().getOutputAssemblerDialect() !=
       MMIXII::MMIXALAsmVariant;
-  if (TailCallRequested && Caller.getCallingConv() == CallingConv::C &&
-      CLI.CallConv == CallingConv::C && IsCanonicalAssembly) {
+  if (TailCallRequested &&
+      isSupportedMMIXCallingConv(Caller.getCallingConv()) &&
+      isSupportedMMIXCallingConv(CLI.CallConv) && IsCanonicalAssembly) {
     const Value *CallerSRet = getMMIXStructRetArgument(Caller);
     const Value *CalleeSRet = getMMIXStructRetArgument(CLI.CB);
     bool ForwardsSRet =
