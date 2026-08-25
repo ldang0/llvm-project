@@ -62,6 +62,26 @@ static bool callsBackward(const MachineInstr &MI) {
   llvm_unreachable("direct call target is outside its module");
 }
 
+static bool tailTargetIsBackward(const MachineInstr &MI) {
+  const Function &Source = MI.getMF()->getFunction();
+  if (!MI.getOperand(0).isGlobal())
+    return false;
+  const auto *Target = dyn_cast<Function>(MI.getOperand(0).getGlobal());
+  if (!Target || Target->isDeclaration() ||
+      Target->getSection() != Source.getSection())
+    return false;
+  if (&Source == Target)
+    return true;
+
+  for (const Function &Function : *Source.getParent()) {
+    if (&Function == Target)
+      return true;
+    if (&Function == &Source)
+      return false;
+  }
+  llvm_unreachable("direct tail target is outside its module");
+}
+
 const MCExpr *MMIXMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
                                                   MCSymbol *Symbol) const {
   const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Ctx);
@@ -157,6 +177,16 @@ MMIXMCInstLower::lowerAddressOperand(const MachineOperand &MO) const {
 void MMIXMCInstLower::lower(const MachineInstr &MI, MCInst &OutMI) const {
   unsigned Opcode = MI.getOpcode();
   unsigned PredicateOperand = ~0U;
+  if (Opcode == MMIX::PseudoMaterializedDirectTail ||
+      Opcode == MMIX::PseudoIndirectTail) {
+    unsigned CalleeOperand =
+        Opcode == MMIX::PseudoMaterializedDirectTail ? 1 : 0;
+    OutMI.setOpcode(MMIX::GOI);
+    OutMI.addOperand(MCOperand::createReg(MMIX::R255));
+    OutMI.addOperand(lowerOperand(MI.getOperand(CalleeOperand)));
+    OutMI.addOperand(MCOperand::createImm(0));
+    return;
+  }
   if (Opcode == MMIX::PseudoDirectCall) {
     MCOperand Callee = lowerOperand(MI.getOperand(1));
     assert(Callee.isExpr() &&
@@ -196,6 +226,8 @@ void MMIXMCInstLower::lower(const MachineInstr &MI, MCInst &OutMI) const {
     Opcode = callsBackward(MI) ? MMIX::PUSHJB : MMIX::PUSHJ;
   } else if (Opcode == MMIX::PseudoPUSHGO) {
     Opcode = MMIX::PUSHGOI;
+  } else if (Opcode == MMIX::PseudoDirectTail) {
+    Opcode = tailTargetIsBackward(MI) ? MMIX::JMPB : MMIX::JMP;
   }
   OutMI.setOpcode(Opcode);
   for (unsigned I = 0; I != MI.getNumOperands(); ++I) {

@@ -331,11 +331,26 @@ public:
       return;
     }
 
+    if (MI->getOpcode() == MMIX::PseudoMaterializedDirectTail &&
+        EmissionMode == MMIXEmissionMode::ELFObject) {
+      if (!MI->getOperand(1).isReg())
+        report_fatal_error(
+            "MMIX materialized tail address has no destination register");
+      MMIXMCInstLower Lower(OutContext, *this, EmissionMode);
+      const MCExpr *Address = Lower.lowerAddressOperand(MI->getOperand(0));
+      for (const MCInst &Inst : createMMIXStaticAddressSequence(
+               EmissionMode, MI->getOperand(1).getReg(), Address, OutContext))
+        emitCheckedMCInstruction(Inst);
+    }
+
     if (MI->isPseudo() && MI->getOpcode() != MMIX::PseudoB &&
         MI->getOpcode() != MMIX::PseudoJMP &&
         MI->getOpcode() != MMIX::PseudoPUSHJ &&
         MI->getOpcode() != MMIX::PseudoPUSHGO &&
-        MI->getOpcode() != MMIX::PseudoDirectCall)
+        MI->getOpcode() != MMIX::PseudoDirectCall &&
+        MI->getOpcode() != MMIX::PseudoDirectTail &&
+        MI->getOpcode() != MMIX::PseudoMaterializedDirectTail &&
+        MI->getOpcode() != MMIX::PseudoIndirectTail)
       report_fatal_error(
           "MMIX CodeGen pseudo reached canonical assembly emission");
 

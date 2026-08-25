@@ -206,4 +206,31 @@ TEST(MMIXTailCallTest, MachinePseudosModelTerminalCallState) {
   }
 }
 
+TEST(MMIXTailCallTest, FinalPseudosPreserveTerminalCallState) {
+  std::unique_ptr<MCInstrInfo> MII{createMMIXMCInstrInfo()};
+  static constexpr std::array Opcodes = {MMIX::PseudoDirectTail,
+                                         MMIX::PseudoMaterializedDirectTail,
+                                         MMIX::PseudoIndirectTail};
+  static constexpr std::array<MCPhysReg, 5> ExpectedUses = {
+      MMIX::R254, MMIX::RJ, MMIX::RG, MMIX::RL, MMIX::RO};
+  static constexpr std::array<MCPhysReg, 1> ExpectedLinkDef = {MMIX::R255};
+
+  for (unsigned Opcode : Opcodes) {
+    const MCInstrDesc &Desc = MII->get(Opcode);
+    EXPECT_TRUE(Desc.isCall());
+    EXPECT_TRUE(Desc.isReturn());
+    EXPECT_TRUE(Desc.isTerminator());
+    EXPECT_TRUE(Desc.isBarrier());
+    EXPECT_TRUE(Desc.hasUnmodeledSideEffects());
+    EXPECT_TRUE(Desc.isVariadic());
+    EXPECT_FALSE(Desc.isBranch());
+    EXPECT_TRUE(llvm::equal(Desc.implicit_uses(), ExpectedUses));
+  }
+
+  EXPECT_TRUE(MII->get(MMIX::PseudoDirectTail).implicit_defs().empty());
+  for (unsigned Opcode :
+       {MMIX::PseudoMaterializedDirectTail, MMIX::PseudoIndirectTail})
+    EXPECT_TRUE(llvm::equal(MII->get(Opcode).implicit_defs(), ExpectedLinkDef));
+}
+
 } // namespace

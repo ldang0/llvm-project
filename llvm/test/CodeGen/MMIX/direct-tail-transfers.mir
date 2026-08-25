@@ -1,0 +1,139 @@
+# RUN: llc -mtriple=mmix-unknown-elf -run-pass=postrapseudos \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=POSTRA
+# RUN: llc -mtriple=mmix-unknown-elf -start-after=prolog-epilog \
+# RUN:   -verify-machineinstrs -filetype=asm %s -o - \
+# RUN:   | FileCheck %s --check-prefix=ASM --implicit-check-not=PUSH
+# RUN: llc -mtriple=mmix-unknown-elf -start-after=prolog-epilog \
+# RUN:   -verify-machineinstrs -filetype=obj %s -o %t.o
+# RUN: llvm-readobj --relocations --expand-relocs %t.o \
+# RUN:   | FileCheck %s --check-prefix=RELOCS
+# RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
+# RUN:   | FileCheck %s --check-prefix=OBJ --implicit-check-not='<unknown>'
+
+# POSTRA-LABEL: name: tail_backward
+# POSTRA: PseudoDirectTail @backward_target, csr_mmix
+# POSTRA-LABEL: name: tail_forward
+# POSTRA: PseudoDirectTail @forward_target, csr_mmix
+# POSTRA-LABEL: name: tail_other_section
+# POSTRA: $r249 = LOAD_CALL_ADDR @section_target
+# POSTRA-NEXT: PseudoMaterializedDirectTail @section_target, killed $r249, csr_mmix
+# POSTRA-LABEL: name: tail_external
+# POSTRA: $r249 = LOAD_CALL_ADDR @declared
+# POSTRA-NEXT: PseudoMaterializedDirectTail @declared, killed $r249, csr_mmix
+# POSTRA-LABEL: name: tail_relocatable_direct
+# POSTRA: PseudoDirectTail @declared, csr_mmix
+
+# ASM-LABEL: tail_backward:
+# ASM: JMPB backward_target
+# ASM-LABEL: tail_forward:
+# ASM: JMP forward_target
+# ASM-LABEL: tail_other_section:
+# ASM: SETH r249, (section_target>>48)&65535
+# ASM: GO r255, r249, 0
+# ASM-LABEL: tail_external:
+# ASM: SETH r249, (declared>>48)&65535
+# ASM: GO r255, r249, 0
+# ASM-LABEL: tail_relocatable_direct:
+# ASM: JMP declared
+
+# RELOCS: Type: R_MMIX_GETA
+# RELOCS: Symbol: .text.separate
+# RELOCS: Type: R_MMIX_GETA
+# RELOCS: Symbol: declared
+# RELOCS: Type: R_MMIX_ADDR27
+# RELOCS: Symbol: declared
+
+# OBJ-LABEL: <tail_backward>:
+# OBJ: JMPB
+# OBJ-LABEL: <tail_forward>:
+# OBJ: JMP
+# OBJ-LABEL: <tail_other_section>:
+# OBJ: GETA r249, 0
+# OBJ: R_MMIX_GETA .text.separate
+# OBJ: GO r255, r249, 0
+# OBJ-LABEL: <tail_external>:
+# OBJ: GETA r249, 0
+# OBJ: R_MMIX_GETA declared
+# OBJ: GO r255, r249, 0
+# OBJ-LABEL: <tail_relocatable_direct>:
+# OBJ: JMP 0
+# OBJ: R_MMIX_ADDR27 declared
+
+--- |
+  target triple = "mmix-unknown-elf"
+  declare void @declared()
+  define internal void @backward_target() { ret void }
+  define void @tail_backward() { ret void }
+  define void @tail_forward() { ret void }
+  define internal void @forward_target() { ret void }
+  define internal void @section_target() section ".text.separate" { ret void }
+  define void @tail_other_section() { ret void }
+  define void @tail_external() { ret void }
+  define void @tail_relocatable_direct() { ret void }
+...
+---
+name: backward_target
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...
+---
+name: tail_backward
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @backward_target, csr_mmix
+...
+---
+name: tail_forward
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @forward_target, csr_mmix
+...
+---
+name: forward_target
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...
+---
+name: section_target
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...
+---
+name: tail_other_section
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    $r249 = LOAD_CALL_ADDR @section_target
+    MATERIALIZED_DIRECT_TAIL_STATE @section_target, killed $r249, csr_mmix
+...
+---
+name: tail_external
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    $r249 = LOAD_CALL_ADDR @declared
+    MATERIALIZED_DIRECT_TAIL_STATE @declared, killed $r249, csr_mmix
+...
+---
+name: tail_relocatable_direct
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @declared, csr_mmix
+...

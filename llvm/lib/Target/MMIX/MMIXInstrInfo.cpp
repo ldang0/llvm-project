@@ -203,6 +203,33 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
+  if (MI.getOpcode() == MMIX::DIRECT_TAIL_STATE ||
+      MI.getOpcode() == MMIX::MATERIALIZED_DIRECT_TAIL_STATE ||
+      MI.getOpcode() == MMIX::INDIRECT_TAIL_STATE) {
+    MachineInstrBuilder MIB;
+    unsigned FirstStateOperand;
+    if (MI.getOpcode() == MMIX::DIRECT_TAIL_STATE) {
+      MIB = BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+                    get(MMIX::PseudoDirectTail))
+                .add(MI.getOperand(0));
+      FirstStateOperand = 1;
+    } else if (MI.getOpcode() == MMIX::MATERIALIZED_DIRECT_TAIL_STATE) {
+      MIB = BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+                    get(MMIX::PseudoMaterializedDirectTail))
+                .add(MI.getOperand(0))
+                .add(MI.getOperand(1));
+      FirstStateOperand = 2;
+    } else {
+      MIB = BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
+                    get(MMIX::PseudoIndirectTail))
+                .add(MI.getOperand(0));
+      FirstStateOperand = 1;
+    }
+    copyCallStateOperands(MIB, MI, FirstStateOperand);
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() == MMIX::SET_RD_ZERO) {
     BuildMI(*MI.getParent(), MI.getIterator(), MI.getDebugLoc(),
             get(MMIX::PUTI))

@@ -2335,6 +2335,31 @@ let isCall = true, isReturn = true, isTerminator = true, isBarrier = true,
             "# MATERIALIZED_DIRECT_TAIL_STATE $callee, $scratch">;
 }
 
+// Post-RA expansion keeps the complete terminal-call state on these final
+// pseudos until MC lowering selects JMP/JMPB or GO. GO writes its unused link
+// result to the reserved target scratch register.
+let isCall = true, isReturn = true, isTerminator = true, isBarrier = true,
+    hasSideEffects = true, Uses = [R254, RJ, RG, RL, RO] in {
+  def PseudoDirectTail
+      : MMIXPseudoInstruction<
+            (outs), (ins MMIXJumpTarget:$callee, variable_ops), ""> {
+    let Size = 4;
+  }
+  def PseudoMaterializedDirectTail
+      : MMIXPseudoInstruction<
+            (outs), (ins MMIXCallTarget:$callee, GPR64Op:$scratch,
+                         variable_ops), ""> {
+    let Size = 4;
+    let Defs = [R255];
+  }
+  def PseudoIndirectTail
+      : MMIXPseudoInstruction<
+            (outs), (ins GPR64Op:$callee, variable_ops), ""> {
+    let Size = 4;
+    let Defs = [R255];
+  }
+}
+
 // Direction is a layout property, so direct calls remain neutral until MC
 // lowering. Indirect calls use the immediate-zero PUSHGO form.
 let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],

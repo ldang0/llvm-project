@@ -1,0 +1,105 @@
+# RUN: llc -mtriple=mmix-unknown-elf -run-pass=postrapseudos \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=POSTRA
+# RUN: llc -mtriple=mmix-unknown-elf -start-before=prolog-epilog \
+# RUN:   -verify-machineinstrs -filetype=asm %s -o - \
+# RUN:   | FileCheck %s --check-prefix=ASM --implicit-check-not=PUSHGO
+# RUN: llc -mtriple=mmix-unknown-elf -start-before=prolog-epilog \
+# RUN:   -verify-machineinstrs -filetype=obj %s -o %t.o
+# RUN: llvm-readobj --relocations %t.o \
+# RUN:   | FileCheck %s --check-prefix=RELOCS --implicit-check-not=R_MMIX_
+# RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
+# RUN:   | FileCheck %s --check-prefix=OBJ --implicit-check-not='<unknown>'
+
+# POSTRA-LABEL: name: indirect
+# POSTRA: PseudoIndirectTail killed $r250, csr_mmix
+# POSTRA-LABEL: name: overlapping_argument
+# POSTRA: PseudoIndirectTail $r231, csr_mmix, {{.*}}implicit $r231
+# POSTRA-LABEL: name: materialized_indirect
+# POSTRA: $r249 = LOAD_ADDR @callee
+# POSTRA-NEXT: PseudoIndirectTail killed $r249, csr_mmix
+
+# ASM-LABEL: indirect:
+# ASM: GO r255, r250, 0
+# ASM-LABEL: overlapping_argument:
+# ASM: GO r255, r231, 0
+# ASM-LABEL: materialized_indirect:
+# ASM: SETH r249, (callee>>48)&65535
+# ASM: GO r255, r249, 0
+# ASM-LABEL: frame_pointer:
+# ASM: LDOU r253,
+# ASM: ADDU{{I?}} r254,
+# ASM: PUT rJ, r30
+# ASM-NEXT: GO r255, r250, 0
+
+# RELOCS: R_MMIX_GETA .text
+
+# OBJ-LABEL: <indirect>:
+# OBJ: GO r255, r250, 0
+# OBJ-LABEL: <overlapping_argument>:
+# OBJ: GO r255, r231, 0
+# OBJ-LABEL: <materialized_indirect>:
+# OBJ: GETA r249, 0
+# OBJ: GO r255, r249, 0
+# OBJ-LABEL: <frame_pointer>:
+# OBJ: PUT rJ, r30
+# OBJ-NEXT: GO r255, r250, 0
+
+--- |
+  target triple = "mmix-unknown-elf"
+  define internal void @callee() { ret void }
+  define void @indirect() { ret void }
+  define void @overlapping_argument() { ret void }
+  define void @materialized_indirect() { ret void }
+  define void @frame_pointer() { ret void }
+...
+---
+name: callee
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...
+---
+name: indirect
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r250
+    INDIRECT_TAIL_STATE killed $r250, csr_mmix
+...
+---
+name: overlapping_argument
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r231
+    INDIRECT_TAIL_STATE $r231, csr_mmix, implicit $r231
+...
+---
+name: materialized_indirect
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    $r249 = LOAD_ADDR @callee
+    INDIRECT_TAIL_STATE killed $r249, csr_mmix
+...
+---
+name: frame_pointer
+selected: true
+tracksRegLiveness: true
+frameInfo:
+  isFrameAddressTaken: true
+  hasCalls: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    liveins: $r250
+    $r231 = SETL 1
+    STOUI $r231, %stack.0, 0
+    INDIRECT_TAIL_STATE killed $r250, csr_mmix
+...
