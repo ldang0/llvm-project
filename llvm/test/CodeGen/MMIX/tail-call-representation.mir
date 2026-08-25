@@ -1,0 +1,107 @@
+# RUN: split-file %s %t
+# RUN: llc -mtriple=mmix -run-pass=none -verify-machineinstrs %t/valid.mir \
+# RUN:   -o - | FileCheck %s --check-prefix=VALID
+# RUN: not --crash llc -mtriple=mmix -run-pass=none -verify-machineinstrs \
+# RUN:   %t/missing-regmask.mir -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=MISSING-REGMASK
+# RUN: not --crash llc -mtriple=mmix -run-pass=none -verify-machineinstrs \
+# RUN:   %t/explicit-argument.mir -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=EXPLICIT-ARGUMENT
+# RUN: not --crash llc -mtriple=mmix -run-pass=none -verify-machineinstrs \
+# RUN:   %t/register-direct.mir -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=REGISTER-DIRECT
+
+#--- valid.mir
+--- |
+  target triple = "mmix"
+
+  declare void @callee()
+
+  define void @direct() {
+    ret void
+  }
+
+  define void @materialized_direct() {
+    ret void
+  }
+
+  define void @indirect() {
+    ret void
+  }
+...
+---
+name: direct
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r231
+    ; VALID-LABEL: name: direct
+    ; VALID: DIRECT_TAIL_STATE @callee, csr_mmix, implicit $r231
+    DIRECT_TAIL_STATE @callee, csr_mmix, implicit $r231
+...
+---
+name: materialized_direct
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r249, $r231
+    ; VALID-LABEL: name: materialized_direct
+    ; VALID: MATERIALIZED_DIRECT_TAIL_STATE @callee, killed $r249, csr_mmix, implicit $r231
+    MATERIALIZED_DIRECT_TAIL_STATE @callee, killed $r249, csr_mmix, implicit $r231
+...
+---
+name: indirect
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r250, $r231
+    ; VALID-LABEL: name: indirect
+    ; VALID: INDIRECT_TAIL_STATE killed $r250, csr_mmix, implicit $r231
+    INDIRECT_TAIL_STATE killed $r250, csr_mmix, implicit $r231
+...
+
+# MISSING-REGMASK: Bad machine code: MMIX tail transfer requires a register mask after its callee operands
+# EXPLICIT-ARGUMENT: Bad machine code: MMIX tail transfer accepts only implicit argument register uses after its register mask
+# REGISTER-DIRECT: Bad machine code: MMIX direct tail transfer requires a symbolic callee
+
+#--- missing-regmask.mir
+--- |
+  target triple = "mmix"
+  declare void @callee()
+  define void @missing_regmask() { ret void }
+...
+---
+name: missing_regmask
+tracksRegLiveness: true
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @callee
+...
+
+#--- explicit-argument.mir
+--- |
+  target triple = "mmix"
+  define void @explicit_argument() { ret void }
+...
+---
+name: explicit_argument
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r250, $r231
+    INDIRECT_TAIL_STATE killed $r250, csr_mmix, $r231
+...
+
+#--- register-direct.mir
+--- |
+  target triple = "mmix"
+  define void @register_direct() { ret void }
+...
+---
+name: register_direct
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r250
+    DIRECT_TAIL_STATE killed $r250, csr_mmix
+...

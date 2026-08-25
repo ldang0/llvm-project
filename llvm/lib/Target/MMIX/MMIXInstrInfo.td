@@ -23,6 +23,12 @@ def MMIXcall
 def MMIXdirect_call
     : SDNode<"MMIXISD::DIRECT_CALL", SDT_MMIXCall,
              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+def MMIXindirect_tail
+    : SDNode<"MMIXISD::INDIRECT_TAIL", SDT_MMIXCall,
+             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
+def MMIXdirect_tail
+    : SDNode<"MMIXISD::DIRECT_TAIL", SDT_MMIXCall,
+             [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
 def SDT_MMIXLoadStackArg
     : SDTypeProfile<1, 1, [SDTCisVT<1, i64>]>;
 def MMIXload_stack_arg
@@ -2306,6 +2312,27 @@ let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
       : MMIXPseudoInstruction<
             (outs), (ins MMIXCallTarget:$callee, GPR64Op:$scratch),
             "# DIRECT_CALL_STATE $callee, $scratch">;
+}
+
+// A tail transfer is both the final call and the return from the current
+// function. The variable operands begin with a register mask and continue
+// with the live argument-register uses. Later tasks lower these state pseudos
+// to terminal JMP/GO sequences after restoring the software frame and rJ.
+let isCall = true, isReturn = true, isTerminator = true, isBarrier = true,
+    hasSideEffects = true, Uses = [R254, RJ, RG, RL, RO] in {
+  def INDIRECT_TAIL_STATE
+      : MMIXPseudoInstruction<
+            (outs), (ins GPR64Op:$callee, variable_ops),
+            "# INDIRECT_TAIL_STATE $callee">;
+  def DIRECT_TAIL_STATE
+      : MMIXPseudoInstruction<
+            (outs), (ins MMIXCallTarget:$callee, variable_ops),
+            "# DIRECT_TAIL_STATE $callee">;
+  def MATERIALIZED_DIRECT_TAIL_STATE
+      : MMIXPseudoInstruction<
+            (outs), (ins MMIXCallTarget:$callee, GPR64Op:$scratch,
+                         variable_ops),
+            "# MATERIALIZED_DIRECT_TAIL_STATE $callee, $scratch">;
 }
 
 // Direction is a layout property, so direct calls remain neutral until MC

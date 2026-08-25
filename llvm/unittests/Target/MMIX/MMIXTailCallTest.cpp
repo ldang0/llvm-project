@@ -7,7 +7,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXTailCall.h"
+#include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/MC/MCInstrInfo.h"
 #include "gtest/gtest.h"
+#include <array>
+#include <memory>
 
 using namespace llvm;
 
@@ -156,6 +161,28 @@ TEST(MMIXTailCallTest, ReportsTheFirstSemanticFailure) {
   expectReason(
       Input, MMIXTailCallEligibilityReason::UnsupportedCallerCallingConvention,
       "caller calling convention is unsupported");
+}
+
+TEST(MMIXTailCallTest, MachinePseudosModelTerminalCallState) {
+  std::unique_ptr<MCInstrInfo> MII{createMMIXMCInstrInfo()};
+  static constexpr std::array Opcodes = {MMIX::INDIRECT_TAIL_STATE,
+                                         MMIX::DIRECT_TAIL_STATE,
+                                         MMIX::MATERIALIZED_DIRECT_TAIL_STATE};
+  static constexpr std::array<MCPhysReg, 5> ExpectedUses = {
+      MMIX::R254, MMIX::RJ, MMIX::RG, MMIX::RL, MMIX::RO};
+
+  for (unsigned Opcode : Opcodes) {
+    const MCInstrDesc &Desc = MII->get(Opcode);
+    EXPECT_TRUE(Desc.isCall());
+    EXPECT_TRUE(Desc.isReturn());
+    EXPECT_TRUE(Desc.isTerminator());
+    EXPECT_TRUE(Desc.isBarrier());
+    EXPECT_TRUE(Desc.hasUnmodeledSideEffects());
+    EXPECT_TRUE(Desc.isVariadic());
+    EXPECT_FALSE(Desc.isBranch());
+    EXPECT_TRUE(Desc.implicit_defs().empty());
+    EXPECT_TRUE(llvm::equal(Desc.implicit_uses(), ExpectedUses));
+  }
 }
 
 } // namespace

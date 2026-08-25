@@ -221,6 +221,59 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   return true;
 }
 
+bool MMIXInstrInfo::verifyInstruction(const MachineInstr &MI,
+                                      StringRef &ErrInfo) const {
+  auto IsDirectTarget = [](const MachineOperand &MO) {
+    return MO.isGlobal() || MO.isSymbol() || MO.isMCSymbol();
+  };
+
+  unsigned ExplicitOperands;
+  switch (MI.getOpcode()) {
+  case MMIX::INDIRECT_TAIL_STATE:
+    ExplicitOperands = 1;
+    if (MI.getNumOperands() < ExplicitOperands || !MI.getOperand(0).isReg()) {
+      ErrInfo = "MMIX indirect tail transfer requires a register callee";
+      return false;
+    }
+    break;
+  case MMIX::DIRECT_TAIL_STATE:
+    ExplicitOperands = 1;
+    if (MI.getNumOperands() < ExplicitOperands ||
+        !IsDirectTarget(MI.getOperand(0))) {
+      ErrInfo = "MMIX direct tail transfer requires a symbolic callee";
+      return false;
+    }
+    break;
+  case MMIX::MATERIALIZED_DIRECT_TAIL_STATE:
+    ExplicitOperands = 2;
+    if (MI.getNumOperands() < ExplicitOperands ||
+        !IsDirectTarget(MI.getOperand(0)) || !MI.getOperand(1).isReg()) {
+      ErrInfo = "MMIX materialized direct tail transfer requires a symbol and "
+                "scratch register";
+      return false;
+    }
+    break;
+  default:
+    return true;
+  }
+
+  if (MI.getNumOperands() <= ExplicitOperands ||
+      !MI.getOperand(ExplicitOperands).isRegMask()) {
+    ErrInfo =
+        "MMIX tail transfer requires a register mask after its callee operands";
+    return false;
+  }
+  for (unsigned I = ExplicitOperands + 1; I != MI.getNumOperands(); ++I) {
+    const MachineOperand &MO = MI.getOperand(I);
+    if (!MO.isReg() || !MO.isImplicit() || MO.isDef()) {
+      ErrInfo = "MMIX tail transfer accepts only implicit argument register "
+                "uses after its register mask";
+      return false;
+    }
+  }
+  return true;
+}
+
 ArrayRef<std::pair<unsigned, const char *>>
 MMIXInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
   static const std::pair<unsigned, const char *> TargetFlags[] = {

@@ -336,6 +336,32 @@ private:
       return;
     }
 
+    if (Node->getOpcode() == MMIXISD::INDIRECT_TAIL ||
+        Node->getOpcode() == MMIXISD::DIRECT_TAIL) {
+      SmallVector<SDValue, 20> Ops;
+      bool HasGlue =
+          Node->getNumOperands() > 1 &&
+          Node->getOperand(Node->getNumOperands() - 1).getValueType() ==
+              MVT::Glue;
+      unsigned LastDataOperand = Node->getNumOperands() - HasGlue;
+      for (unsigned I = 1; I != LastDataOperand; ++I)
+        Ops.push_back(Node->getOperand(I));
+      Ops.push_back(Node->getOperand(0));
+      if (HasGlue)
+        Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
+
+      unsigned Opcode = MMIX::INDIRECT_TAIL_STATE;
+      if (Node->getOpcode() == MMIXISD::DIRECT_TAIL) {
+        bool HasAddressScratch =
+            Node->getNumOperands() > 2 &&
+            Node->getOperand(2).getOpcode() != ISD::RegisterMask;
+        Opcode = HasAddressScratch ? MMIX::MATERIALIZED_DIRECT_TAIL_STATE
+                                   : MMIX::DIRECT_TAIL_STATE;
+      }
+      CurDAG->SelectNodeTo(Node, Opcode, MVT::Other, MVT::Glue, Ops);
+      return;
+    }
+
     if (Node->getOpcode() == MMIXISD::RET_GLUE) {
       CurDAG->SelectNodeTo(Node, MMIX::RET, MVT::Other, Node->getOperand(0));
       return;
