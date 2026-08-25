@@ -502,6 +502,10 @@ Expected<const Function *> llvm::validateMMIXALModule(const Module &M) {
               "instruction '" + I.getOpcodeName() + "' in function '" +
               F.getName() + "'");
         if (const auto *Call = dyn_cast<CallBase>(&I)) {
+          if (Call->isMustTailCall())
+            return createStringError(
+                Twine("MMIXAL output variant 1 does not support required ") +
+                "tail calls in function '" + F.getName() + "'");
           if (Error Err = validateMMIXALAggregateABI(*Call, F))
             return std::move(Err);
           if (Error Err = validateMMIXALVariadicABI(*Call, F))

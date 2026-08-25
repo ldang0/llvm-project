@@ -5,12 +5,6 @@
 ; RUN: not llc -mtriple=mmix -filetype=obj %t/vararg.ll \
 ; RUN:   -o %t/vararg.o 2>&1 | FileCheck %s --check-prefix=VARARG
 ; RUN: test ! -s %t/vararg.o
-; RUN: not llc -mtriple=mmix -filetype=asm %t/musttail.ll \
-; RUN:   -o %t/musttail.s 2>&1 | FileCheck %s --check-prefix=MUSTTAIL
-; RUN: test ! -s %t/musttail.s
-; RUN: not llc -mtriple=mmix -filetype=obj %t/musttail.ll \
-; RUN:   -o %t/musttail.o 2>&1 | FileCheck %s --check-prefix=MUSTTAIL
-; RUN: test ! -s %t/musttail.o
 ; RUN: not llc -mtriple=mmix -filetype=asm %t/runtime-cc.ll \
 ; RUN:   -o %t/runtime-cc.s 2>&1 | FileCheck %s --check-prefix=RUNTIME-CC
 ; RUN: test ! -s %t/runtime-cc.s
@@ -32,7 +26,6 @@
 
 ; VARARG: Calling convention does not support varargs or perfect forwarding!
 ; VARARG: input module cannot be verified
-; MUSTTAIL: LLVM ERROR: MMIX does not support required tail calls in function 'fast_required_tail'
 ; RUNTIME-CC: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'runtime_call'
 ; COROUTINE: LLVM ERROR: MMIX does not support coroutines in function 'fast_coroutine'
 ; EXCEPTION: LLVM ERROR: MMIX does not support exception handling in function 'fast_exception_path'
@@ -44,16 +37,6 @@ declare fastcc i64 @variadic_fast(i64, ...)
 
 define i64 @call_variadic_fast(i64 %value) {
   %result = call fastcc i64 (i64, ...) @variadic_fast(i64 %value, i64 1)
-  ret i64 %result
-}
-
-;--- musttail.ll
-target triple = "mmix-unknown-elf"
-
-declare fastcc i64 @fast_callee(i64)
-
-define fastcc i64 @fast_required_tail(i64 %value) {
-  %result = musttail call fastcc i64 @fast_callee(i64 %value)
   ret i64 %result
 }
 

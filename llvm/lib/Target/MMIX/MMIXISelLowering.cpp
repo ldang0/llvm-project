@@ -1720,11 +1720,8 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   MachineFunction &MF = CLI.DAG.getMachineFunction();
   SelectionDAG &DAG = CLI.DAG;
   SDValue Chain = CLI.Chain;
-  bool TailCallRequested = CLI.IsTailCall;
-  if (CLI.CB && CLI.CB->isMustTailCall())
-    reportFatalUsageError(
-        Twine("MMIX does not support required tail calls in ") + "function '" +
-        MF.getName() + "'");
+  bool IsRequiredTailCall = CLI.CB && CLI.CB->isMustTailCall();
+  bool TailCallRequested = CLI.IsTailCall || IsRequiredTailCall;
   if (!isSupportedMMIXCallingConv(CLI.CallConv))
     reportFatalUsageError(
         Twine("MMIX supports only C and Fast calling conventions in ") +
@@ -1963,7 +1960,21 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Eligibility.ReusableIncomingStackBytes =
         MF.getInfo<MMIXMachineFunctionInfo>()->getIncomingStackArgSize();
     applyMMIXTailCallABI(Eligibility, ABI);
-    IsTailCall = classifyMMIXTailCall(Eligibility).isEligible();
+    MMIXTailCallEligibility TailCallEligibility =
+        classifyMMIXTailCall(Eligibility);
+    switch (TailCallEligibility.getDisposition(
+        IsRequiredTailCall ? MMIXTailCallRequestKind::Required
+                           : MMIXTailCallRequestKind::Ordinary)) {
+    case MMIXTailCallDisposition::TailTransfer:
+      IsTailCall = true;
+      break;
+    case MMIXTailCallDisposition::NormalCall:
+      break;
+    case MMIXTailCallDisposition::Diagnose:
+      reportFatalUsageError(
+          Twine("MMIX required tail call is ineligible in function '") +
+          MF.getName() + "': " + TailCallEligibility.getReasonText());
+    }
   }
   CLI.IsTailCall = IsTailCall;
   if (!IsTailCall)
