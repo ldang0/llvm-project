@@ -1,0 +1,102 @@
+# RUN: llc -mtriple=mmix -run-pass=prolog-epilog -verify-machineinstrs %s -o - \
+# RUN:   | FileCheck %s
+
+# The fixed objects model caller-visible incoming argument slots. Tail stores
+# target those same offsets, so PEI addresses them above the current frame and
+# restores SP only after every overlapping source has been loaded.
+
+# CHECK-LABEL: name: seventeen_slots
+# CHECK: stackSize: 8
+# CHECK: $r254 = frame-setup SUBUI $r254, 8
+# CHECK: [[V17:\$r[0-9]+]] = LDOUI $r254, 8
+# CHECK-NEXT: STOUI [[V17]], $r254, 8
+# CHECK-NEXT: $r254 = frame-destroy ADDUI $r254, 8
+# CHECK-NEXT: DIRECT_TAIL_STATE @callee17
+# CHECK-NOT: ADJCALLSTACK
+
+# CHECK-LABEL: name: eighteen_slot_swap
+# CHECK: stackSize: 8
+# CHECK: $r254 = frame-setup SUBUI $r254, 8
+# CHECK: [[S0:\$r[0-9]+]] = LDOUI $r254, 8
+# CHECK-NEXT: [[S1:\$r[0-9]+]] = LDOUI $r254, 16
+# CHECK-NEXT: STOUI [[S1]], $r254, 8
+# CHECK-NEXT: STOUI [[S0]], $r254, 16
+# CHECK-NEXT: $r254 = frame-destroy ADDUI $r254, 8
+# CHECK-NEXT: DIRECT_TAIL_STATE @callee18
+# CHECK-NOT: ADJCALLSTACK
+
+# CHECK-LABEL: name: twenty_slots
+# CHECK: stackSize: 8
+# CHECK: $r254 = frame-setup SUBUI $r254, 8
+# CHECK: STOUI $r231, $r254, 8
+# CHECK-NEXT: STOUI $r232, $r254, 16
+# CHECK-NEXT: STOUI $r233, $r254, 24
+# CHECK-NEXT: STOUI $r234, $r254, 32
+# CHECK-NEXT: $r254 = frame-destroy ADDUI $r254, 8
+# CHECK-NEXT: DIRECT_TAIL_STATE @callee20
+# CHECK-NOT: ADJCALLSTACK
+
+--- |
+  target triple = "mmix"
+  declare void @callee17()
+  declare void @callee18()
+  declare void @callee20()
+  define void @seventeen_slots() { ret void }
+  define void @eighteen_slot_swap() { ret void }
+  define void @twenty_slots() { ret void }
+...
+---
+name: seventeen_slots
+tracksRegLiveness: true
+fixedStack:
+  - { id: 0, offset: 0, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    $r250 = LDOUI %fixed-stack.0, 0
+    STOUI $r250, %fixed-stack.0, 0
+    DIRECT_TAIL_STATE @callee17, csr_mmix
+...
+---
+name: eighteen_slot_swap
+tracksRegLiveness: true
+fixedStack:
+  - { id: 0, offset: 0, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+  - { id: 1, offset: 8, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    $r249 = LDOUI %fixed-stack.0, 0
+    $r250 = LDOUI %fixed-stack.1, 0
+    STOUI $r250, %fixed-stack.0, 0
+    STOUI $r249, %fixed-stack.1, 0
+    DIRECT_TAIL_STATE @callee18, csr_mmix
+...
+---
+name: twenty_slots
+tracksRegLiveness: true
+fixedStack:
+  - { id: 0, offset: 0, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+  - { id: 1, offset: 8, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+  - { id: 2, offset: 16, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+  - { id: 3, offset: 24, size: 8, alignment: 8, isImmutable: false,
+      isAliased: true }
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    liveins: $r231, $r232, $r233, $r234
+    STOUI $r231, %fixed-stack.0, 0
+    STOUI $r232, %fixed-stack.1, 0
+    STOUI $r233, %fixed-stack.2, 0
+    STOUI $r234, %fixed-stack.3, 0
+    DIRECT_TAIL_STATE @callee20, csr_mmix
+...

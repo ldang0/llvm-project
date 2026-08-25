@@ -1596,6 +1596,47 @@ static SDValue convertOutgoingValue(SDValue Value, const CCValAssign &VA,
   }
 }
 
+static void copyMMIXArgumentsToRegisters(
+    SDValue &Chain, SDValue &Glue,
+    ArrayRef<std::pair<MCRegister, SDValue>> RegsToPass, const SDLoc &DL,
+    SelectionDAG &DAG) {
+  // Keeping every source as an SDValue until all assignments are known gives
+  // the scheduler and register allocator parallel-copy semantics. In
+  // particular, no early physical-register write can destroy a later source
+  // or an overlapping indirect callee.
+  for (const auto &[Reg, Value] : RegsToPass) {
+    Chain = DAG.getCopyToReg(Chain, DL, Reg, Value, Glue);
+    Glue = Chain.getValue(1);
+  }
+}
+
+static SDValue addTokenForMMIXTailCallArgument(
+    SDValue Chain, SelectionDAG &DAG, MachineFrameInfo &MFI,
+    int ClobberedFrameIndex) {
+  SmallVector<SDValue, 8> ArgChains = {Chain};
+  int64_t FirstByte = MFI.getObjectOffset(ClobberedFrameIndex);
+  int64_t LastByte =
+      FirstByte + int64_t(MFI.getObjectSize(ClobberedFrameIndex)) - 1;
+
+  // LOAD_STACK_ARG represents an incoming fixed-stack load until instruction
+  // selection. Order every overlapping load before the outgoing tail store so
+  // arbitrary stack-argument permutations have memmove-equivalent behavior.
+  for (SDNode *User : DAG.getEntryNode()->users()) {
+    if (User->getOpcode() != MMIXISD::LOAD_STACK_ARG)
+      continue;
+    const auto *FI = dyn_cast<FrameIndexSDNode>(User->getOperand(1));
+    if (!FI || FI->getIndex() >= 0)
+      continue;
+    int64_t InFirstByte = MFI.getObjectOffset(FI->getIndex());
+    int64_t InLastByte =
+        InFirstByte + int64_t(MFI.getObjectSize(FI->getIndex())) - 1;
+    if (InFirstByte <= LastByte && FirstByte <= InLastByte)
+      ArgChains.push_back(SDValue(User, 1));
+  }
+
+  return DAG.getNode(ISD::TokenFactor, SDLoc(Chain), MVT::Other, ArgChains);
+}
+
 static void
 validateMMIXVariadicCallOperands(const TargetLowering::CallLoweringInfo &CLI,
                                  StringRef FunctionName) {
@@ -1807,7 +1848,10 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     ABIOutVals.push_back(Packed);
     I = End;
   }
-  CLI.IsTailCall = false;
+  // Tail-transfer selection reuses the argument machinery below. Until that
+  // selection is connected, all requests retain the normal call behavior.
+  bool IsTailCall = false;
+  CLI.IsTailCall = IsTailCall;
 
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
@@ -1815,7 +1859,8 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (ArgLocs.size() != ABIOutVals.size())
     report_fatal_error("MMIX call assignment lost an ABI argument");
   unsigned NumBytes = ArgCCInfo.getStackSize();
-  Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
+  if (!IsTailCall)
+    Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
 
   SmallVector<std::pair<MCRegister, SDValue>, 16> RegsToPass;
   SmallVector<SDValue, 8> StackStores;
@@ -1828,27 +1873,35 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
       continue;
     }
 
-    if (!StackPointer)
-      StackPointer = DAG.getCopyFromReg(Chain, CLI.DL, MMIX::R254, MVT::i64);
     if (Value.getValueType() == MVT::f64)
       Value = DAG.getNode(ISD::BITCAST, CLI.DL, MVT::i64, Value);
-    SDValue Address = StackPointer;
-    if (VA.getLocMemOffset())
-      Address =
-          DAG.getNode(ISD::ADD, CLI.DL, MVT::i64, StackPointer,
-                      DAG.getConstant(VA.getLocMemOffset(), CLI.DL, MVT::i64));
-    StackStores.push_back(DAG.getStore(
-        Chain, CLI.DL, Value, Address,
-        MachinePointerInfo::getStack(MF, VA.getLocMemOffset()), Align(8)));
+    SDValue Address;
+    MachinePointerInfo PointerInfo;
+    if (IsTailCall) {
+      int FI = MF.getFrameInfo().CreateFixedObject(
+          /*Size=*/8, VA.getLocMemOffset(), /*IsImmutable=*/false);
+      Address = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      PointerInfo = MachinePointerInfo::getFixedStack(MF, FI);
+      Chain = addTokenForMMIXTailCallArgument(Chain, DAG, MF.getFrameInfo(), FI);
+    } else {
+      if (!StackPointer)
+        StackPointer =
+            DAG.getCopyFromReg(Chain, CLI.DL, MMIX::R254, MVT::i64);
+      Address = StackPointer;
+      if (VA.getLocMemOffset())
+        Address = DAG.getNode(
+            ISD::ADD, CLI.DL, MVT::i64, StackPointer,
+            DAG.getConstant(VA.getLocMemOffset(), CLI.DL, MVT::i64));
+      PointerInfo = MachinePointerInfo::getStack(MF, VA.getLocMemOffset());
+    }
+    StackStores.push_back(
+        DAG.getStore(Chain, CLI.DL, Value, Address, PointerInfo, Align(8)));
   }
   if (!StackStores.empty())
     Chain = DAG.getNode(ISD::TokenFactor, CLI.DL, MVT::Other, StackStores);
 
   SDValue Glue;
-  for (const auto &[Reg, Value] : RegsToPass) {
-    Chain = DAG.getCopyToReg(Chain, CLI.DL, Reg, Value, Glue);
-    Glue = Chain.getValue(1);
-  }
+  copyMMIXArgumentsToRegisters(Chain, Glue, RegsToPass, CLI.DL, DAG);
 
   SDValue Callee = CLI.Callee;
   SDValue DirectCallee;
@@ -1897,8 +1950,10 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   Chain = DAG.getNode(DirectCallee ? MMIXISD::DIRECT_CALL : MMIXISD::CALL,
                       CLI.DL, DAG.getVTList(MVT::Other, MVT::Glue), CallOps);
   Glue = Chain.getValue(1);
-  Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
-  Glue = Chain.getValue(1);
+  if (!IsTailCall) {
+    Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
+    Glue = Chain.getValue(1);
+  }
 
   SmallVector<CCValAssign, 2> ResultLocs;
   CCState ResultCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ResultLocs,
@@ -2080,6 +2135,8 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(ABIIns, CC_MMIX);
   if (ArgLocs.size() != ArgMappings.size())
     report_fatal_error("MMIX formal assignment lost an ABI argument");
+  MF.getInfo<MMIXMachineFunctionInfo>()->setIncomingStackArgSize(
+      CCInfo.getStackSize());
 
   SmallVector<SDValue, 16> VarArgStores;
   if (IsVarArg) {

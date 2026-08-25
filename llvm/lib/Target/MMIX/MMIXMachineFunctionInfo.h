@@ -17,6 +17,7 @@
 namespace llvm {
 
 class MMIXMachineFunctionInfo final : public MachineFunctionInfo {
+  unsigned IncomingStackArgSize = 0;
   unsigned NamedArgSlots = 0;
   unsigned FirstVarArgRegisterIndex = 0;
   unsigned VarArgsSaveSize = 0;
@@ -29,6 +30,12 @@ public:
   clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
         const DenseMap<MachineBasicBlock *, MachineBasicBlock *> &Src2DstMBB)
       const override;
+
+  void setIncomingStackArgSize(unsigned Size) {
+    assert(Size % 8 == 0 && "unaligned MMIX incoming stack argument area");
+    IncomingStackArgSize = Size;
+  }
+  unsigned getIncomingStackArgSize() const { return IncomingStackArgSize; }
 
   void setVarArgsInfo(unsigned Slots, unsigned FirstRegister, unsigned SaveSize,
                       int FrameIndex) {
