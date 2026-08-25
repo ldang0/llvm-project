@@ -8,6 +8,7 @@
 
 #include "MMIXTailCall.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
+#include "MMIXAggregateABI.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "gtest/gtest.h"
@@ -111,6 +112,100 @@ TEST(MMIXTailCallTest, ClassifiesABIAndStorageBoundaries) {
   Input.HasCallerCopy = true;
   expectReason(Input, MMIXTailCallEligibilityReason::EphemeralCallerCopy,
                "caller-copy storage does not survive the transfer");
+}
+
+TEST(MMIXTailCallTest, NormalizesSupportedResultShapes) {
+  EXPECT_EQ(classifyMMIXTailCallResultShape(
+                MMIXAggregateABIKind::DirectResult, 1),
+            MMIXTailCallResultShape::OneRegister);
+  EXPECT_EQ(classifyMMIXTailCallResultShape(
+                MMIXAggregateABIKind::DirectResult, 2),
+            MMIXTailCallResultShape::TwoRegisters);
+  EXPECT_EQ(classifyMMIXTailCallResultShape(
+                MMIXAggregateABIKind::IndirectResult, 0),
+            MMIXTailCallResultShape::Indirect);
+  EXPECT_EQ(classifyMMIXTailCallResultShape(MMIXAggregateABIKind::Empty, 0),
+            MMIXTailCallResultShape::NoResult);
+  EXPECT_EQ(classifyMMIXTailCallResultShape(
+                MMIXAggregateABIKind::DirectResult, 3),
+            MMIXTailCallResultShape::Unsupported);
+
+  for (MMIXTailCallResultShape Shape :
+       {MMIXTailCallResultShape::NoResult,
+        MMIXTailCallResultShape::OneRegister,
+        MMIXTailCallResultShape::TwoRegisters}) {
+    MMIXTailCallEligibilityInput Eligibility = eligibleInput();
+    MMIXTailCallABIInput ABI;
+    ABI.CallerResult = Shape;
+    ABI.CalleeResult = Shape;
+    ABI.ArgumentsAreCompatible = true;
+    applyMMIXTailCallABI(Eligibility, ABI);
+    EXPECT_TRUE(classifyMMIXTailCall(Eligibility).isEligible());
+    EXPECT_EQ(Eligibility.IndirectResult,
+              MMIXTailCallIndirectResultKind::None);
+  }
+
+  MMIXTailCallEligibilityInput Eligibility = eligibleInput();
+  MMIXTailCallABIInput ABI;
+  ABI.CallerResult = MMIXTailCallResultShape::OneRegister;
+  ABI.CalleeResult = MMIXTailCallResultShape::TwoRegisters;
+  ABI.ArgumentsAreCompatible = true;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  expectReason(Eligibility,
+               MMIXTailCallEligibilityReason::IncompatibleResults,
+               "caller and callee result locations are incompatible");
+
+  Eligibility = eligibleInput();
+  ABI.CalleeResult = MMIXTailCallResultShape::Unsupported;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  expectReason(Eligibility,
+               MMIXTailCallEligibilityReason::IncompatibleResults,
+               "caller and callee result locations are incompatible");
+}
+
+TEST(MMIXTailCallTest, ClassifiesIndirectResultForwarding) {
+  MMIXTailCallEligibilityInput Eligibility = eligibleInput();
+  MMIXTailCallABIInput ABI;
+  ABI.CallerResult = MMIXTailCallResultShape::Indirect;
+  ABI.CalleeResult = MMIXTailCallResultShape::Indirect;
+  ABI.ArgumentsAreCompatible = true;
+  ABI.ForwardsIndirectResult = true;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  EXPECT_TRUE(classifyMMIXTailCall(Eligibility).isEligible());
+  EXPECT_EQ(Eligibility.IndirectResult,
+            MMIXTailCallIndirectResultKind::Forwarded);
+
+  Eligibility = eligibleInput();
+  ABI.ForwardsIndirectResult = false;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  expectReason(Eligibility,
+               MMIXTailCallEligibilityReason::IncompatibleIndirectResult,
+               "indirect result is not forwarded compatibly");
+
+  Eligibility = eligibleInput();
+  ABI.CalleeResult = MMIXTailCallResultShape::NoResult;
+  ABI.ForwardsIndirectResult = true;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  expectReason(Eligibility,
+               MMIXTailCallEligibilityReason::IncompatibleResults,
+               "caller and callee result locations are incompatible");
+}
+
+TEST(MMIXTailCallTest, ClassifiesCallerCopyLifetime) {
+  MMIXTailCallEligibilityInput Eligibility = eligibleInput();
+  MMIXTailCallABIInput ABI;
+  ABI.CallerResult = MMIXTailCallResultShape::OneRegister;
+  ABI.CalleeResult = MMIXTailCallResultShape::OneRegister;
+  ABI.ArgumentsAreCompatible = true;
+  ABI.HasCallerCopy = true;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  expectReason(Eligibility, MMIXTailCallEligibilityReason::EphemeralCallerCopy,
+               "caller-copy storage does not survive the transfer");
+
+  Eligibility = eligibleInput();
+  ABI.CallerCopySurvivesTransfer = true;
+  applyMMIXTailCallABI(Eligibility, ABI);
+  EXPECT_TRUE(classifyMMIXTailCall(Eligibility).isEligible());
 }
 
 TEST(MMIXTailCallTest, ClassifiesCalleeAndFrameBoundaries) {

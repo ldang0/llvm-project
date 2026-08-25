@@ -7,10 +7,36 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXTailCall.h"
+#include "MMIXAggregateABI.h"
 #include "MMIXCallingConv.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
+
+MMIXTailCallResultShape llvm::classifyMMIXTailCallResultShape(
+    MMIXAggregateABIKind Kind, unsigned NumResultRegisters) {
+  switch (Kind) {
+  case MMIXAggregateABIKind::Scalar:
+    if (NumResultRegisters == 0)
+      return MMIXTailCallResultShape::NoResult;
+    return NumResultRegisters == 1 ? MMIXTailCallResultShape::OneRegister
+                                   : MMIXTailCallResultShape::Unsupported;
+  case MMIXAggregateABIKind::Empty:
+    return NumResultRegisters == 0 ? MMIXTailCallResultShape::NoResult
+                                   : MMIXTailCallResultShape::Unsupported;
+  case MMIXAggregateABIKind::DirectResult:
+    if (NumResultRegisters == 1)
+      return MMIXTailCallResultShape::OneRegister;
+    return NumResultRegisters == 2 ? MMIXTailCallResultShape::TwoRegisters
+                                   : MMIXTailCallResultShape::Unsupported;
+  case MMIXAggregateABIKind::IndirectResult:
+    return MMIXTailCallResultShape::Indirect;
+  case MMIXAggregateABIKind::DirectArgument:
+  case MMIXAggregateABIKind::CallerCopyArgument:
+    return MMIXTailCallResultShape::Unsupported;
+  }
+  llvm_unreachable("unhandled MMIX aggregate ABI kind");
+}
 
 bool MMIXTailCallFrameState::isEligible() const {
   return getReason() == MMIXTailCallEligibilityReason::Eligible;
@@ -23,6 +49,26 @@ MMIXTailCallEligibilityReason MMIXTailCallFrameState::getReason() const {
     return MMIXTailCallEligibilityReason::StackRealignment;
   return CanRestoreFrame ? MMIXTailCallEligibilityReason::Eligible
                          : MMIXTailCallEligibilityReason::UnrestorableFrame;
+}
+
+void llvm::applyMMIXTailCallABI(MMIXTailCallEligibilityInput &Eligibility,
+                                const MMIXTailCallABIInput &ABI) {
+  Eligibility.ResultsAreCompatible =
+      ABI.CallerResult != MMIXTailCallResultShape::Unsupported &&
+      ABI.CallerResult == ABI.CalleeResult;
+  Eligibility.ArgumentsAreCompatible = ABI.ArgumentsAreCompatible;
+  Eligibility.HasCallerCopy = ABI.HasCallerCopy;
+  Eligibility.CallerCopySurvivesTransfer = ABI.CallerCopySurvivesTransfer;
+
+  if (ABI.CallerResult != MMIXTailCallResultShape::Indirect &&
+      ABI.CalleeResult != MMIXTailCallResultShape::Indirect) {
+    Eligibility.IndirectResult = MMIXTailCallIndirectResultKind::None;
+    return;
+  }
+  Eligibility.IndirectResult =
+      Eligibility.ResultsAreCompatible && ABI.ForwardsIndirectResult
+          ? MMIXTailCallIndirectResultKind::Forwarded
+          : MMIXTailCallIndirectResultKind::Incompatible;
 }
 
 MMIXTailCallEligibility

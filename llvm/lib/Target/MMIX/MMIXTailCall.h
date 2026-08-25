@@ -15,6 +15,8 @@
 
 namespace llvm {
 
+enum class MMIXAggregateABIKind;
+
 enum class MMIXTailCallRequestKind {
   Ordinary,
   Required,
@@ -30,6 +32,14 @@ enum class MMIXTailCallIndirectResultKind {
   None,
   Forwarded,
   Incompatible,
+};
+
+enum class MMIXTailCallResultShape {
+  NoResult,
+  OneRegister,
+  TwoRegisters,
+  Indirect,
+  Unsupported,
 };
 
 enum class MMIXTailCallEligibilityReason {
@@ -85,6 +95,17 @@ struct MMIXTailCallEligibilityInput {
   uint64_t ReusableIncomingStackBytes = 0;
 };
 
+struct MMIXTailCallABIInput {
+  MMIXTailCallResultShape CallerResult =
+      MMIXTailCallResultShape::Unsupported;
+  MMIXTailCallResultShape CalleeResult =
+      MMIXTailCallResultShape::Unsupported;
+  bool ArgumentsAreCompatible = false;
+  bool ForwardsIndirectResult = false;
+  bool HasCallerCopy = false;
+  bool CallerCopySurvivesTransfer = false;
+};
+
 class MMIXTailCallEligibility {
   MMIXTailCallEligibilityReason Reason;
 
@@ -102,6 +123,13 @@ public:
 
 MMIXTailCallEligibility
 classifyMMIXTailCall(const MMIXTailCallEligibilityInput &Input);
+
+void applyMMIXTailCallABI(MMIXTailCallEligibilityInput &Eligibility,
+                          const MMIXTailCallABIInput &ABI);
+
+MMIXTailCallResultShape
+classifyMMIXTailCallResultShape(MMIXAggregateABIKind Kind,
+                                unsigned NumResultRegisters);
 
 } // namespace llvm
 
