@@ -5,8 +5,9 @@
 # RUN:   | FileCheck %s --check-prefix=ASM --implicit-check-not=PUSH
 # RUN: llc -mtriple=mmix-unknown-elf -start-after=prolog-epilog \
 # RUN:   -verify-machineinstrs -filetype=obj %s -o %t.o
-# RUN: llvm-readobj --relocations --expand-relocs %t.o \
-# RUN:   | FileCheck %s --check-prefix=RELOCS
+# RUN: llvm-readobj --sections --symbols --relocations --expand-relocs %t.o \
+# RUN:   | FileCheck %s --check-prefix=RELOCS \
+# RUN:     --implicit-check-not=R_MMIX_PUSHJ
 # RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
 # RUN:   | FileCheck %s --check-prefix=OBJ --implicit-check-not='<unknown>'
 
@@ -36,12 +37,27 @@
 # ASM-LABEL: tail_relocatable_direct:
 # ASM: JMP declared
 
-# RELOCS: Type: R_MMIX_GETA
-# RELOCS: Symbol: .text.separate
-# RELOCS: Type: R_MMIX_GETA
-# RELOCS: Symbol: declared
-# RELOCS: Type: R_MMIX_ADDR27
-# RELOCS: Symbol: declared
+# RELOCS:      Name: .text
+# RELOCS:      Name: .rela.text
+# RELOCS:      Name: .text.separate
+# RELOCS:      Section {{.*}} .rela.text {
+# RELOCS:      Offset: 0x10
+# RELOCS-NEXT: Type: R_MMIX_GETA
+# RELOCS-NEXT: Symbol: .text.separate
+# RELOCS-NEXT: Addend: 0x0
+# RELOCS:      Offset: 0x24
+# RELOCS-NEXT: Type: R_MMIX_GETA
+# RELOCS-NEXT: Symbol: declared
+# RELOCS-NEXT: Addend: 0x0
+# RELOCS:      Offset: 0x38
+# RELOCS-NEXT: Type: R_MMIX_ADDR27
+# RELOCS-NEXT: Symbol: declared
+# RELOCS-NEXT: Addend: 0x0
+# RELOCS:      Name: section_target
+# RELOCS:      Type: Function
+# RELOCS:      Section: .text.separate
+# RELOCS:      Name: declared
+# RELOCS:      Section: Undefined
 
 # OBJ-LABEL: <tail_backward>:
 # OBJ: JMPB

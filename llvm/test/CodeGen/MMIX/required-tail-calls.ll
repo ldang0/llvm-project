@@ -13,6 +13,10 @@
 ; RUN:   -o %t/dynamic-stack.o 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=DYNAMIC-STACK
 ; RUN: test ! -s %t/dynamic-stack.o
+; RUN: not llc -mtriple=mmix -filetype=asm %t/realigned-stack.ll \
+; RUN:   -o %t/realigned-stack.s 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=REALIGNED-STACK
+; RUN: test ! -s %t/realigned-stack.s
 ; RUN: not llc -mtriple=mmix -filetype=asm %t/caller-copy.ll \
 ; RUN:   -o %t/caller-copy.s 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=CALLER-COPY
@@ -21,6 +25,10 @@
 ; RUN:   -o %t/incompatible-sret.s 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=INCOMPATIBLE-SRET
 ; RUN: test ! -s %t/incompatible-sret.s
+; RUN: not llc -mtriple=mmix -filetype=asm %t/unrestorable-frame.ll \
+; RUN:   -o %t/unrestorable-frame.s 2>&1 \
+; RUN:   | FileCheck %s --check-prefix=UNRESTORABLE-FRAME
+; RUN: test ! -s %t/unrestorable-frame.s
 ; RUN: not llc -mtriple=mmix -filetype=asm %t/unsupported-cc.ll \
 ; RUN:   -o %t/unsupported-cc.s 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=UNSUPPORTED-CC
@@ -81,8 +89,10 @@
 ; OBJ: GO r255
 
 ; DYNAMIC-STACK: LLVM ERROR: MMIX required tail call is ineligible in function 'required_dynamic_stack': dynamic stack allocation prevents frame reuse
+; REALIGNED-STACK: LLVM ERROR: MMIX required tail call is ineligible in function 'required_realigned_stack': stack realignment prevents frame reuse
 ; CALLER-COPY: LLVM ERROR: MMIX required tail call is ineligible in function 'required_caller_copy': caller-copy storage does not survive the transfer
 ; INCOMPATIBLE-SRET: LLVM ERROR: MMIX required tail call is ineligible in function 'required_incompatible_sret': indirect result is not forwarded compatibly
+; UNRESTORABLE-FRAME: LLVM ERROR: MMIX required tail call is ineligible in function 'required_unrestorable_frame': software frame cannot be restored before transfer
 ; UNSUPPORTED-CC: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'required_unsupported_cc'
 
 ;--- supported.ll
@@ -157,6 +167,18 @@ define i64 @required_dynamic_stack(i64 %value) {
   ret i64 %result
 }
 
+;--- realigned-stack.ll
+target triple = "mmix-unknown-elf"
+
+declare i64 @realigned_target(i64)
+
+define i64 @required_realigned_stack(i64 %value) {
+  %storage = alloca i64, align 16
+  store volatile i64 %value, ptr %storage, align 16
+  %result = musttail call i64 @realigned_target(i64 %value)
+  ret i64 %result
+}
+
 ;--- caller-copy.ll
 target triple = "mmix-unknown-elf"
 
@@ -181,6 +203,18 @@ define void @required_incompatible_sret(ptr sret(%wide) %result) {
   musttail call void @incompatible_sret_target(ptr sret(%wide) %local)
   ret void
 }
+
+;--- unrestorable-frame.ll
+target triple = "mmix-unknown-elf"
+
+declare i64 @unrestorable_target(i64)
+
+define i64 @required_unrestorable_frame(i64 %value) #0 {
+  %result = musttail call i64 @unrestorable_target(i64 %value)
+  ret i64 %result
+}
+
+attributes #0 = { "probe-stack"="inline-asm" }
 
 ;--- unsupported-cc.ll
 target triple = "mmix-unknown-elf"

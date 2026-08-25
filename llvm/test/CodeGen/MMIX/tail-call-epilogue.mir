@@ -26,6 +26,8 @@
 # VALID-NEXT: liveins: $r250
 # VALID: $r30 = frame-setup GET $rj
 # VALID-NEXT: $rj = frame-destroy PUT $r30
+# VALID-NOT: GET $rj
+# VALID-NOT: PUT $r30
 # VALID-NOT: PUSH
 # VALID-NOT: POP
 # VALID-NEXT: INDIRECT_TAIL_STATE killed $r250, csr_mmix
@@ -38,6 +40,7 @@
 # VALID: $r254 = frame-setup SUBUI $r254, 8
 # VALID: STOUI $r250, $r254, 0
 # VALID-NEXT: $r254 = frame-destroy ADDUI $r254, 8
+# VALID-NOT: $r254 = frame-destroy
 # VALID-NOT: PUSH
 # VALID-NOT: POP
 # VALID-NEXT: MATERIALIZED_DIRECT_TAIL_STATE @callee, killed $r249, csr_mmix
@@ -53,6 +56,9 @@
 # VALID: $r253 = LDOU $r253, killed $r255
 # VALID-NEXT: $r254 = frame-destroy ADDUI $r254, 16
 # VALID-NEXT: $rj = frame-destroy PUT $r30
+# VALID-NOT: $r253 = LDOU
+# VALID-NOT: $r254 = frame-destroy
+# VALID-NOT: $rj = frame-destroy
 # VALID-NOT: PUSH
 # VALID-NOT: POP
 # VALID-NEXT: DIRECT_TAIL_STATE @callee, csr_mmix

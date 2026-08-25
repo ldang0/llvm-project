@@ -1,6 +1,9 @@
 ; RUN: llc -mtriple=mmix -O0 -verify-machineinstrs %s -o - \
 ; RUN:   | FileCheck %s --check-prefix=ASM
 ; RUN: llc -mtriple=mmix -O0 -verify-machineinstrs -filetype=obj %s -o %t.o
+; RUN: llvm-readobj --relocations --expand-relocs %t.o \
+; RUN:   | FileCheck %s --check-prefix=RELOC \
+; RUN:     --implicit-check-not=R_MMIX_PUSHJ
 ; RUN: llvm-objdump --no-print-imm-hex -d %t.o \
 ; RUN:   | FileCheck %s --check-prefix=OBJ
 ; RUN: opt -mtriple=mmix -passes=globalopt -S %s -o %t.opt.ll
@@ -11,6 +14,8 @@
 define internal fastcc i64 @fast_target(i64 %value) noinline {
   ret i64 %value
 }
+
+declare fastcc i64 @fast_unresolved(i64)
 
 ; ASM-LABEL: fast_direct:
 ; ASM-NOT: PUSH
@@ -29,6 +34,45 @@ define fastcc i64 @fast_direct(i64 %value) {
 ; OBJ: GO r255
 define fastcc i64 @fast_indirect(ptr %callee, i64 %value) {
   %result = tail call fastcc i64 %callee(i64 %value)
+  ret i64 %result
+}
+
+; ASM-LABEL: fast_forward:
+; ASM-NOT: PUSH
+; ASM: JMP{{B?}} fast_forward_target
+; OBJ-LABEL: <fast_forward>:
+; OBJ: JMP
+define fastcc i64 @fast_forward(i64 %value) {
+  %result = tail call fastcc i64 @fast_forward_target(i64 %value)
+  ret i64 %result
+}
+
+define internal fastcc i64 @fast_forward_target(i64 %value) noinline {
+  ret i64 %value
+}
+
+define internal fastcc i64 @fast_section_target(i64 %value) noinline
+    section ".text.fast.tail.target" {
+  ret i64 %value
+}
+
+; ASM-LABEL: fast_cross_section:
+; ASM-NOT: PUSH
+; ASM: GO r255
+; OBJ-LABEL: <fast_cross_section>:
+; OBJ: GO r255
+define fastcc i64 @fast_cross_section(i64 %value) {
+  %result = tail call fastcc i64 @fast_section_target(i64 %value)
+  ret i64 %result
+}
+
+; ASM-LABEL: fast_external:
+; ASM-NOT: PUSH
+; ASM: GO r255
+; OBJ-LABEL: <fast_external>:
+; OBJ: GO r255
+define fastcc i64 @fast_external(i64 %value) {
+  %result = tail call fastcc i64 @fast_unresolved(i64 %value)
   ret i64 %result
 }
 
@@ -124,3 +168,10 @@ define i64 @optimizer_entry(i64 %value) {
   %result = call i64 @optimizer_tail_caller(i64 %value)
   ret i64 %result
 }
+
+; RELOC:      Type: R_MMIX_GETA
+; RELOC-NEXT: Symbol: .text.fast.tail.target
+; RELOC-NEXT: Addend: 0x0
+; RELOC:      Type: R_MMIX_GETA
+; RELOC-NEXT: Symbol: fast_unresolved
+; RELOC-NEXT: Addend: 0x0
