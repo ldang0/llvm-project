@@ -78,23 +78,26 @@
 // ASM: FIXU r231, 1, r231
 // ASM-LABEL: fused_float:
 // ASM: SETH {{r[0-9]+}}, (fmaf>>48)&65535
-// ASM: PUSHGO r31, {{r[0-9]+}}, 0
+// ASM-NOT: PUSHGO
+// ASM: GO r255, {{r[0-9]+}}, 0
 // ASM-LABEL: remainder_double:
 // ASM: SETH {{r[0-9]+}}, (fmod>>48)&65535
-// ASM: PUSHGO r31, {{r[0-9]+}}, 0
+// ASM-NOT: PUSHGO
+// ASM: GO r255, {{r[0-9]+}}, 0
 // ASM-LABEL: nearby_long_double:
 // ASM: SETH {{r[0-9]+}}, (nearbyintl>>48)&65535
-// ASM: PUSHGO r31, {{r[0-9]+}}, 0
+// ASM-NOT: PUSHGO
+// ASM: GO r255, {{r[0-9]+}}, 0
 
 // ELF: Format: elf64-mmix
 // ELF-NEXT: Arch: mmix
 // ELF: Type: Relocatable
 // ELF: Machine: EM_MMIX
-// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF: Type: R_MMIX_GETA (13)
 // ELF-NEXT: Symbol: fmaf
-// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF: Type: R_MMIX_GETA (13)
 // ELF-NEXT: Symbol: fmod
-// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF: Type: R_MMIX_GETA (13)
 // ELF-NEXT: Symbol: nearbyintl
 // ELF: Name: float_arithmetic
 // ELF: Type: Function
@@ -134,11 +137,14 @@
 // DIS-LABEL: <double_to_signed>:
 // DIS: FIXU r231, 1, r231
 // DIS-LABEL: <fused_float>:
-// DIS: PUSHJ r31, 0
-// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE fmaf
+// DIS: GETA
+// DIS-NEXT: {{.*}} R_MMIX_GETA fmaf
+// DIS: GO r255
 // DIS-LABEL: <remainder_double>:
-// DIS: PUSHJ r31, 0
-// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE fmod
+// DIS: GETA
+// DIS-NEXT: {{.*}} R_MMIX_GETA fmod
+// DIS: GO r255
 // DIS-LABEL: <nearby_long_double>:
-// DIS: PUSHJ r31, 0
-// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE nearbyintl
+// DIS: GETA
+// DIS-NEXT: {{.*}} R_MMIX_GETA nearbyintl
+// DIS: GO r255

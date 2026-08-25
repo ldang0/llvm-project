@@ -27,24 +27,27 @@
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
 // ASM-LABEL: find_first_set:
 // ASM: SETH r{{[0-9]+}}, (__ffsdi2>>48)&65535
-// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+// ASM-NOT: PUSHGO
+// ASM: GO r255, r{{[0-9]+}}, 0
 // ASM-LABEL: remainder_double:
 // ASM: SETH r{{[0-9]+}}, (fmod>>48)&65535
-// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+// ASM-NOT: PUSHGO
+// ASM: GO r255, r{{[0-9]+}}, 0
 // ASM-LABEL: fused_float:
 // ASM: SETH r{{[0-9]+}}, (fmaf>>48)&65535
-// ASM: PUSHGO r31, r{{[0-9]+}}, 0
+// ASM-NOT: PUSHGO
+// ASM: GO r255, r{{[0-9]+}}, 0
 
 // ELF: Format: elf64-mmix
 // ELF-NEXT: Arch: mmix
 // ELF: Type: Relocatable
 // ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
 // ELF-NEXT: Symbol: memcpy
-// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF: Type: R_MMIX_GETA (13)
 // ELF-NEXT: Symbol: __ffsdi2
-// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF: Type: R_MMIX_GETA (13)
 // ELF-NEXT: Symbol: fmod
-// ELF: Type: R_MMIX_PUSHJ_STUBBABLE (36)
+// ELF: Type: R_MMIX_GETA (13)
 // ELF-NEXT: Symbol: fmaf
 // ELF: Name: memcpy
 // ELF: Section: Undefined
@@ -59,11 +62,14 @@
 // DIS: PUSHJ r31, 0
 // DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE memcpy
 // DIS-LABEL: <find_first_set>:
-// DIS: PUSHJ r31, 0
-// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE __ffsdi2
+// DIS: GETA
+// DIS-NEXT: {{.*}} R_MMIX_GETA __ffsdi2
+// DIS: GO r255
 // DIS-LABEL: <remainder_double>:
-// DIS: PUSHJ r31, 0
-// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE fmod
+// DIS: GETA
+// DIS-NEXT: {{.*}} R_MMIX_GETA fmod
+// DIS: GO r255
 // DIS-LABEL: <fused_float>:
-// DIS: PUSHJ r31, 0
-// DIS-NEXT: {{.*}} R_MMIX_PUSHJ_STUBBABLE fmaf
+// DIS: GETA
+// DIS-NEXT: {{.*}} R_MMIX_GETA fmaf
+// DIS: GO r255
