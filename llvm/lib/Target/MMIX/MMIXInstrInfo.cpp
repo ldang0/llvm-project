@@ -271,6 +271,15 @@ bool MMIXInstrInfo::verifyInstruction(const MachineInstr &MI,
       return false;
     }
   }
+
+  const MachineFunction &MF = *MI.getMF();
+  MMIXTailCallFrameState FrameState =
+      MF.getSubtarget<MMIXSubtarget>().getFrameLowering()->analyzeTailCallFrame(
+          MF);
+  if (!FrameState.isEligible()) {
+    ErrInfo = MMIXTailCallEligibility(FrameState.getReason()).getReasonText();
+    return false;
+  }
   return true;
 }
 

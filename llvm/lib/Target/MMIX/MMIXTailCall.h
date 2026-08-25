@@ -57,6 +57,15 @@ enum class MMIXTailCallDisposition {
   Diagnose,
 };
 
+struct MMIXTailCallFrameState {
+  bool HasDynamicStack = false;
+  bool RequiresStackRealignment = false;
+  bool CanRestoreFrame = false;
+
+  bool isEligible() const;
+  MMIXTailCallEligibilityReason getReason() const;
+};
+
 struct MMIXTailCallEligibilityInput {
   CallingConv::ID CallerCC = CallingConv::C;
   CallingConv::ID CalleeCC = CallingConv::C;

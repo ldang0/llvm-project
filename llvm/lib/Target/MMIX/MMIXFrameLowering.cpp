@@ -82,6 +82,19 @@ static void validateFrame(const MachineFunction &MF,
         MF.getName() + "'");
 }
 
+MMIXTailCallFrameState
+MMIXFrameLowering::analyzeTailCallFrame(const MachineFunction &MF) const {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  MMIXTailCallFrameState State;
+  State.HasDynamicStack = MFI.hasVarSizedObjects();
+  State.RequiresStackRealignment = MFI.getMaxAlign() > getStackAlign();
+  State.CanRestoreFrame =
+      !MFI.hasOpaqueSPAdjustment() && !MF.shouldSplitStack() &&
+      !MF.getFunction().hasFnAttribute("probe-stack") &&
+      MFI.getStackSize() <= uint64_t(INT64_MAX);
+  return State;
+}
+
 void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
   assert(&MBB == &MF.front() && "MMIX does not support shrink wrapping");
@@ -114,14 +127,13 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
   }
 }
 
-void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
-                                     MachineBasicBlock &MBB) const {
+void MMIXFrameLowering::emitCallerStateRestore(
+    MachineFunction &MF, MachineBasicBlock &MBB,
+    MachineBasicBlock::iterator MBBI, const DebugLoc &DL) const {
   uint64_t StackSize = MF.getFrameInfo().getStackSize();
   if (StackSize > uint64_t(INT64_MAX))
     report_fatal_error("MMIX stack frame is too large");
 
-  MachineBasicBlock::iterator MBBI = MBB.getFirstTerminator();
-  DebugLoc DL = MBBI == MBB.end() ? DebugLoc() : MBBI->getDebugLoc();
   const auto &MMIXII =
       *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
   if (MF.getFrameInfo().hasVarSizedObjects()) {
@@ -139,6 +151,27 @@ void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
     BuildMI(MBB, MBBI, DL, MMIXII.get(MMIX::PUT), MMIX::RJ)
         .addReg(MMIX::R30)
         .setMIFlag(MachineInstr::FrameDestroy);
+}
+
+static bool isTailTransfer(const MachineInstr &MI) {
+  return MI.getOpcode() == MMIX::INDIRECT_TAIL_STATE ||
+         MI.getOpcode() == MMIX::DIRECT_TAIL_STATE ||
+         MI.getOpcode() == MMIX::MATERIALIZED_DIRECT_TAIL_STATE;
+}
+
+void MMIXFrameLowering::emitEpilogue(MachineFunction &MF,
+                                     MachineBasicBlock &MBB) const {
+  MachineBasicBlock::iterator MBBI = MBB.getFirstTerminator();
+  DebugLoc DL = MBBI == MBB.end() ? DebugLoc() : MBBI->getDebugLoc();
+  if (MBBI != MBB.end() && isTailTransfer(*MBBI)) {
+    MMIXTailCallFrameState State = analyzeTailCallFrame(MF);
+    if (!State.isEligible())
+      reportFatalUsageError(
+          Twine("MMIX tail transfer is ineligible: ") +
+          MMIXTailCallEligibility(State.getReason()).getReasonText() +
+          " in function '" + MF.getName() + "'");
+  }
+  emitCallerStateRestore(MF, MBB, MBBI, DL);
 }
 
 MachineBasicBlock::iterator MMIXFrameLowering::eliminateCallFramePseudoInstr(

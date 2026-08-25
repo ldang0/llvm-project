@@ -163,6 +163,27 @@ TEST(MMIXTailCallTest, ReportsTheFirstSemanticFailure) {
       "caller calling convention is unsupported");
 }
 
+TEST(MMIXTailCallTest, ClassifiesMachineFrameState) {
+  MMIXTailCallFrameState State;
+  State.CanRestoreFrame = true;
+  EXPECT_TRUE(State.isEligible());
+  EXPECT_EQ(State.getReason(), MMIXTailCallEligibilityReason::Eligible);
+
+  State.HasDynamicStack = true;
+  EXPECT_EQ(State.getReason(), MMIXTailCallEligibilityReason::DynamicStack);
+
+  State.RequiresStackRealignment = true;
+  EXPECT_EQ(State.getReason(), MMIXTailCallEligibilityReason::DynamicStack);
+
+  State.HasDynamicStack = false;
+  EXPECT_EQ(State.getReason(), MMIXTailCallEligibilityReason::StackRealignment);
+
+  State.RequiresStackRealignment = false;
+  State.CanRestoreFrame = false;
+  EXPECT_EQ(State.getReason(),
+            MMIXTailCallEligibilityReason::UnrestorableFrame);
+}
+
 TEST(MMIXTailCallTest, MachinePseudosModelTerminalCallState) {
   std::unique_ptr<MCInstrInfo> MII{createMMIXMCInstrInfo()};
   static constexpr std::array Opcodes = {MMIX::INDIRECT_TAIL_STATE,

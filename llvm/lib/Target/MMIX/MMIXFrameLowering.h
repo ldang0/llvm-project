@@ -9,11 +9,16 @@
 #ifndef LLVM_LIB_TARGET_MMIX_MMIXFRAMELOWERING_H
 #define LLVM_LIB_TARGET_MMIX_MMIXFRAMELOWERING_H
 
+#include "MMIXTailCall.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
 
 class MMIXFrameLowering final : public TargetFrameLowering {
+  void emitCallerStateRestore(MachineFunction &MF, MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MBBI,
+                              const DebugLoc &DL) const;
+
 public:
   MMIXFrameLowering();
 
@@ -24,6 +29,7 @@ public:
                             RegScavenger *RS = nullptr) const override;
   void processFunctionBeforeFrameFinalized(
       MachineFunction &MF, RegScavenger *RS = nullptr) const override;
+  MMIXTailCallFrameState analyzeTailCallFrame(const MachineFunction &MF) const;
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   MachineBasicBlock::iterator

@@ -12,6 +12,19 @@
 
 using namespace llvm;
 
+bool MMIXTailCallFrameState::isEligible() const {
+  return getReason() == MMIXTailCallEligibilityReason::Eligible;
+}
+
+MMIXTailCallEligibilityReason MMIXTailCallFrameState::getReason() const {
+  if (HasDynamicStack)
+    return MMIXTailCallEligibilityReason::DynamicStack;
+  if (RequiresStackRealignment)
+    return MMIXTailCallEligibilityReason::StackRealignment;
+  return CanRestoreFrame ? MMIXTailCallEligibilityReason::Eligible
+                         : MMIXTailCallEligibilityReason::UnrestorableFrame;
+}
+
 MMIXTailCallEligibility
 llvm::classifyMMIXTailCall(const MMIXTailCallEligibilityInput &Input) {
   using Reason = MMIXTailCallEligibilityReason;

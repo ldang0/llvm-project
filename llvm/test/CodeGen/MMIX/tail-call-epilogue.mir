@@ -1,0 +1,163 @@
+# RUN: split-file %s %t
+# RUN: llc -mtriple=mmix -run-pass=prolog-epilog -verify-machineinstrs \
+# RUN:   %t/valid.mir -o - | FileCheck %s --check-prefix=VALID
+# RUN: not --crash llc -mtriple=mmix -run-pass=prolog-epilog \
+# RUN:   -verify-machineinstrs %t/dynamic.mir -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=DYNAMIC
+# RUN: not --crash llc -mtriple=mmix -run-pass=prolog-epilog \
+# RUN:   -verify-machineinstrs %t/realigned.mir -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=REALIGNED
+# RUN: not --crash llc -mtriple=mmix -run-pass=prolog-epilog \
+# RUN:   -verify-machineinstrs %t/opaque.mir -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=OPAQUE
+
+# VALID-LABEL: name: leaf
+# VALID: body:
+# VALID-NEXT: bb.0:
+# VALID-NOT: frame-setup
+# VALID-NOT: frame-destroy
+# VALID-NOT: PUSH
+# VALID-NOT: POP
+# VALID: DIRECT_TAIL_STATE @callee, csr_mmix
+
+# VALID-LABEL: name: non_leaf
+# VALID: body:
+# VALID-NEXT: bb.0:
+# VALID-NEXT: liveins: $r250
+# VALID: $r30 = frame-setup GET $rj
+# VALID-NEXT: $rj = frame-destroy PUT $r30
+# VALID-NOT: PUSH
+# VALID-NOT: POP
+# VALID-NEXT: INDIRECT_TAIL_STATE killed $r250, csr_mmix
+
+# VALID-LABEL: name: framed
+# VALID: stackSize: 8
+# VALID: body:
+# VALID-NEXT: bb.0:
+# VALID-NEXT: liveins: $r249
+# VALID: $r254 = frame-setup SUBUI $r254, 8
+# VALID: STOUI $r250, $r254, 0
+# VALID-NEXT: $r254 = frame-destroy ADDUI $r254, 8
+# VALID-NOT: PUSH
+# VALID-NOT: POP
+# VALID-NEXT: MATERIALIZED_DIRECT_TAIL_STATE @callee, killed $r249, csr_mmix
+
+# VALID-LABEL: name: frame_pointer
+# VALID: stackSize: 16
+# VALID: body:
+# VALID-NEXT: bb.0:
+# VALID-NEXT: $r30 = frame-setup GET $rj
+# VALID-NEXT: $r254 = frame-setup SUBUI $r254, 16
+# VALID-NEXT: STOUI killed $r253, $r254, 8
+# VALID-NEXT: $r253 = frame-setup ADDUI $r254, 16
+# VALID: $r253 = LDOU $r253, killed $r255
+# VALID-NEXT: $r254 = frame-destroy ADDUI $r254, 16
+# VALID-NEXT: $rj = frame-destroy PUT $r30
+# VALID-NOT: PUSH
+# VALID-NOT: POP
+# VALID-NEXT: DIRECT_TAIL_STATE @callee, csr_mmix
+
+# DYNAMIC: Bad machine code: dynamic stack allocation prevents frame reuse
+# REALIGNED: Bad machine code: stack realignment prevents frame reuse
+# OPAQUE: Bad machine code: software frame cannot be restored before transfer
+
+#--- valid.mir
+--- |
+  target triple = "mmix"
+  declare void @callee()
+  define void @leaf() { ret void }
+  define void @non_leaf() { ret void }
+  define void @framed() { ret void }
+  define void @frame_pointer() { ret void }
+...
+---
+name: leaf
+tracksRegLiveness: true
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @callee, csr_mmix
+...
+---
+name: non_leaf
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    liveins: $r250
+    INDIRECT_TAIL_STATE killed $r250, csr_mmix
+...
+---
+name: framed
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    liveins: $r249
+    $r250 = SETL 1
+    STOUI $r250, %stack.0, 0
+    MATERIALIZED_DIRECT_TAIL_STATE @callee, killed $r249, csr_mmix
+...
+---
+name: frame_pointer
+tracksRegLiveness: true
+frameInfo:
+  isFrameAddressTaken: true
+  hasCalls: true
+stack:
+  - { id: 0, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    $r250 = SETL 1
+    STOUI $r250, %stack.0, 0
+    DIRECT_TAIL_STATE @callee, csr_mmix
+...
+
+#--- dynamic.mir
+--- |
+  target triple = "mmix"
+  declare void @callee()
+  define void @dynamic() { ret void }
+...
+---
+name: dynamic
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: variable-sized, alignment: 8 }
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @callee, csr_mmix
+...
+
+#--- realigned.mir
+--- |
+  target triple = "mmix"
+  declare void @callee()
+  define void @realigned() { ret void }
+...
+---
+name: realigned
+tracksRegLiveness: true
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @callee, csr_mmix
+...
+
+#--- opaque.mir
+--- |
+  target triple = "mmix"
+  declare void @callee()
+  define void @opaque() { ret void }
+...
+---
+name: opaque
+tracksRegLiveness: true
+frameInfo:
+  hasOpaqueSPAdjustment: true
+body: |
+  bb.0:
+    DIRECT_TAIL_STATE @callee, csr_mmix
+...
