@@ -32,9 +32,6 @@ public:
   explicit MMIXTTIImpl(const MMIXTargetMachine *TM, const Function &F)
       : BaseT(TM, F.getDataLayout()), ST(TM->getSubtargetImpl(F)),
         TLI(ST->getTargetLowering()) {}
-
-  // FIXME: Enable this promotion once the MMIX backend implements fastcc.
-  bool useFastCCForInternalCall(Function &) const override { return false; }
 };
 
 } // namespace llvm
