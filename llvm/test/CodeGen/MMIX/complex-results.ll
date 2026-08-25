@@ -43,12 +43,11 @@ define double @call_complex_indirect(ptr %callee, double %real,
   ret double %result
 }
 
-; A source tail marker remains an ordinary MMIX call because the target has no
-; tail-call ABI. Both result registers flow directly to the ordinary return.
+; Both result registers retain their ABI locations across the terminal
+; transfer, so the caller returns the Complex value without copying it.
 ; ASM-LABEL: forward_complex:
-; ASM:       PUSHGO
-; ASM:       PUT rJ
-; ASM-NEXT:  POP 0, 0
+; ASM-NOT:   PUSH
+; ASM:       GO r255
 define %complex @forward_complex(double %real, double %imaginary) {
   %value = tail call %complex @make_complex(double %real, double %imaginary)
   ret %complex %value

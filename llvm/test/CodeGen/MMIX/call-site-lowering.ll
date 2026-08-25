@@ -102,11 +102,11 @@ define i64 @call_indirect(ptr %callee, i64 %value) {
   ret i64 %result
 }
 
-; Tail-call optimization is deliberately disabled for the MMIX C ABI.
-; ISEL-LABEL: name: tail_call_disabled
-; ISEL:       hasTailCall: false
-; ISEL:       DIRECT_CALL_STATE @i64_callee, {{.*}}csr_mmix
-define i64 @tail_call_disabled(i64 %value) {
+; Eligible ordinary C tail calls select the terminal direct-call state.
+; ISEL-LABEL: name: tail_call_enabled
+; ISEL:       hasTailCall: true
+; ISEL:       MATERIALIZED_DIRECT_TAIL_STATE @i64_callee, {{.*}}csr_mmix
+define i64 @tail_call_enabled(i64 %value) {
   %result = tail call i64 @i64_callee(i64 %value)
   ret i64 %result
 }

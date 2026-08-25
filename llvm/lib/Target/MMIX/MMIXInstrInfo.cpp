@@ -292,9 +292,9 @@ bool MMIXInstrInfo::verifyInstruction(const MachineInstr &MI,
   }
   for (unsigned I = ExplicitOperands + 1; I != MI.getNumOperands(); ++I) {
     const MachineOperand &MO = MI.getOperand(I);
-    if (!MO.isReg() || !MO.isImplicit() || MO.isDef()) {
-      ErrInfo = "MMIX tail transfer accepts only implicit argument register "
-                "uses after its register mask";
+    if (!MO.isReg() || MO.isDef()) {
+      ErrInfo = "MMIX tail transfer accepts only argument register uses after "
+                "its register mask";
       return false;
     }
   }

@@ -7,11 +7,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXISelLowering.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXAggregateABI.h"
 #include "MMIXCallingConv.h"
 #include "MMIXMachineFunctionInfo.h"
 #include "MMIXSubtarget.h"
+#include "MMIXTailCall.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -25,6 +27,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicsMMIX.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -115,6 +118,22 @@ getMMIXDirectGlobalCallee(SDValue Callee) {
   if (AddOverflow(GA->getOffset(), Addend, Offset))
     report_fatal_error("MMIX direct call symbol addend is out of range");
   return std::pair(GA, Offset);
+}
+
+static const Value *getMMIXStructRetArgument(const Function &F) {
+  for (const Argument &Arg : F.args())
+    if (Arg.hasStructRetAttr())
+      return &Arg;
+  return nullptr;
+}
+
+static const Value *getMMIXStructRetArgument(const CallBase *Call) {
+  if (!Call)
+    return nullptr;
+  for (unsigned I = 0; I != Call->arg_size(); ++I)
+    if (Call->paramHasAttr(I, Attribute::StructRet))
+      return Call->getArgOperand(I);
+  return nullptr;
 }
 
 static bool isUnsafeInlineAsmRegister(MCRegister Reg) {
@@ -1393,6 +1412,38 @@ static MMIXAggregateABIClassification classifyMMIXABIValue(
   return Classification;
 }
 
+static MMIXTailCallResultShape
+classifyMMIXCallerTailResult(const TargetLowering &TLI, const Function &F,
+                             const DataLayout &DL) {
+  if (F.hasStructRetAttr())
+    return MMIXTailCallResultShape::Indirect;
+
+  SmallVector<EVT, 2> ValueVTs;
+  ComputeValueVTs(TLI, DL, F.getReturnType(), ValueVTs);
+  ISD::ArgFlagsTy Flags;
+  MMIXAggregateABIClassification Classification =
+      classifyMMIXABIValue(MMIXAggregateABIRole::Result, Flags, DL,
+                           F.getReturnType(), ValueVTs.size());
+  if (!Classification.isValid())
+    return MMIXTailCallResultShape::Unsupported;
+
+  unsigned NumResultRegisters = ValueVTs.size();
+  if (Classification.Kind == MMIXAggregateABIKind::DirectResult)
+    NumResultRegisters = isMMIXWideComplexResultType(F.getReturnType()) ? 2 : 1;
+  return classifyMMIXTailCallResultShape(Classification.Kind,
+                                         NumResultRegisters);
+}
+
+static bool hasCompatibleMMIXTailResultAttributes(const Function &Caller,
+                                                  const CallBase *Call) {
+  if (!Call || Caller.getReturnType() != Call->getType())
+    return false;
+  for (Attribute::AttrKind Kind : {Attribute::SExt, Attribute::ZExt})
+    if (Caller.hasRetAttribute(Kind) != Call->hasRetAttr(Kind))
+      return false;
+  return true;
+}
+
 static bool isSupportedMMIXABIType(Type *Ty) {
   if (Ty->isVoidTy() || Ty->isAggregateType() || Ty->isPointerTy() ||
       Ty->isFloatTy() || Ty->isDoubleTy())
@@ -1669,6 +1720,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   MachineFunction &MF = CLI.DAG.getMachineFunction();
   SelectionDAG &DAG = CLI.DAG;
   SDValue Chain = CLI.Chain;
+  bool TailCallRequested = CLI.IsTailCall;
   if (CLI.CB && CLI.CB->isMustTailCall())
     reportFatalUsageError(
         Twine("MMIX does not support required tail calls in ") + "function '" +
@@ -1763,6 +1815,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   SmallVector<ISD::OutputArg, 16> ABIOuts;
   SmallVector<SDValue, 16> ABIOutVals;
+  bool HasCallerCopy = false;
   for (unsigned I = 0; I != CLI.Outs.size();) {
     const ISD::OutputArg &Arg = CLI.Outs[I];
     Type *AggregateTy = nullptr;
@@ -1791,6 +1844,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
           "in function '" + MF.getName() + "'");
 
     if (Classification.Kind == MMIXAggregateABIKind::CallerCopyArgument) {
+      HasCallerCopy = true;
       uint64_t Size = Arg.Flags.getByValSize();
       Align Alignment = Arg.Flags.getNonZeroByValAlign();
       int FI = MF.getFrameInfo().CreateStackObject(Size, Alignment,
@@ -1848,10 +1902,6 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     ABIOutVals.push_back(Packed);
     I = End;
   }
-  // Tail-transfer selection reuses the argument machinery below. Until that
-  // selection is connected, all requests retain the normal call behavior.
-  bool IsTailCall = false;
-  CLI.IsTailCall = IsTailCall;
 
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ArgLocs, *DAG.getContext());
@@ -1859,6 +1909,62 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (ArgLocs.size() != ABIOutVals.size())
     report_fatal_error("MMIX call assignment lost an ABI argument");
   unsigned NumBytes = ArgCCInfo.getStackSize();
+
+  SDValue OriginalCallee = CLI.Callee;
+  bool IsDirectCallee = getMMIXDirectGlobalCallee(OriginalCallee).has_value() ||
+                        isa<ExternalSymbolSDNode>(OriginalCallee);
+  MMIXTailCallCalleeKind CalleeKind =
+      IsDirectCallee ? MMIXTailCallCalleeKind::Direct
+                     : (OriginalCallee.getValueType() == MVT::i64
+                            ? MMIXTailCallCalleeKind::Indirect
+                            : MMIXTailCallCalleeKind::Unsupported);
+
+  bool IsTailCall = false;
+  const Function &Caller = MF.getFunction();
+  bool IsCanonicalAssembly =
+      getTargetMachine().getMCAsmInfo().getOutputAssemblerDialect() !=
+      MMIXII::MMIXALAsmVariant;
+  if (TailCallRequested && Caller.getCallingConv() == CallingConv::C &&
+      CLI.CallConv == CallingConv::C && IsCanonicalAssembly) {
+    const Value *CallerSRet = getMMIXStructRetArgument(Caller);
+    const Value *CalleeSRet = getMMIXStructRetArgument(CLI.CB);
+    bool ForwardsSRet =
+        CallerSRet && CalleeSRet &&
+        CallerSRet->stripPointerCasts() == CalleeSRet->stripPointerCasts();
+
+    MMIXTailCallABIInput ABI;
+    ABI.CallerResult =
+        classifyMMIXCallerTailResult(*this, Caller, DAG.getDataLayout());
+    if (!hasCompatibleMMIXTailResultAttributes(Caller, CLI.CB))
+      ABI.CallerResult = MMIXTailCallResultShape::Unsupported;
+    ABI.CalleeResult =
+        CalleeSRet ? MMIXTailCallResultShape::Indirect
+                   : classifyMMIXTailCallResultShape(ResultClassification.Kind,
+                                                     ABIIns.size());
+    ABI.ArgumentsAreCompatible = true;
+    ABI.ForwardsIndirectResult = ForwardsSRet;
+    ABI.HasCallerCopy = HasCallerCopy;
+    ABI.CallerCopySurvivesTransfer = false;
+
+    MMIXTailCallFrameState Frame = MF.getSubtarget<MMIXSubtarget>()
+                                       .getFrameLowering()
+                                       ->analyzeTailCallFrame(MF);
+    MMIXTailCallEligibilityInput Eligibility;
+    Eligibility.CallerCC = Caller.getCallingConv();
+    Eligibility.CalleeCC = CLI.CallConv;
+    Eligibility.CallerIsVarArg = Caller.isVarArg();
+    Eligibility.CalleeIsVarArg = CLI.IsVarArg;
+    Eligibility.Callee = CalleeKind;
+    Eligibility.HasDynamicStack = Frame.HasDynamicStack;
+    Eligibility.RequiresStackRealignment = Frame.RequiresStackRealignment;
+    Eligibility.CanRestoreFrame = Frame.CanRestoreFrame;
+    Eligibility.OutgoingStackBytes = NumBytes;
+    Eligibility.ReusableIncomingStackBytes =
+        MF.getInfo<MMIXMachineFunctionInfo>()->getIncomingStackArgSize();
+    applyMMIXTailCallABI(Eligibility, ABI);
+    IsTailCall = classifyMMIXTailCall(Eligibility).isEligible();
+  }
+  CLI.IsTailCall = IsTailCall;
   if (!IsTailCall)
     Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
 
@@ -1903,7 +2009,7 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SDValue Glue;
   copyMMIXArgumentsToRegisters(Chain, Glue, RegsToPass, CLI.DL, DAG);
 
-  SDValue Callee = CLI.Callee;
+  SDValue Callee = OriginalCallee;
   SDValue DirectCallee;
   if (auto GlobalCallee = getMMIXDirectGlobalCallee(Callee)) {
     const GlobalAddressSDNode *GA = GlobalCallee->first;
@@ -1947,13 +2053,20 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (Glue)
     CallOps.push_back(Glue);
 
-  Chain = DAG.getNode(DirectCallee ? MMIXISD::DIRECT_CALL : MMIXISD::CALL,
-                      CLI.DL, DAG.getVTList(MVT::Other, MVT::Glue), CallOps);
+  unsigned CallOpcode;
+  if (IsTailCall)
+    CallOpcode = IsDirectCallee ? MMIXISD::DIRECT_TAIL : MMIXISD::INDIRECT_TAIL;
+  else
+    CallOpcode = DirectCallee ? MMIXISD::DIRECT_CALL : MMIXISD::CALL;
+  Chain = DAG.getNode(CallOpcode, CLI.DL, DAG.getVTList(MVT::Other, MVT::Glue),
+                      CallOps);
   Glue = Chain.getValue(1);
-  if (!IsTailCall) {
-    Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
-    Glue = Chain.getValue(1);
+  if (IsTailCall) {
+    MF.getFrameInfo().setHasTailCall();
+    return Chain;
   }
+  Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, CLI.DL);
+  Glue = Chain.getValue(1);
 
   SmallVector<CCValAssign, 2> ResultLocs;
   CCState ResultCCInfo(CLI.CallConv, CLI.IsVarArg, MF, ResultLocs,
