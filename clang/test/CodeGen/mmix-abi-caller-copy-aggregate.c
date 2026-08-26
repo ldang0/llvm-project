@@ -100,7 +100,10 @@ void first_stack_slot(long a0, long a1, long a2, long a3, long a4, long a5,
 // ISEL: CALL_STATE
 // ISEL-LABEL: name: nested_call
 // ISEL: stack:
+// ISEL: - { id: [[SELECT_COPY:[0-9]+]], {{.*}}size: 16, alignment: 8,
 // ISEL: - { id: [[NESTED_COPY:[0-9]+]], {{.*}}size: 16, alignment: 8,
+// ISEL: STOUI {{.*}}%stack.[[SELECT_COPY]], 8
+// ISEL: STOUI {{.*}}%stack.[[SELECT_COPY]], 0
 // ISEL: DIRECT_CALL_STATE @select_pair
 // ISEL: STOUI {{.*}}%stack.[[NESTED_COPY]], 8
 // ISEL: STOUI {{.*}}%stack.[[NESTED_COPY]], 0

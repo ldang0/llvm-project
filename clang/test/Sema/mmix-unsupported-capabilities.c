@@ -5,7 +5,7 @@
 _Thread_local int tls; // expected-error {{thread-local storage is not supported for the current target}}
 
 void variable_length_array(int n) {
-  int values[n]; // expected-error {{variable length arrays are not supported for the current target}}
+  int values[n];
   (void)values;
 }
 

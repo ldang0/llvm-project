@@ -16,9 +16,9 @@ typedef _Complex double complex_double;
 typedef _Complex long double complex_long_double;
 
 // ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __mulsc3
-// ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __divsc3
+// ELF-DAG: R_MMIX_GETA __divsc3
 // ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __muldc3
-// ELF-DAG: R_MMIX_PUSHJ_STUBBABLE __divdc3
+// ELF-DAG: R_MMIX_GETA __divdc3
 
 struct ComplexMember {
   int tag;

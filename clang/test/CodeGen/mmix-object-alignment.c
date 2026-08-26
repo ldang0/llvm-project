@@ -6,14 +6,13 @@
 // RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
 // RUN:   -o - %s | llc -mtriple=mmix -stop-after=prolog-epilog -o - \
 // RUN:   | FileCheck %s --check-prefix=FRAME
-// RUN: %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
-// RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
-// RUN:   -DOVERALIGNED -o - %s \
-// RUN:   | not llc -mtriple=mmix -o /dev/null 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=OVERALIGNED
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
-// RUN:   -DVARIABLE -o /dev/null %s 2>&1 \
+// RUN:   -DOVERALIGNED -o /dev/null %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=OVERALIGNED
+// RUN: %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
+// RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
+// RUN:   -DVARIABLE -o - %s \
 // RUN:   | FileCheck %s --check-prefix=VARIABLE
 
 struct Packed {
@@ -69,14 +68,15 @@ void unsupported_alignment(void) {
   value = 0;
 }
 
-// OVERALIGNED: LLVM ERROR: MMIX does not support stack realignment in function 'unsupported_alignment'
+// OVERALIGNED: error: MMIX does not support automatic object alignment greater than 8 bytes
 #endif
 
 #ifdef VARIABLE
-void unsupported_variable_size(int count) {
+void variable_size_object(int count) {
   char values[count];
   values[0] = 0;
 }
 
-// VARIABLE: error: variable length arrays are not supported for the current target
+// VARIABLE-LABEL: define dso_local void @variable_size_object(
+// VARIABLE: %vla = alloca i8, i64 %{{[0-9]+}}, align 1
 #endif
