@@ -582,8 +582,8 @@ MMIXTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   }
 
   // Reserved architectural and special registers are valid clobber names, but
-  // cannot carry values without changing the provisional register-allocation
-  // or special-register state contract.
+  // cannot carry values without changing the reviewed register-allocation or
+  // special-register state contract.
   if (VT != MVT::Other)
     return {0, nullptr};
   if (MMIX::GPR64RegClass.contains(Reg))
