@@ -1,0 +1,60 @@
+# RUN: split-file %s %t
+# RUN: cmake \
+# RUN:   -DMMIX_ENTRYPOINTS=%S/../../../../libc/config/baremetal/mmix/entrypoints.txt \
+# RUN:   -P %t/check.cmake
+
+#--- check.cmake
+include(${MMIX_ENTRYPOINTS})
+
+set(expected_libc
+    libc.src.stdlib.abs
+    libc.src.stdlib.div
+    libc.src.stdlib.labs
+    libc.src.stdlib.ldiv
+    libc.src.stdlib.llabs
+    libc.src.stdlib.lldiv
+    libc.src.string.memchr
+    libc.src.string.memcmp
+    libc.src.string.memcpy
+    libc.src.string.memmove
+    libc.src.string.memset
+    libc.src.string.strcmp
+    libc.src.string.strncmp
+    libc.src.string.strlen)
+set(expected_libm
+    libc.src.math.copysign
+    libc.src.math.copysignf
+    libc.src.math.fabs
+    libc.src.math.fabsf)
+
+if(NOT TARGET_LIBC_ENTRYPOINTS STREQUAL expected_libc)
+  message(FATAL_ERROR
+    "unexpected MMIX libc entrypoints: ${TARGET_LIBC_ENTRYPOINTS}")
+endif()
+if(NOT TARGET_LIBM_ENTRYPOINTS STREQUAL expected_libm)
+  message(FATAL_ERROR
+    "unexpected MMIX libm entrypoints: ${TARGET_LIBM_ENTRYPOINTS}")
+endif()
+
+set(expected_all ${expected_libc} ${expected_libm})
+if(NOT TARGET_LLVMLIBC_ENTRYPOINTS STREQUAL expected_all)
+  message(FATAL_ERROR
+    "unexpected combined MMIX entrypoints: ${TARGET_LLVMLIBC_ENTRYPOINTS}")
+endif()
+
+set(unique_entrypoints ${TARGET_LLVMLIBC_ENTRYPOINTS})
+list(REMOVE_DUPLICATES unique_entrypoints)
+if(NOT unique_entrypoints STREQUAL TARGET_LLVMLIBC_ENTRYPOINTS)
+  message(FATAL_ERROR "duplicate MMIX entrypoint")
+endif()
+
+foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
+  if(NOT entrypoint MATCHES "^libc[.]src[.](stdlib|string)[.]")
+    message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
+  endif()
+endforeach()
+foreach(entrypoint IN LISTS TARGET_LIBM_ENTRYPOINTS)
+  if(NOT entrypoint MATCHES "^libc[.]src[.]math[.]")
+    message(FATAL_ERROR "unreviewed MMIX libm family: ${entrypoint}")
+  endif()
+endforeach()
