@@ -1,0 +1,61 @@
+# RUN: split-file %s %t
+# RUN: chmod +x %t/compiler
+# RUN: cmake -DCMAKE_CXX_COMPILER=%t/compiler \
+# RUN:   -DLLVM_LIBC_ARCH_MODULE=%S/../../../../libc/cmake/modules/LLVMLibCArchitectures.cmake \
+# RUN:   -DTEST_TRIPLE=mmix-unknown-unknown -DEXPECT_ARCH=mmix \
+# RUN:   -DEXPECT_OS=baremetal -DEXPECT_MMIX=ON -DEXPECT_CROSSBUILD=ON \
+# RUN:   -P %t/check.cmake
+# RUN: cmake -DCMAKE_CXX_COMPILER=%t/compiler \
+# RUN:   -DLLVM_LIBC_ARCH_MODULE=%S/../../../../libc/cmake/modules/LLVMLibCArchitectures.cmake \
+# RUN:   -DTEST_TRIPLE=mmix-unknown-elf -DEXPECT_ARCH=mmix \
+# RUN:   -DEXPECT_OS=baremetal -DEXPECT_MMIX=ON -DEXPECT_CROSSBUILD=ON \
+# RUN:   -P %t/check.cmake
+# RUN: cmake -DCMAKE_CXX_COMPILER=%t/compiler \
+# RUN:   -DLLVM_LIBC_ARCH_MODULE=%S/../../../../libc/cmake/modules/LLVMLibCArchitectures.cmake \
+# RUN:   -DTEST_TRIPLE=x86_64-unknown-linux-gnu -DEXPECT_ARCH=x86_64 \
+# RUN:   -DEXPECT_OS=linux -DEXPECT_MMIX=OFF -DEXPECT_CROSSBUILD=OFF \
+# RUN:   -P %t/check.cmake
+# RUN: not cmake -DCMAKE_CXX_COMPILER=%t/compiler \
+# RUN:   -DLLVM_LIBC_ARCH_MODULE=%S/../../../../libc/cmake/modules/LLVMLibCArchitectures.cmake \
+# RUN:   -DTEST_TRIPLE=mmix64-unknown-unknown -P %t/check.cmake 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=INVALID
+
+# INVALID: libc build: Invalid or unknown triple: mmix64-unknown-unknown
+
+#--- compiler
+#!/bin/sh
+echo "Target: x86_64-unknown-linux-gnu" >&2
+
+#--- check.cmake
+set(LIBC_TARGET_TRIPLE "${TEST_TRIPLE}")
+include(${LLVM_LIBC_ARCH_MODULE})
+
+if(NOT LIBC_TARGET_ARCHITECTURE STREQUAL "${EXPECT_ARCH}")
+  message(FATAL_ERROR
+    "expected architecture ${EXPECT_ARCH}, got ${LIBC_TARGET_ARCHITECTURE}")
+endif()
+if(NOT LIBC_TARGET_OS STREQUAL "${EXPECT_OS}")
+  message(FATAL_ERROR "expected OS ${EXPECT_OS}, got ${LIBC_TARGET_OS}")
+endif()
+
+if(EXPECT_MMIX)
+  if(NOT LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+    message(FATAL_ERROR "MMIX architecture predicate is not set")
+  endif()
+elseif(DEFINED LIBC_TARGET_ARCHITECTURE_IS_MMIX AND
+       LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+  message(FATAL_ERROR "MMIX architecture predicate leaked to ${EXPECT_ARCH}")
+endif()
+
+if(EXPECT_CROSSBUILD)
+  if(NOT LIBC_CROSSBUILD)
+    message(FATAL_ERROR "expected an explicit Clang cross-build")
+  endif()
+  list(FIND LIBC_COMPILE_OPTIONS_DEFAULT "--target=${TEST_TRIPLE}"
+       target_option_index)
+  if(target_option_index EQUAL -1)
+    message(FATAL_ERROR "missing --target=${TEST_TRIPLE}")
+  endif()
+elseif(LIBC_CROSSBUILD)
+  message(FATAL_ERROR "unexpected cross-build for ${TEST_TRIPLE}")
+endif()
