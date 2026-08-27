@@ -1,0 +1,68 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding \
+# RUN:   -fsyntax-only -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc %t/properties.cpp
+
+#--- properties.cpp
+#include "src/__support/complex_type.h"
+
+#ifndef LIBC_TARGET_ARCH_IS_MMIX
+#error "LLVM libc did not recognize the MMIX source architecture"
+#endif
+
+#if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
+#error "MMIX must use big-endian byte order"
+#endif
+
+#if !defined(LIBC_TYPES_HAS_INT64) || defined(LIBC_TYPES_HAS_INT128)
+#error "unexpected LLVM libc integer capabilities"
+#endif
+
+#if !defined(LIBC_TYPES_LONG_DOUBLE_IS_FLOAT64) ||                         \
+    defined(LIBC_TYPES_LONG_DOUBLE_IS_X86_FLOAT80) ||                     \
+    defined(LIBC_TYPES_LONG_DOUBLE_IS_FLOAT128) ||                        \
+    defined(LIBC_TYPES_LONG_DOUBLE_IS_DOUBLE_DOUBLE)
+#error "unexpected LLVM libc long double representation"
+#endif
+
+#if defined(LIBC_TYPES_HAS_FLOAT16) || defined(LIBC_TYPES_HAS_FLOAT128) || \
+    defined(LIBC_TYPES_HAS_CFLOAT16) || defined(LIBC_TYPES_HAS_CFLOAT128)
+#error "LLVM libc advertised an unsupported extended floating type"
+#endif
+
+#define SAME_TYPE(T, U) __is_same(T, U)
+
+static_assert(__BIGGEST_ALIGNMENT__ == 8);
+static_assert(sizeof(bool) == 1 && alignof(bool) == 1);
+static_assert(sizeof(char) == 1 && alignof(char) == 1 && char(-1) < 0);
+static_assert(sizeof(short) == 2 && alignof(short) == 2);
+static_assert(sizeof(int) == 4 && alignof(int) == 4);
+static_assert(sizeof(long) == 8 && alignof(long) == 8);
+static_assert(sizeof(long long) == 8 && alignof(long long) == 8);
+static_assert(sizeof(void *) == 8 && alignof(void *) == 8);
+
+static_assert(SAME_TYPE(__SIZE_TYPE__, unsigned long));
+static_assert(SAME_TYPE(__PTRDIFF_TYPE__, long));
+static_assert(SAME_TYPE(__INTPTR_TYPE__, long));
+static_assert(SAME_TYPE(__UINTPTR_TYPE__, unsigned long));
+static_assert(SAME_TYPE(__WCHAR_TYPE__, int));
+static_assert(SAME_TYPE(__WINT_TYPE__, unsigned int));
+
+static_assert(sizeof(float) == 4 && alignof(float) == 4 &&
+              __FLT_MANT_DIG__ == 24);
+static_assert(sizeof(double) == 8 && alignof(double) == 8 &&
+              __DBL_MANT_DIG__ == 53);
+static_assert(sizeof(long double) == 8 && alignof(long double) == 8 &&
+              __LDBL_MANT_DIG__ == 53);
+static_assert(!SAME_TYPE(double, long double));
+
+using FloatComplex = __llvm_libc::make_complex_t<float>;
+using DoubleComplex = __llvm_libc::make_complex_t<double>;
+using LongDoubleComplex = __llvm_libc::make_complex_t<long double>;
+
+static_assert(sizeof(FloatComplex) == 8 && alignof(FloatComplex) == 4);
+static_assert(sizeof(DoubleComplex) == 16 && alignof(DoubleComplex) == 8);
+static_assert(sizeof(LongDoubleComplex) == 16 &&
+              alignof(LongDoubleComplex) == 8);
+static_assert(!SAME_TYPE(DoubleComplex, LongDoubleComplex));
