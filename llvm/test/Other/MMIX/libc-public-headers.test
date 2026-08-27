@@ -1,0 +1,124 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: cmake \
+# RUN:   -DMMIX_HEADERS=%S/../../../../libc/config/baremetal/mmix/headers.txt \
+# RUN:   -P %t/check-config.cmake
+# RUN: mkdir -p %t/include
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/ctype.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/ctype.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/float.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/float.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/inttypes.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/inttypes.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/limits.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/limits.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/math.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/math.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/stdint.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/stdint.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/stdlib.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/stdlib.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/string.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/string.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/strings.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/strings.yaml
+# RUN: not grep -RE '(/home/|/tmp/|[A-Za-z]:\\)' %t/include
+# RUN: clang --target=mmix-unknown-unknown -std=c17 -ffreestanding -nostdinc \
+# RUN:   -isystem %S/../../../../clang/lib/Headers -I %t/include \
+# RUN:   -I %S/../../../../libc/include -fsyntax-only %t/properties.c
+# RUN: clang --target=mmix-unknown-elf -std=c17 -ffreestanding -nostdinc \
+# RUN:   -isystem %S/../../../../clang/lib/Headers -I %t/include \
+# RUN:   -I %S/../../../../libc/include -fsyntax-only %t/properties.c
+
+#--- check-config.cmake
+include(${MMIX_HEADERS})
+set(expected_headers
+    libc.include.ctype
+    libc.include.float
+    libc.include.inttypes
+    libc.include.limits
+    libc.include.math
+    libc.include.stdint
+    libc.include.stdlib
+    libc.include.string
+    libc.include.strings)
+if(NOT TARGET_PUBLIC_HEADERS STREQUAL expected_headers)
+  message(FATAL_ERROR
+    "unexpected MMIX public headers: ${TARGET_PUBLIC_HEADERS}")
+endif()
+
+#--- properties.c
+#include <ctype.h>
+#include <float.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <math.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define SAME_TYPE(T, U) __builtin_types_compatible_p(T, U)
+
+_Static_assert(CHAR_BIT == 8 && CHAR_MIN < 0, "plain char model");
+_Static_assert(sizeof(int8_t) == 1 && sizeof(int16_t) == 2,
+               "narrow integer types");
+_Static_assert(sizeof(int32_t) == 4 && sizeof(int64_t) == 8,
+               "wide integer types");
+_Static_assert(SAME_TYPE(intptr_t, long), "intptr_t");
+_Static_assert(SAME_TYPE(uintptr_t, unsigned long), "uintptr_t");
+_Static_assert(SAME_TYPE(intmax_t, long), "intmax_t");
+_Static_assert(SAME_TYPE(uintmax_t, unsigned long), "uintmax_t");
+_Static_assert(SIZE_MAX == ULONG_MAX && INT64_MAX == LONG_MAX,
+               "integer limits");
+_Static_assert(sizeof(PRId64) == sizeof("ld"), "int64 format");
+
+_Static_assert(FLT_RADIX == 2 && FLT_MANT_DIG == 24, "float format");
+_Static_assert(DBL_MANT_DIG == 53 && LDBL_MANT_DIG == 53,
+               "double formats");
+_Static_assert(FLT_EVAL_METHOD == 0, "floating evaluation method");
+_Static_assert(SAME_TYPE(float_t, float), "float_t");
+_Static_assert(SAME_TYPE(double_t, double), "double_t");
+_Static_assert(!SAME_TYPE(double, long double), "distinct long double");
+_Static_assert(sizeof(_Complex float) == 8, "float complex");
+_Static_assert(sizeof(_Complex double) == 16, "double complex");
+_Static_assert(sizeof(_Complex long double) == 16, "long double complex");
+
+_Static_assert(SAME_TYPE(size_t, unsigned long), "size_t");
+_Static_assert(SAME_TYPE(ptrdiff_t, long), "ptrdiff_t");
+_Static_assert(SAME_TYPE(wchar_t, int), "wchar_t");
+_Static_assert(_Alignof(max_align_t) == 8, "maximum alignment");
+struct OffsetProbe {
+  char padding;
+  long value;
+};
+_Static_assert(offsetof(struct OffsetProbe, value) == 8, "offsetof");
+_Static_assert(sizeof(div_t) == 8 && _Alignof(div_t) == 4, "div_t");
+_Static_assert(sizeof(ldiv_t) == 16 && _Alignof(ldiv_t) == 8, "ldiv_t");
+_Static_assert(sizeof(lldiv_t) == 16 && _Alignof(lldiv_t) == 8, "lldiv_t");
+
+static long read_variadic(int ignored, ...) {
+  va_list args;
+  va_start(args, ignored);
+  long value = va_arg(args, long);
+  va_list copy;
+  va_copy(copy, args);
+  va_end(copy);
+  va_end(args);
+  return value;
+}
+
+bool header_probe(void) {
+  return read_variadic(0, 1L) == 1;
+}
