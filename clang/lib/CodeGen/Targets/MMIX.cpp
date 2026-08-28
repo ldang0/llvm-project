@@ -90,6 +90,18 @@ static bool diagnoseUnsupportedMMIXCXXFeature(CodeGenModule &CGM,
   return true;
 }
 
+static bool diagnoseUnsupportedMMIXCXXObjectLifetime(CodeGenModule &CGM,
+                                                      SourceLocation Loc,
+                                                      const CXXRecordDecl *RD) {
+  if (RD->getNumVBases() != 0)
+    return diagnoseUnsupportedMMIXCXXFeature(CGM, Loc,
+                                             "virtual inheritance");
+  if (RD->isPolymorphic())
+    return diagnoseUnsupportedMMIXCXXFeature(CGM, Loc,
+                                             "polymorphic object lifetime");
+  return false;
+}
+
 static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
                                                SourceLocation Loc,
                                                StringRef ValueKind,
@@ -303,12 +315,8 @@ public:
   }
 
   bool VisitCXXConstructExpr(CXXConstructExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(
-        CGM, E->getExprLoc(), "class construction and destruction");
-  }
-
-  bool VisitLambdaExpr(LambdaExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(), "lambdas");
+    return !diagnoseUnsupportedMMIXCXXObjectLifetime(
+        CGM, E->getExprLoc(), E->getConstructor()->getParent());
   }
 
   bool VisitCXXDynamicCastExpr(CXXDynamicCastExpr *E) {
@@ -330,6 +338,9 @@ public:
   }
 
   bool VisitCXXNewExpr(CXXNewExpr *E) {
+    if (const FunctionDecl *OperatorNew = E->getOperatorNew();
+        OperatorNew && OperatorNew->isReservedGlobalPlacementOperator())
+      return true;
     return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
                                               "general allocation");
   }
@@ -851,11 +862,10 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                           "virtual member functions");
         return;
       }
-      if (isa<CXXConstructorDecl, CXXDestructorDecl>(Method)) {
-        diagnoseUnsupportedMMIXCXXFeature(
-            CGM, FD->getLocation(), "class construction and destruction");
+      if (isa<CXXConstructorDecl, CXXDestructorDecl>(Method) &&
+          diagnoseUnsupportedMMIXCXXObjectLifetime(
+              CGM, FD->getLocation(), Method->getParent()))
         return;
-      }
     }
 
     if (diagnoseUnsupportedMMIXCXXBoundary(CGM, FD->getLocation(), "returns",

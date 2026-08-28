@@ -11,25 +11,22 @@
 // RUN:   | FileCheck %s --check-prefix=VECTOR-REFERENCE
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_CONSTRUCTION %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=CONSTRUCTION
+// RUN:   -DTEST_POLYMORPHIC_CONSTRUCTION %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=POLYMORPHIC-CONSTRUCTION
 
 #if defined(TEST_VECTOR_REFERENCE)
 using int2 = int __attribute__((ext_vector_type(2)));
 
 int first(int2 &Value) { return Value[0]; }
 // VECTOR-REFERENCE: error: MMIX GNU ABI does not support vector value CodeGen involving type 'int2 &'
-#elif defined(TEST_CONSTRUCTION)
-struct Constructed {
-  Constructed();
-  long Value;
+#elif defined(TEST_POLYMORPHIC_CONSTRUCTION)
+struct Polymorphic {
+  Polymorphic();
+  virtual long value() const;
 };
 
-long construct() {
-  Constructed Value;
-  return Value.Value;
-}
-// CONSTRUCTION: error: MMIX C++ producer profile does not support class construction and destruction
+void construct() { Polymorphic Value; }
+// POLYMORPHIC-CONSTRUCTION: error: MMIX C++ producer profile does not support polymorphic object lifetime
 #else
 struct Counter {
   long Value;
