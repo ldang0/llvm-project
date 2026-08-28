@@ -11,5 +11,5 @@ struct Polymorphic {
   virtual long value() const;
 };
 
-long read(const Polymorphic &object) { return object.value(); }
+long read(Polymorphic *object) { return object->value(); }
 #endif

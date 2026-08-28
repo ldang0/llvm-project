@@ -10,4 +10,4 @@ struct Value {
 
 int read(Value value) { return value.get(); }
 
-// CHECK: error: MMIX does not support C++ CodeGen
+// CHECK: error: MMIX C++ producer profile does not support C++ record arguments

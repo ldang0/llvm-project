@@ -12,7 +12,10 @@
 #include "TargetInfo.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
+#include "clang/AST/ExprCXX.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/StmtCXX.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/IR/Constants.h"
@@ -71,6 +74,32 @@ static bool isUnsupportedMMIXBoundaryScalarType(const ASTContext &Context,
                                                 QualType Ty, bool AllowVoid) {
   return !isSupportedMMIXComplexType(Ty) &&
          isUnsupportedMMIXScalarType(Context, Ty, AllowVoid);
+}
+
+static bool diagnoseUnsupportedMMIXCXXFeature(CodeGenModule &CGM,
+                                              SourceLocation Loc,
+                                              StringRef Feature) {
+  unsigned DiagID = CGM.getDiags().getCustomDiagID(
+      DiagnosticsEngine::Error,
+      "MMIX C++ producer profile does not support %0");
+  CGM.getDiags().Report(Loc, DiagID) << Feature;
+  return true;
+}
+
+static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
+                                               SourceLocation Loc,
+                                               StringRef ValueKind,
+                                               QualType Ty) {
+  if (Ty->isReferenceType())
+    return diagnoseUnsupportedMMIXCXXFeature(
+        CGM, Loc, ("reference " + ValueKind).str());
+
+  const auto *RT = Ty->getAs<RecordType>();
+  if (RT && isa<CXXRecordDecl>(RT->getDecl()))
+    return diagnoseUnsupportedMMIXCXXFeature(
+        CGM, Loc, ("C++ record " + ValueKind).str());
+
+  return false;
 }
 
 static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
@@ -254,8 +283,57 @@ public:
   explicit MMIXCodeGenBoundaryVisitor(CodeGenModule &CGM) : CGM(CGM) {}
 
   bool VisitVarDecl(VarDecl *VD) {
+    if (CGM.getLangOpts().CPlusPlus && VD->isStaticLocal() && VD->hasInit() &&
+        !VD->hasConstantInitialization())
+      return !diagnoseUnsupportedMMIXCXXFeature(
+          CGM, VD->getLocation(), "dynamic local initialization");
     return diagnoseAutomaticObjectAlignment(VD) &&
            diagnoseObjectType(VD->getLocation(), VD->getType());
+  }
+
+  bool VisitCXXMemberCallExpr(CXXMemberCallExpr *E) {
+    const CXXMethodDecl *Method = E->getMethodDecl();
+    return !diagnoseUnsupportedMMIXCXXFeature(
+        CGM, E->getExprLoc(), Method && Method->isVirtual()
+                                  ? "virtual dispatch"
+                                  : "nonvirtual member calls");
+  }
+
+  bool VisitCXXConstructExpr(CXXConstructExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(
+        CGM, E->getExprLoc(), "class construction and destruction");
+  }
+
+  bool VisitLambdaExpr(LambdaExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(), "lambdas");
+  }
+
+  bool VisitCXXDynamicCastExpr(CXXDynamicCastExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(), "RTTI");
+  }
+
+  bool VisitCXXTypeidExpr(CXXTypeidExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(), "RTTI");
+  }
+
+  bool VisitCXXThrowExpr(CXXThrowExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              "exceptions");
+  }
+
+  bool VisitCoroutineBodyStmt(CoroutineBodyStmt *S) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, S->getBeginLoc(),
+                                              "coroutines");
+  }
+
+  bool VisitCXXNewExpr(CXXNewExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              "general allocation");
+  }
+
+  bool VisitCXXDeleteExpr(CXXDeleteExpr *E) {
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              "general deallocation");
   }
 
   bool VisitExpr(Expr *E) {
@@ -577,6 +655,13 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
   if (!VD || !VD->hasGlobalStorage())
     return;
 
+  if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
+      !VD->hasConstantInitialization()) {
+    diagnoseUnsupportedMMIXCXXFeature(CGM, VD->getLocation(),
+                                      "dynamic initialization");
+    return;
+  }
+
   diagnoseUnsupportedMMIXObject(CGM, VD->getLocation(), VD->getType());
 }
 
@@ -757,10 +842,22 @@ RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
   if (CGM.getLangOpts().CPlusPlus) {
-    unsigned DiagID = CGM.getDiags().getCustomDiagID(
-        DiagnosticsEngine::Error, "MMIX does not support C++ CodeGen");
-    CGM.getDiags().Report(FD->getLocation(), DiagID);
-    return;
+    if (const auto *Method = dyn_cast<CXXMethodDecl>(FD)) {
+      diagnoseUnsupportedMMIXCXXFeature(CGM, FD->getLocation(),
+                                        Method->isVirtual()
+                                            ? "virtual member functions"
+                                            : "nonvirtual member functions");
+      return;
+    }
+
+    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, FD->getLocation(), "returns",
+                                           FD->getReturnType()))
+      return;
+    for (const ParmVarDecl *Param : FD->parameters()) {
+      if (diagnoseUnsupportedMMIXCXXBoundary(CGM, Param->getLocation(),
+                                             "arguments", Param->getType()))
+        return;
+    }
   }
 
   if (FD->hasAttr<NakedAttr>() || FD->hasAttr<TargetAttr>()) {
