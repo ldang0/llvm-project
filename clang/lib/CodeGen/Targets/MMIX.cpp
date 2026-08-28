@@ -74,9 +74,13 @@ static bool isSupportedMMIXComplexType(QualType Ty) {
          ElementTy->isSpecificBuiltinType(BuiltinType::LongDouble);
 }
 
+static bool isSupportedMMIXFixedVectorType(const ASTContext &Context,
+                                           QualType Ty);
+
 static bool isUnsupportedMMIXBoundaryScalarType(const ASTContext &Context,
                                                 QualType Ty, bool AllowVoid) {
   return !isSupportedMMIXComplexType(Ty) &&
+         !isSupportedMMIXFixedVectorType(Context, Ty) &&
          isUnsupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
 
@@ -642,6 +646,17 @@ static bool diagnoseUnsupportedMMIXVariadicSignature(CodeGenModule &CGM,
   if (!FD || !FD->isVariadic() || FD->getNumParams() == 0)
     return false;
 
+  for (const ParmVarDecl *Param : FD->parameters()) {
+    if (!isSupportedMMIXFixedVectorType(CGM.getContext(), Param->getType()))
+      continue;
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support vector parameters in variadic "
+        "functions");
+    CGM.getDiags().Report(Loc, DiagID);
+    return true;
+  }
+
   QualType LastNamedType = FD->getParamDecl(FD->getNumParams() - 1)->getType();
   if (!isEmptyRecord(CGM.getContext(), LastNamedType, /*AllowArrays=*/true))
     return false;
@@ -652,6 +667,25 @@ static bool diagnoseUnsupportedMMIXVariadicSignature(CodeGenModule &CGM,
       "variadic function");
   CGM.getDiags().Report(Loc, DiagID);
   return true;
+}
+
+static void diagnoseUnsupportedMMIXVariadicCallArguments(
+    CodeGenModule &CGM, SourceLocation Loc, const FunctionDecl *Callee,
+    const CallArgList &Args) {
+  if (!Callee || !Callee->isVariadic())
+    return;
+
+  unsigned FixedArgumentCount = Callee->getNumParams();
+  for (unsigned I = FixedArgumentCount; I != Args.size(); ++I) {
+    QualType Ty = Args[I].getType();
+    if (!isSupportedMMIXFixedVectorType(CGM.getContext(), Ty))
+      continue;
+    unsigned DiagID = CGM.getDiags().getCustomDiagID(
+        DiagnosticsEngine::Error,
+        "MMIX GNU ABI does not support variadic vector argument type %0");
+    CGM.getDiags().Report(Loc, DiagID) << Ty;
+    return;
+  }
 }
 
 class MMIXABIInfo : public DefaultABIInfo {
@@ -711,6 +745,11 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
 ABIArgInfo MMIXABIInfo::classifyReturnType(QualType Ty) const {
   if (Ty->isVoidType())
     return ABIArgInfo::getIgnore();
+  if (isSupportedMMIXFixedVectorType(getContext(), Ty)) {
+    llvm::IntegerType *CoerceTy =
+        llvm::IntegerType::get(getVMContext(), getContext().getTypeSize(Ty));
+    return ABIArgInfo::getDirect(CoerceTy);
+  }
   if (isSupportedMMIXComplexType(Ty)) {
     QualType ElementTy = Ty->castAs<ComplexType>()->getElementType();
     if (ElementTy->isSpecificBuiltinType(BuiltinType::Float))
@@ -775,6 +814,13 @@ ABIArgInfo MMIXABIInfo::classifyAggregateArgument(QualType Ty) const {
 
 ABIArgInfo MMIXABIInfo::classifyArgumentType(QualType Ty) const {
   Ty = useFirstFieldIfTransparentUnion(Ty);
+  if (isSupportedMMIXFixedVectorType(getContext(), Ty)) {
+    unsigned Size = getContext().getTypeSize(Ty);
+    llvm::IntegerType *CoerceTy =
+        llvm::IntegerType::get(getVMContext(), Size);
+    return Size < 64 ? ABIArgInfo::getNoExtend(CoerceTy)
+                     : ABIArgInfo::getDirect(CoerceTy);
+  }
   if (isSupportedMMIXComplexType(Ty)) {
     QualType ElementTy = Ty->castAs<ComplexType>()->getElementType();
     if (ElementTy->isSpecificBuiltinType(BuiltinType::Float))
@@ -958,6 +1004,7 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
     const FunctionDecl *Callee, const CallArgList &Args,
     QualType ReturnType) const {
   diagnoseUnsupportedMMIXVariadicSignature(CGM, CallLoc, Callee);
+  diagnoseUnsupportedMMIXVariadicCallArguments(CGM, CallLoc, Callee, Args);
 
   if (CGM.getLangOpts().CPlusPlus) {
     if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, ReturnType))
