@@ -53,83 +53,84 @@ protected:
   }
 };
 
-TEST_F(MMIXAddressEmissionTest, TextOutputsUseCanonicalSplitSequence) {
-  static constexpr std::array Outputs = {MMIXEmissionMode::CanonicalAssembly,
-                                         MMIXEmissionMode::MMIXALAssembly};
+TEST_F(MMIXAddressEmissionTest, MMIXALUsesSplitAddressSequence) {
   static constexpr std::array<unsigned, 4> Opcodes = {MMIX::SETH, MMIX::INCMH,
                                                       MMIX::INCML, MMIX::INCL};
   static constexpr std::array<unsigned, 4> Shifts = {48, 32, 16, 0};
   const MCExpr *Address = symbol("target");
 
-  for (MMIXEmissionMode Mode : Outputs) {
-    SmallVector<MCInst, 4> Sequence =
-        createMMIXStaticAddressSequence(Mode, MMIX::R7, Address, Ctx);
-    ASSERT_EQ(Sequence.size(), Opcodes.size());
-    for (unsigned I = 0; I != Sequence.size(); ++I) {
-      const MCInst &Inst = Sequence[I];
-      EXPECT_EQ(Inst.getOpcode(), Opcodes[I]);
-      ASSERT_EQ(Inst.getNumOperands(), 2u);
-      EXPECT_EQ(Inst.getOperand(0).getReg(), MMIX::R7);
+  SmallVector<MCInst, 4> Sequence = createMMIXStaticAddressSequence(
+      MMIXEmissionMode::MMIXALAssembly, MMIX::R7, Address, Ctx);
+  ASSERT_EQ(Sequence.size(), Opcodes.size());
+  for (unsigned I = 0; I != Sequence.size(); ++I) {
+    const MCInst &Inst = Sequence[I];
+    EXPECT_EQ(Inst.getOpcode(), Opcodes[I]);
+    ASSERT_EQ(Inst.getNumOperands(), 2u);
+    EXPECT_EQ(Inst.getOperand(0).getReg(), MMIX::R7);
 
-      const auto *Mask = dyn_cast<MCBinaryExpr>(Inst.getOperand(1).getExpr());
-      ASSERT_NE(Mask, nullptr);
-      EXPECT_EQ(Mask->getOpcode(), MCBinaryExpr::And);
-      EXPECT_EQ(absoluteValue(Mask->getRHS()), 0xffff);
-      if (!Shifts[I]) {
-        EXPECT_EQ(Mask->getLHS(), Address);
-        continue;
-      }
-
-      const auto *Shift = dyn_cast<MCBinaryExpr>(Mask->getLHS());
-      ASSERT_NE(Shift, nullptr);
-      EXPECT_EQ(Shift->getOpcode(), MCBinaryExpr::LShr);
-      EXPECT_EQ(Shift->getLHS(), Address);
-      EXPECT_EQ(absoluteValue(Shift->getRHS()), Shifts[I]);
+    const auto *Mask = dyn_cast<MCBinaryExpr>(Inst.getOperand(1).getExpr());
+    ASSERT_NE(Mask, nullptr);
+    EXPECT_EQ(Mask->getOpcode(), MCBinaryExpr::And);
+    EXPECT_EQ(absoluteValue(Mask->getRHS()), 0xffff);
+    if (!Shifts[I]) {
+      EXPECT_EQ(Mask->getLHS(), Address);
+      continue;
     }
+
+    const auto *Shift = dyn_cast<MCBinaryExpr>(Mask->getLHS());
+    ASSERT_NE(Shift, nullptr);
+    EXPECT_EQ(Shift->getOpcode(), MCBinaryExpr::LShr);
+    EXPECT_EQ(Shift->getLHS(), Address);
+    EXPECT_EQ(absoluteValue(Shift->getRHS()), Shifts[I]);
   }
 }
 
-TEST_F(MMIXAddressEmissionTest, ELFObjectUsesGETAReservationContract) {
+TEST_F(MMIXAddressEmissionTest, CanonicalELFUsesGETAReservationContract) {
   const MCExpr *Address = MCBinaryExpr::createAdd(
       symbol("target"), MCConstantExpr::create(-16, Ctx), Ctx);
-  SmallVector<MCInst, 4> Sequence = createMMIXStaticAddressSequence(
-      MMIXEmissionMode::ELFObject, MMIX::R9, Address, Ctx);
+  for (MMIXEmissionMode Mode : {MMIXEmissionMode::CanonicalAssembly,
+                                MMIXEmissionMode::ELFObject}) {
+    SmallVector<MCInst, 4> Sequence =
+        createMMIXStaticAddressSequence(Mode, MMIX::R9, Address, Ctx);
 
-  ASSERT_EQ(Sequence.size(), 1u);
-  const MCInst &Inst = Sequence.front();
-  EXPECT_EQ(Inst.getOpcode(), MMIX::GETA);
-  ASSERT_EQ(Inst.getNumOperands(), 3u);
-  EXPECT_EQ(Inst.getOperand(0).getReg(), MMIX::R9);
-  const auto *Specifier =
-      dyn_cast<MCSpecifierExpr>(Inst.getOperand(1).getExpr());
-  ASSERT_NE(Specifier, nullptr);
-  EXPECT_EQ(Specifier->getSpecifier(), MMIXII::S_GETA);
-  EXPECT_EQ(Specifier->getSubExpr(), Address);
-  EXPECT_EQ(Inst.getOperand(2).getImm(), MMIXII::GETARelocationReservedSlots);
-  EXPECT_EQ((1 + MMIXII::GETARelocationReservedSlots) * 4, 16u);
+    ASSERT_EQ(Sequence.size(), 1u);
+    const MCInst &Inst = Sequence.front();
+    EXPECT_EQ(Inst.getOpcode(), MMIX::GETA);
+    ASSERT_EQ(Inst.getNumOperands(), 3u);
+    EXPECT_EQ(Inst.getOperand(0).getReg(), MMIX::R9);
+    const auto *Specifier =
+        dyn_cast<MCSpecifierExpr>(Inst.getOperand(1).getExpr());
+    ASSERT_NE(Specifier, nullptr);
+    EXPECT_EQ(Specifier->getSpecifier(), MMIXII::S_GETA);
+    EXPECT_EQ(Specifier->getSubExpr(), Address);
+    EXPECT_EQ(Inst.getOperand(2).getImm(),
+              MMIXII::GETARelocationReservedSlots);
+    EXPECT_EQ((1 + MMIXII::GETARelocationReservedSlots) * 4, 16u);
 
-  std::unique_ptr<MCCodeEmitter> Emitter{createMMIXMCCodeEmitter(*MII, Ctx)};
-  SmallVector<char, 16> Bytes;
-  SmallVector<MCFixup, 1> Fixups;
-  Emitter->encodeInstruction(Inst, Bytes, Fixups, *STI);
+    std::unique_ptr<MCCodeEmitter> Emitter{createMMIXMCCodeEmitter(*MII, Ctx)};
+    SmallVector<char, 16> Bytes;
+    SmallVector<MCFixup, 1> Fixups;
+    Emitter->encodeInstruction(Inst, Bytes, Fixups, *STI);
 
-  static constexpr std::array<unsigned char, 16> ExpectedBytes = {
-      0xf4, 0x09, 0x00, 0x00, 0xfd, 0x00, 0x00, 0x00,
-      0xfd, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x00, 0x00};
-  ASSERT_EQ(Bytes.size(), ExpectedBytes.size());
-  for (unsigned I = 0; I != Bytes.size(); ++I)
-    EXPECT_EQ(static_cast<unsigned char>(Bytes[I]), ExpectedBytes[I]);
+    static constexpr std::array<unsigned char, 16> ExpectedBytes = {
+        0xf4, 0x09, 0x00, 0x00, 0xfd, 0x00, 0x00, 0x00,
+        0xfd, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x00, 0x00};
+    ASSERT_EQ(Bytes.size(), ExpectedBytes.size());
+    for (unsigned I = 0; I != Bytes.size(); ++I)
+      EXPECT_EQ(static_cast<unsigned char>(Bytes[I]), ExpectedBytes[I]);
 
-  ASSERT_EQ(Fixups.size(), 1u);
-  EXPECT_EQ(Fixups.front().getKind(), MMIX::fixup_mmix_geta);
-  EXPECT_TRUE(Fixups.front().isPCRel());
-  EXPECT_TRUE(Fixups.front().isLinkerRelaxable());
-  MCValue Value;
-  ASSERT_TRUE(Fixups.front().getValue()->evaluateAsRelocatable(Value, nullptr));
-  ASSERT_NE(Value.getAddSym(), nullptr);
-  EXPECT_EQ(Value.getAddSym()->getName(), "target");
-  EXPECT_EQ(Value.getSubSym(), nullptr);
-  EXPECT_EQ(Value.getConstant(), -16);
+    ASSERT_EQ(Fixups.size(), 1u);
+    EXPECT_EQ(Fixups.front().getKind(), MMIX::fixup_mmix_geta);
+    EXPECT_TRUE(Fixups.front().isPCRel());
+    EXPECT_TRUE(Fixups.front().isLinkerRelaxable());
+    MCValue Value;
+    ASSERT_TRUE(
+        Fixups.front().getValue()->evaluateAsRelocatable(Value, nullptr));
+    ASSERT_NE(Value.getAddSym(), nullptr);
+    EXPECT_EQ(Value.getAddSym()->getName(), "target");
+    EXPECT_EQ(Value.getSubSym(), nullptr);
+    EXPECT_EQ(Value.getConstant(), -16);
+  }
 }
 
 } // namespace

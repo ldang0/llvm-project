@@ -145,10 +145,7 @@ define internal void @defined_function() {
 ; MIR-LABEL: name: defined_data_address
 ; MIR:       $r231 = LOAD_ADDR @defined_data
 ; ASM-LABEL: defined_data_address:
-; ASM:       SETH r231, (defined_data>>48)&65535
-; ASM-NEXT:  INCMH r231, (defined_data>>32)&65535
-; ASM-NEXT:  INCML r231, (defined_data>>16)&65535
-; ASM-NEXT:  INCL r231, defined_data&65535
+; ASM:       GETA r231, %geta(defined_data)
 define ptr @defined_data_address() {
   ret ptr @defined_data
 }
@@ -172,15 +169,11 @@ define ptr @external_function_address() {
 }
 
 ; A folded positive byte offset remains attached to the static-address pseudo.
-; The text path applies every split operation to the complete S+A expression;
-; the object path therefore receives one symbol-plus-addend expression too.
+; The text and object paths preserve one complete S+A expression.
 ; MIR-LABEL: name: positive_address_offset
 ; MIR:       $r231 = LOAD_ADDR @defined_data + 4660
 ; ASM-LABEL: positive_address_offset:
-; ASM:       SETH r231, ((defined_data+4660)>>48)&65535
-; ASM-NEXT:  INCMH r231, ((defined_data+4660)>>32)&65535
-; ASM-NEXT:  INCML r231, ((defined_data+4660)>>16)&65535
-; ASM-NEXT:  INCL r231, (defined_data+4660)&65535
+; ASM:       GETA r231, %geta(defined_data+4660)
 define ptr @positive_address_offset() {
   ret ptr getelementptr (i8, ptr @defined_data, i64 4660)
 }
@@ -207,13 +200,13 @@ target:
 }
 
 ; Unresolved direct calls preserve both their symbolic callee and the scratch
-; register used by the unchanged text fallback.
+; register used by the relocatable text fallback.
 ; MIR-LABEL: name: direct_call
 ; MIR-NOT:   LOAD_ADDR
 ; MIR:       [[CALL_SCRATCH:\$r[0-9]+]] = LOAD_CALL_ADDR @external_function
 ; MIR-NEXT:  PseudoDirectCall $r31, @external_function, killed [[CALL_SCRATCH]], csr_mmix
 ; ASM-LABEL: direct_call:
-; ASM:       SETH [[CALL_TARGET:r[0-9]+]], (external_function>>48)&65535
+; ASM:       GETA [[CALL_TARGET:r[0-9]+]], %geta(external_function)
 ; ASM:       PUSHGO r31, [[CALL_TARGET]], 0
 ; ASM-NOT:   PUSHJ
 define void @direct_call() {

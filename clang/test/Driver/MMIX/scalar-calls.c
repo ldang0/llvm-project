@@ -40,10 +40,7 @@
 // ASM-LABEL: call_external_many:
 // ASM: STOU {{r[0-9]+}}, [[OUT:r[0-9]+]], 8
 // ASM: STOU {{r[0-9]+}}, [[OUT]], 0
-// ASM: SETH r{{[0-9]+}}, (external_many>>48)&65535
-// ASM: INCMH r{{[0-9]+}}, (external_many>>32)&65535
-// ASM: INCML r{{[0-9]+}}, (external_many>>16)&65535
-// ASM: INCL r{{[0-9]+}}, external_many&65535
+// ASM: GETA r{{[0-9]+}}, %geta(external_many)
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
 
 // ELF: Format: elf64-mmix

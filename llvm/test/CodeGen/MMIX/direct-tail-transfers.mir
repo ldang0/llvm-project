@@ -29,10 +29,10 @@
 # ASM-LABEL: tail_forward:
 # ASM: JMP forward_target
 # ASM-LABEL: tail_other_section:
-# ASM: SETH r249, (section_target>>48)&65535
+# ASM: GETA r249, %geta(section_target)
 # ASM: GO r255, r249, 0
 # ASM-LABEL: tail_external:
-# ASM: SETH r249, (declared>>48)&65535
+# ASM: GETA r249, %geta(declared)
 # ASM: GO r255, r249, 0
 # ASM-LABEL: tail_relocatable_direct:
 # ASM: JMP declared

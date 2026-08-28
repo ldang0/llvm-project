@@ -32,7 +32,6 @@ llvm::createMMIXStaticAddressSequence(MMIXEmissionMode Mode,
                                       const MCExpr *Address, MCContext &Ctx) {
   SmallVector<MCInst, 4> Sequence;
   switch (Mode) {
-  case MMIXEmissionMode::CanonicalAssembly:
   case MMIXEmissionMode::MMIXALAssembly: {
     static constexpr std::array<unsigned, 4> Opcodes = {
         MMIX::SETH, MMIX::INCMH, MMIX::INCML, MMIX::INCL};
@@ -47,6 +46,7 @@ llvm::createMMIXStaticAddressSequence(MMIXEmissionMode Mode,
     }
     return Sequence;
   }
+  case MMIXEmissionMode::CanonicalAssembly:
   case MMIXEmissionMode::ELFObject: {
     MCInst Inst;
     Inst.setOpcode(MMIX::GETA);

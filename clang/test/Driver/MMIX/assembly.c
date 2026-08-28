@@ -33,10 +33,7 @@
 // ASM: GET r30, rJ
 // ASM: PUSHJ r31, recursive_sum
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
-// ASM: SETH r{{[0-9]+}}, (external_scalar>>48)&65535
-// ASM-NEXT: INCMH r{{[0-9]+}}, (external_scalar>>32)&65535
-// ASM-NEXT: INCML r{{[0-9]+}}, (external_scalar>>16)&65535
-// ASM-NEXT: INCL r{{[0-9]+}}, external_scalar&65535
+// ASM: GETA r{{[0-9]+}}, %geta(external_scalar)
 // ASM: POP 0, 0
 
 // ASM-LABEL: recursive_sum:
@@ -44,7 +41,7 @@
 // ASM: POP 0, 0
 
 // ASM-LABEL: copy_block:
-// ASM: SETH r{{[0-9]+}}, (memcpy>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(memcpy)
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
 // ASM: POP 0, 0
 

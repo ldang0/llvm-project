@@ -143,7 +143,7 @@ define internal void @section_target() section ".text.separate" {
 ; POSTRA:       [[SECTION_REG:\$r[0-9]+]] = LOAD_CALL_ADDR @section_target
 ; POSTRA-NEXT:  PseudoDirectCall $r31, @section_target, killed [[SECTION_REG]], csr_mmix
 ; ASM-LABEL: call_other_section:
-; ASM:       SETH [[SECTION_TEXT:r[0-9]+]], (section_target>>48)&65535
+; ASM:       GETA [[SECTION_TEXT:r[0-9]+]], %geta(section_target)
 ; ASM:       PUSHGO r31, [[SECTION_TEXT]], 0
 define void @call_other_section() {
   call void @section_target()
@@ -156,7 +156,7 @@ define void @call_other_section() {
 ; POSTRA-LABEL: name: call_declaration
 ; POSTRA:       PseudoDirectCall $r31, @declared, killed $r{{[0-9]+}}, csr_mmix
 ; ASM-LABEL: call_declaration:
-; ASM:       SETH [[DECL_TEXT:r[0-9]+]], (declared>>48)&65535
+; ASM:       GETA [[DECL_TEXT:r[0-9]+]], %geta(declared)
 ; ASM:       PUSHGO r31, [[DECL_TEXT]], 0
 define void @call_declaration() {
   call void @declared()
@@ -193,7 +193,7 @@ define void @call_weak() {
 ; POSTRA-LABEL: name: call_with_addend
 ; POSTRA:       PseudoDirectCall $r31, @declared - 12, killed $r{{[0-9]+}}, csr_mmix
 ; ASM-LABEL: call_with_addend:
-; ASM:       SETH [[ADDEND_TEXT:r[0-9]+]], ((declared-12)>>48)&65535
+; ASM:       GETA [[ADDEND_TEXT:r[0-9]+]], %geta(declared-12)
 ; ASM:       PUSHGO r31, [[ADDEND_TEXT]], 0
 define void @call_with_addend() {
   call void getelementptr (i8, ptr @declared, i64 -12)()

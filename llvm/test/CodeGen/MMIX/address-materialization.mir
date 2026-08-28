@@ -3,22 +3,10 @@
 # RUN:   -filetype=asm %s -o - | FileCheck %s --check-prefix=ASM
 
 # ASM-LABEL: address_materialization:
-# ASM:       SETH r0, ([[CPI:\.LCPI[0-9]+_0]]>>48)&65535
-# ASM-NEXT:  INCMH r0, ([[CPI]]>>32)&65535
-# ASM-NEXT:  INCML r0, ([[CPI]]>>16)&65535
-# ASM-NEXT:  INCL r0, [[CPI]]&65535
-# ASM-NEXT:  SETH r1, ([[JTI:\.LJTI[0-9]+_0]]>>48)&65535
-# ASM-NEXT:  INCMH r1, ([[JTI]]>>32)&65535
-# ASM-NEXT:  INCML r1, ([[JTI]]>>16)&65535
-# ASM-NEXT:  INCL r1, [[JTI]]&65535
-# ASM-NEXT:  SETH r2, (external_name>>48)&65535
-# ASM-NEXT:  INCMH r2, (external_name>>32)&65535
-# ASM-NEXT:  INCML r2, (external_name>>16)&65535
-# ASM-NEXT:  INCL r2, external_name&65535
-# ASM-NEXT:  SETH r3, (external_callee>>48)&65535
-# ASM-NEXT:  INCMH r3, (external_callee>>32)&65535
-# ASM-NEXT:  INCML r3, (external_callee>>16)&65535
-# ASM-NEXT:  INCL r3, external_callee&65535
+# ASM:       GETA r0, %geta([[CPI:\.LCPI[0-9]+_0]])
+# ASM-NEXT:  GETA r1, %geta([[JTI:\.LJTI[0-9]+_0]])
+# ASM-NEXT:  GETA r2, %geta(external_name)
+# ASM-NEXT:  GETA r3, %geta(external_callee)
 
 --- |
   define void @address_materialization() {

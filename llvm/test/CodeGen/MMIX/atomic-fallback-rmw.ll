@@ -6,9 +6,9 @@ target triple = "mmix"
 ; generic helpers. The retry loop preserves atomic fetch-add semantics.
 define i32 @unaligned_atomic_rmw(ptr %p, i32 %value) {
 ; CHECK-LABEL: unaligned_atomic_rmw:
-; CHECK: (__atomic_load>>48)
+; CHECK: %geta(__atomic_load)
 ; CHECK: PUSHGO
-; CHECK: (__atomic_compare_exchange>>48)
+; CHECK: %geta(__atomic_compare_exchange)
 ; CHECK: atomicrmw.start
 ; CHECK: PUSHGO
 ; CHECK: BZB

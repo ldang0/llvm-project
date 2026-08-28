@@ -93,15 +93,15 @@ void copy_block(void *destination, const void *source) {
 // ASM-LABEL: compose:
 // ASM: PUSHJ {{r[0-9]+}}, recursive_sum
 // ASM: PUSHGO {{r[0-9]+}}, {{r[0-9]+}}, 0
-// ASM: SETH {{r[0-9]+}}, (external_scalar>>48)&65535
+// ASM: GETA {{r[0-9]+}}, %geta(external_scalar)
 // ASM: PUSHGO {{r[0-9]+}}, {{r[0-9]+}}, 0
-// ASM: SETH {{r[0-9]+}}, (external_direct>>48)&65535
-// ASM: SETH {{r[0-9]+}}, (external_variadic>>48)&65535
-// ASM: SETH {{r[0-9]+}}, (global_pointer>>48)&65535
+// ASM: GETA {{r[0-9]+}}, %geta(external_direct)
+// ASM: GETA {{r[0-9]+}}, %geta(external_variadic)
+// ASM: GETA {{r[0-9]+}}, %geta(global_pointer)
 // ASM-LABEL: recursive_sum:
 // ASM: PUSHJB {{r[0-9]+}}, recursive_sum
 // ASM-LABEL: copy_block:
-// ASM: SETH {{r[0-9]+}}, (memcpy>>48)&65535
+// ASM: GETA {{r[0-9]+}}, %geta(memcpy)
 // ASM: PUSHGO {{r[0-9]+}}, {{r[0-9]+}}, 0
 
 // ELF: Format: elf64-mmix

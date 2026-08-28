@@ -76,10 +76,10 @@ int address_taken(int value) {
 // ASM-BASE-LABEL: small_array:
 // ASM-BASE-NOT: __stack_chk
 // ASM-BASE-LABEL: large_array:
-// ASM-BASE: SETH {{r[0-9]+}}, (__stack_chk_guard>>48)&65535
+// ASM-BASE: GETA {{r[0-9]+}}, %geta(__stack_chk_guard)
 // ASM-BASE: LDOU {{r[0-9]+}}, {{r[0-9]+}}, 0
 // ASM-BASE: LDOU {{r[0-9]+}}, {{r[0-9]+}}, 0
-// ASM-BASE: SETH {{r[0-9]+}}, (__stack_chk_fail>>48)&65535
+// ASM-BASE: GETA {{r[0-9]+}}, %geta(__stack_chk_fail)
 // ASM-BASE: PUSHGO
 // ASM-BASE-LABEL: address_taken:
 // ASM-BASE-NOT: __stack_chk

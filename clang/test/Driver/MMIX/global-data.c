@@ -42,16 +42,13 @@
 // IR: ret ptr @external_function
 
 // ASM-LABEL: address_defined_data:
-// ASM: SETH r231, (initialized_global>>48)&65535
-// ASM: INCMH r231, (initialized_global>>32)&65535
-// ASM: INCML r231, (initialized_global>>16)&65535
-// ASM: INCL r231, initialized_global&65535
+// ASM: GETA r231, %geta(initialized_global)
 // ASM-LABEL: address_external_data:
-// ASM: SETH r231, (external_global>>48)&65535
+// ASM: GETA r231, %geta(external_global)
 // ASM-LABEL: address_defined_function:
-// ASM: SETH r231, (internal_function>>48)&65535
+// ASM: GETA r231, %geta(internal_function)
 // ASM-LABEL: address_external_function:
-// ASM: SETH r231, (external_function>>48)&65535
+// ASM: GETA r231, %geta(external_function)
 // ASM-LABEL: initialized_global:
 // ASM-NEXT: .8byte 1234605616436508552
 // ASM: .section .bss,"aw",@nobits

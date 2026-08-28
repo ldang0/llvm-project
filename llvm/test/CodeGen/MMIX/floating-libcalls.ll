@@ -15,7 +15,7 @@ target triple = "mmix-unknown-elf"
 ; binary64 values occupy one complete octa.
 
 ; ASM-LABEL: remainder_f32:
-; ASM:       SETH {{r[0-9]+}}, (fmodf>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(fmodf)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ASM-NOT:   FREM
 ; ISEL-LABEL: name: remainder_f32
@@ -26,7 +26,7 @@ define float @remainder_f32(float %lhs, float %rhs) {
 }
 
 ; ASM-LABEL: remainder_f64:
-; ASM:       SETH {{r[0-9]+}}, (fmod>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(fmod)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ASM-NOT:   FREM
 ; ISEL-LABEL: name: remainder_f64
@@ -37,7 +37,7 @@ define double @remainder_f64(double %lhs, double %rhs) {
 }
 
 ; ASM-LABEL: fused_multiply_add_f32:
-; ASM:       SETH {{r[0-9]+}}, (fmaf>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(fmaf)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: fused_multiply_add_f32
 ; ISEL:       DIRECT_CALL_STATE &fmaf, {{.*}}implicit $r231, implicit $r232, implicit $r233, implicit-def $r254, implicit-def $r231
@@ -47,7 +47,7 @@ define float @fused_multiply_add_f32(float %lhs, float %rhs, float %addend) {
 }
 
 ; ASM-LABEL: fused_multiply_add_f64:
-; ASM:       SETH {{r[0-9]+}}, (fma>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(fma)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: fused_multiply_add_f64
 ; ISEL:       DIRECT_CALL_STATE &fma, {{.*}}implicit $r231, implicit $r232, implicit $r233, implicit-def $r254, implicit-def $r231
@@ -59,7 +59,7 @@ define double @fused_multiply_add_f64(double %lhs, double %rhs,
 }
 
 ; ASM-LABEL: round_f32:
-; ASM:       SETH {{r[0-9]+}}, (roundf>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(roundf)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: round_f32
 ; ISEL:       DIRECT_CALL_STATE &roundf, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
@@ -69,7 +69,7 @@ define float @round_f32(float %value) {
 }
 
 ; ASM-LABEL: round_f64:
-; ASM:       SETH {{r[0-9]+}}, (round>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(round)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: round_f64
 ; ISEL:       DIRECT_CALL_STATE &round, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
@@ -79,7 +79,7 @@ define double @round_f64(double %value) {
 }
 
 ; ASM-LABEL: nearbyint_f32:
-; ASM:       SETH {{r[0-9]+}}, (nearbyintf>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(nearbyintf)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: nearbyint_f32
 ; ISEL:       DIRECT_CALL_STATE &nearbyintf, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
@@ -89,7 +89,7 @@ define float @nearbyint_f32(float %value) {
 }
 
 ; ASM-LABEL: nearbyint_f64:
-; ASM:       SETH {{r[0-9]+}}, (nearbyint>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(nearbyint)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: nearbyint_f64
 ; ISEL:       DIRECT_CALL_STATE &nearbyint, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
@@ -102,7 +102,7 @@ define double @nearbyint_f64(double %value) {
 ; cannot distinguish C double from this target's representation-identical
 ; long double, so choosing the l suffix is a frontend responsibility.
 ; ASM-LABEL: explicit_fmal:
-; ASM:       SETH {{r[0-9]+}}, (fmal>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(fmal)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: explicit_fmal
 ; ISEL:       DIRECT_CALL_STATE @fmal, {{.*}}implicit $r231, implicit $r232, implicit $r233, implicit-def $r254, implicit-def $r231

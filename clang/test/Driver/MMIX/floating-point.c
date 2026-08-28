@@ -77,15 +77,15 @@
 // ASM-LABEL: double_to_signed:
 // ASM: FIXU r231, 1, r231
 // ASM-LABEL: fused_float:
-// ASM: SETH {{r[0-9]+}}, (fmaf>>48)&65535
+// ASM: GETA {{r[0-9]+}}, %geta(fmaf)
 // ASM-NOT: PUSHGO
 // ASM: GO r255, {{r[0-9]+}}, 0
 // ASM-LABEL: remainder_double:
-// ASM: SETH {{r[0-9]+}}, (fmod>>48)&65535
+// ASM: GETA {{r[0-9]+}}, %geta(fmod)
 // ASM-NOT: PUSHGO
 // ASM: GO r255, {{r[0-9]+}}, 0
 // ASM-LABEL: nearby_long_double:
-// ASM: SETH {{r[0-9]+}}, (nearbyintl>>48)&65535
+// ASM: GETA {{r[0-9]+}}, %geta(nearbyintl)
 // ASM-NOT: PUSHGO
 // ASM: GO r255, {{r[0-9]+}}, 0
 

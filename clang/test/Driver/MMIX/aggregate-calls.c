@@ -46,13 +46,13 @@
 // ISEL: CALL_STATE @external_boundary{{.*}}implicit $r251{{.*}}implicit $r231{{.*}}implicit $r246
 
 // ASM-LABEL: forward_direct:
-// ASM: SETH r{{[0-9]+}}, (external_direct>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(external_direct)
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
 // ASM-LABEL: forward_boundary:
 // ASM: STOU {{r[0-9]+}}, [[OUT:r[0-9]+]], 16
 // ASM: STOU {{r[0-9]+}}, [[OUT]], 8
 // ASM: STOU {{r[0-9]+}}, [[OUT]], 0
-// ASM: SETH r{{[0-9]+}}, (external_boundary>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(external_boundary)
 // ASM: OR r251,
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
 

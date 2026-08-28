@@ -56,7 +56,7 @@ define i64 @call_no_fixed(i64 %value) {
 ; ISEL-DAG:   [[SECOND:%[0-9]+]]:{{[^ ]+}} = LDOUI [[RELOADED]], 8
 ; ASM-LABEL: boundary15:
 ; ASM:       STOU r246,
-; ASM:       SETH {{.*}}(clobber>>48)
+; ASM:       GETA {{.*}}%geta(clobber)
 ; ASM:       PUSHGO
 ; ASM:       LDOU
 define i64 @boundary15(i64, i64, i64, i64, i64, i64, i64, i64,
@@ -265,7 +265,7 @@ define i64 @read_classes(i64 %named, ...) {
 ; ISEL-SAME:  implicit $r232, implicit $r233, implicit $r234, implicit $r235,
 ; ISEL-SAME:  implicit $r236
 ; ASM-LABEL: call_classes:
-; ASM:       SETH {{.*}}(read_classes>>48)
+; ASM:       GETA {{.*}}%geta(read_classes)
 ; ASM:       PUSHGO
 define i64 @call_classes(i32 %signed, i32 %unsigned, double %fp,
                          %packed3 %packed) {

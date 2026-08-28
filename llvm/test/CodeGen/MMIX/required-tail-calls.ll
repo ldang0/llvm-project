@@ -36,7 +36,7 @@
 
 ; ASM-LABEL: required_direct:
 ; ASM-NOT: PUSH
-; ASM: INCL {{r[0-9]+}}, direct_target&65535
+; ASM: GETA {{r[0-9]+}}, %geta(direct_target)
 ; ASM: GO r255
 ; OBJ-LABEL: <required_direct>:
 ; OBJ: GO r255
@@ -57,14 +57,14 @@
 ; ASM: LDO
 ; ASM: STOU
 ; ASM-NOT: PUSH
-; ASM: INCL {{r[0-9]+}}, stack_target&65535
+; ASM: GETA {{r[0-9]+}}, %geta(stack_target)
 ; ASM: GO r255
 ; OBJ-LABEL: <required_stack_arguments>:
 ; OBJ: GO r255
 
 ; ASM-LABEL: required_pair_result:
 ; ASM-NOT: PUSH
-; ASM: INCL {{r[0-9]+}}, pair_target&65535
+; ASM: GETA {{r[0-9]+}}, %geta(pair_target)
 ; ASM: GO r255
 ; OBJ-LABEL: <required_pair_result>:
 ; OBJ: GO r255
@@ -77,7 +77,7 @@
 
 ; ASM-LABEL: required_fast_direct:
 ; ASM-NOT: PUSH
-; ASM: INCL {{r[0-9]+}}, fast_target&65535
+; ASM: GETA {{r[0-9]+}}, %geta(fast_target)
 ; ASM: GO r255
 ; OBJ-LABEL: <required_fast_direct>:
 ; OBJ: GO r255

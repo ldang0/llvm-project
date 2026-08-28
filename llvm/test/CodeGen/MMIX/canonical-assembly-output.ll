@@ -17,10 +17,7 @@
 ; CHECK-NEXT: SUBU [[COUNTER:r[0-9]+]], [[COUNTER]], 1
 ; CHECK-NEXT: CMPU [[CONDITION:r[0-9]+]], [[COUNTER]], 0
 ; CHECK-NEXT: BNZB [[CONDITION]], [[LOOP]]
-; CHECK:      SETH [[ADDRESS:r[0-9]+]], (canonical_data>>48)&65535
-; CHECK-NEXT: INCMH [[ADDRESS]], (canonical_data>>32)&65535
-; CHECK-NEXT: INCML [[ADDRESS]], (canonical_data>>16)&65535
-; CHECK-NEXT: INCL [[ADDRESS]], canonical_data&65535
+; CHECK:      GETA [[ADDRESS:r[0-9]+]], %geta(canonical_data)
 ; CHECK-NEXT: LDOU [[VALUE:r[0-9]+]], [[ADDRESS]], 0
 ; CHECK-NEXT: ADDU r{{[0-9]+}}, [[VALUE]], 7
 ; CHECK:      .size canonical_output, {{.*}}-canonical_output

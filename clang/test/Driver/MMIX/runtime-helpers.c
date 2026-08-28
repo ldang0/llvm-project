@@ -23,18 +23,18 @@
 // IR: call float @fmaf(float noundef %{{[0-9]+}}, float noundef %{{[0-9]+}}, float noundef %{{[0-9]+}})
 
 // ASM-LABEL: copy_large:
-// ASM: SETH r{{[0-9]+}}, (memcpy>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(memcpy)
 // ASM: PUSHGO r31, r{{[0-9]+}}, 0
 // ASM-LABEL: find_first_set:
-// ASM: SETH r{{[0-9]+}}, (__ffsdi2>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(__ffsdi2)
 // ASM-NOT: PUSHGO
 // ASM: GO r255, r{{[0-9]+}}, 0
 // ASM-LABEL: remainder_double:
-// ASM: SETH r{{[0-9]+}}, (fmod>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(fmod)
 // ASM-NOT: PUSHGO
 // ASM: GO r255, r{{[0-9]+}}, 0
 // ASM-LABEL: fused_float:
-// ASM: SETH r{{[0-9]+}}, (fmaf>>48)&65535
+// ASM: GETA r{{[0-9]+}}, %geta(fmaf)
 // ASM-NOT: PUSHGO
 // ASM: GO r255, r{{[0-9]+}}, 0
 

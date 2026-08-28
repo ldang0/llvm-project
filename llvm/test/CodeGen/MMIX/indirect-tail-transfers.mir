@@ -23,7 +23,7 @@
 # ASM-LABEL: overlapping_argument:
 # ASM: GO r255, r231, 0
 # ASM-LABEL: materialized_indirect:
-# ASM: SETH r249, (callee>>48)&65535
+# ASM: GETA r249, %geta(callee)
 # ASM: GO r255, r249, 0
 # ASM-LABEL: frame_pointer:
 # ASM: LDOU r253,

@@ -86,7 +86,7 @@ define void @copy_40(ptr %destination, ptr %source) {
 }
 
 ; ASM-LABEL: copy_40_minsize:
-; ASM:       SETH {{r[0-9]+}}, (memcpy>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(memcpy)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: copy_40_minsize
 ; ISEL:       DIRECT_CALL_STATE &memcpy, {{.*}}implicit $r231, implicit $r232, implicit $r233
@@ -99,7 +99,7 @@ define void @copy_40_minsize(ptr %destination, ptr %source) minsize {
 ; Large and dynamic copies use the standard memcpy pointer, pointer, size_t
 ; signature in the first three ordinary ABI slots.
 ; ASM-LABEL: copy_128:
-; ASM:       SETH {{r[0-9]+}}, (memcpy>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(memcpy)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: copy_128
 ; ISEL:       DIRECT_CALL_STATE &memcpy, {{.*}}implicit $r231, implicit $r232, implicit $r233
@@ -110,7 +110,7 @@ define void @copy_128(ptr %destination, ptr %source) {
 }
 
 ; ASM-LABEL: copy_dynamic:
-; ASM:       SETH {{r[0-9]+}}, (memcpy>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(memcpy)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: copy_dynamic
 ; ISEL:       DIRECT_CALL_STATE &memcpy, {{.*}}implicit $r231, implicit $r232, implicit $r233
@@ -122,7 +122,7 @@ define void @copy_dynamic(ptr %destination, ptr %source, i64 %size) {
 
 ; Large moves and fills use only the other two standard C memory helpers.
 ; ASM-LABEL: move_128:
-; ASM:       SETH {{r[0-9]+}}, (memmove>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(memmove)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: move_128
 ; ISEL:       DIRECT_CALL_STATE &memmove, {{.*}}implicit $r231, implicit $r232, implicit $r233
@@ -133,7 +133,7 @@ define void @move_128(ptr %destination, ptr %source) {
 }
 
 ; ASM-LABEL: set_128:
-; ASM:       SETH {{r[0-9]+}}, (memset>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(memset)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: set_128
 ; ISEL:       DIRECT_CALL_STATE &memset, {{.*}}implicit $r231, implicit $r232, implicit $r233
@@ -156,7 +156,7 @@ define i64 @population_count(i64 %value) {
 ; GNU __ffsdi2 compatibility is represented by an explicit ordinary C call.
 ; Producing this undefined reference does not claim a runtime implementation.
 ; ASM-LABEL: explicit_ffsdi2:
-; ASM:       SETH {{r[0-9]+}}, (__ffsdi2>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(__ffsdi2)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: explicit_ffsdi2
 ; ISEL:       DIRECT_CALL_STATE @__ffsdi2, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231

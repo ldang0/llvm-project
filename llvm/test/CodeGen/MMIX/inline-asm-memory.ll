@@ -27,7 +27,7 @@ define void @offsettable_stack(i64 %value) {
 
 define i64 @general_symbolic_memory() {
 ; CHECK-LABEL: general_symbolic_memory:
-; CHECK:       SETH [[ADDRESS:r[0-9]+]], (object>>48)&65535
+; CHECK:       GETA [[ADDRESS:r[0-9]+]], %geta(object)
 ; CHECK:       #APP
 ; CHECK-NEXT:  LDO [[RESULT:r[0-9]+]], [[ADDRESS]], 0
 ; CHECK:       #NO_APP

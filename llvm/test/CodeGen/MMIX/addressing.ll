@@ -11,10 +11,7 @@ target triple = "mmix"
 declare void @callee()
 
 ; ASM-LABEL: global_address:
-; ASM:      SETH r231, (data>>48)&65535
-; ASM-NEXT: INCMH r231, (data>>32)&65535
-; ASM-NEXT: INCML r231, (data>>16)&65535
-; ASM-NEXT: INCL r231, data&65535
+; ASM:      GETA r231, %geta(data)
 ; ISEL-LABEL: name: global_address
 ; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR @data
 ; MIR-LABEL: name: global_address
@@ -24,10 +21,7 @@ define ptr @global_address() {
 }
 
 ; ASM-LABEL: function_address:
-; ASM:      SETH r231, (callee>>48)&65535
-; ASM-NEXT: INCMH r231, (callee>>32)&65535
-; ASM-NEXT: INCML r231, (callee>>16)&65535
-; ASM-NEXT: INCL r231, callee&65535
+; ASM:      GETA r231, %geta(callee)
 ; ISEL-LABEL: name: function_address
 ; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR @callee
 define ptr @function_address() {
@@ -37,20 +31,14 @@ define ptr @function_address() {
 ; Materialize a non-folded addend independently without truncating it.
 ; ASM-LABEL: global_address_addend:
 ; ASM:      SETL [[OFFSET:r[0-9]+]], 4660
-; ASM-NEXT: SETH [[BASE:r[0-9]+]], (data>>48)&65535
-; ASM-NEXT: INCMH [[BASE]], (data>>32)&65535
-; ASM-NEXT: INCML [[BASE]], (data>>16)&65535
-; ASM-NEXT: INCL [[BASE]], data&65535
+; ASM-NEXT: GETA [[BASE:r[0-9]+]], %geta(data)
 ; ASM-NEXT: ADDU r231, [[BASE]], [[OFFSET]]
 define ptr @global_address_addend() {
   ret ptr getelementptr (i8, ptr @data, i64 4660)
 }
 
 ; ASM-LABEL: block_address:
-; ASM:      SETH r231, ([[BLOCK:\.Ltmp[0-9]+]]>>48)&65535
-; ASM-NEXT: INCMH r231, ([[BLOCK]]>>32)&65535
-; ASM-NEXT: INCML r231, ([[BLOCK]]>>16)&65535
-; ASM-NEXT: INCL r231, [[BLOCK]]&65535
+; ASM:      GETA r231, %geta([[BLOCK:\.Ltmp[0-9]+]])
 ; ISEL-LABEL: name: block_address
 ; ISEL:       %{{[0-9]+}}:gpr64codegen = LOAD_ADDR blockaddress(@block_address, %ir-block.target)
 define ptr @block_address() {

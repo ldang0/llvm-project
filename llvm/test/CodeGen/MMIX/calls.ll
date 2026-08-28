@@ -27,7 +27,7 @@ define void @call_backward() {
 ; Separate function sections do not have a known relative order, so even a
 ; local definition uses the conservative indirect procedure form.
 ; SECTIONS-LABEL: call_backward:
-; SECTIONS:       SETH [[SECTION_TARGET:r[0-9]+]], {{.*}}earlier
+; SECTIONS:       GETA [[SECTION_TARGET:r[0-9]+]], %geta(earlier)
 ; SECTIONS:       PUSHGO r31, [[SECTION_TARGET]], 0
 
 ; CHECK-LABEL: call_forward:
@@ -44,11 +44,11 @@ define internal void @later() {
   ret void
 }
 
-; Canonical text keeps the conservative address-materialization plus PUSHGO
-; sequence for unresolved direct symbols.
+; Canonical text uses relocatable address materialization plus PUSHGO for
+; unresolved direct symbols.
 ; CHECK-LABEL: call_external:
 ; CHECK:       GET r30, rJ
-; CHECK:       SETH [[TARGET:r[0-9]+]], {{.*}}external_callee
+; CHECK:       GETA [[TARGET:r[0-9]+]], %geta(external_callee)
 ; CHECK:       PUSHGO r31, [[TARGET]], 0
 ; CHECK:       PUT rJ, r30
 ; CHECK-NEXT:  POP 0, 0

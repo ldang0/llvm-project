@@ -78,7 +78,7 @@ return:
 ; ASM-LABEL: frame_result:
 ; ASM:       STOU r253, r254,
 ; ASM:       ADDU r253, r254,
-; ASM:       SETH [[EXTERNAL:r[0-9]+]], (external_direct>>48)&65535
+; ASM:       GETA [[EXTERNAL:r[0-9]+]], %geta(external_direct)
 ; ASM:       PUSHGO r31, [[EXTERNAL]], 0
 ; ASM:       PUSHJB r31, recursive_result
 define void @frame_result(
@@ -133,14 +133,14 @@ entry:
   ret void
 }
 
-; Global storage exercises canonical split addresses and the ELF GETA path
-; while the external calls retain their stubbable object relocations.
+; Global storage and text calls use canonical GETA addresses while direct ELF
+; objects retain their stubbable call relocations.
 ; ASM-LABEL: call_globals:
-; ASM:       SETH {{r[0-9]+}}, (aggregate_result>>48)&65535
-; ASM:       SETH {{r[0-9]+}}, (external_sret>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(aggregate_result)
+; ASM:       GETA {{r[0-9]+}}, %geta(external_sret)
 ; ASM:       PUSHGO
-; ASM:       SETH {{r[0-9]+}}, (aggregate_source>>48)&65535
-; ASM:       SETH {{r[0-9]+}}, (external_direct>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(aggregate_source)
+; ASM:       GETA {{r[0-9]+}}, %geta(external_direct)
 ; ASM:       PUSHGO
 define void @call_globals() {
 entry:

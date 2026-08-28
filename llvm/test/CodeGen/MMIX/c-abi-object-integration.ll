@@ -35,9 +35,9 @@ define internal i64 @local_scalar(i64 %value) {
 ; Compose ordinary scalar calls with both direct and caller-copy aggregates.
 ; ASM-LABEL: call_values:
 ; ASM:       PUSHJB r31, local_scalar
-; ASM:       SETH {{r[0-9]+}}, (external_scalar>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(external_scalar)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
-; ASM:       SETH {{r[0-9]+}}, (external_direct>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(external_direct)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 define %small @call_values(i64 %value, %small %direct,
                            ptr byval(%large) align 8 %copy) {
@@ -51,13 +51,13 @@ define %small @call_values(i64 %value, %small %direct,
 }
 
 ; The hidden result pointer and a variadic caller-copy operand coexist with
-; ordinary slots. Global addresses retain canonical split text expressions.
+; ordinary slots. Global addresses retain canonical relocatable expressions.
 ; ASM-LABEL: call_results_and_varargs:
-; ASM:       SETH {{r[0-9]+}}, (aggregate_result>>48)&65535
-; ASM:       SETH {{r[0-9]+}}, (external_sret>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(aggregate_result)
+; ASM:       GETA {{r[0-9]+}}, %geta(external_sret)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
-; ASM:       SETH {{r[0-9]+}}, (aggregate_source>>48)&65535
-; ASM:       SETH {{r[0-9]+}}, (external_variadic>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(aggregate_source)
+; ASM:       GETA {{r[0-9]+}}, %geta(external_variadic)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 define i64 @call_results_and_varargs(%small %direct) {
   call void @external_sret(
@@ -71,7 +71,7 @@ define i64 @call_results_and_varargs(%small %direct) {
 ; A large intrinsic copy proves that an ABI object may retain an ordinary C
 ; runtime-helper reference without claiming that the runtime is available.
 ; ASM-LABEL: copy_object:
-; ASM:       SETH {{r[0-9]+}}, (memcpy>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(memcpy)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 define void @copy_object(ptr %destination, ptr %source) {
   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %destination,
@@ -81,7 +81,7 @@ define void @copy_object(ptr %destination, ptr %source) {
 
 ; Symbolic calls retain one signed S+A expression for the object writer.
 ; ASM-LABEL: call_signed_addend:
-; ASM:       SETH {{r[0-9]+}}, ((external_addend-12)>>48)&65535
+; ASM:       GETA {{r[0-9]+}}, %geta(external_addend-12)
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 define void @call_signed_addend() {
   call void getelementptr (i8, ptr @external_addend, i64 -12)()

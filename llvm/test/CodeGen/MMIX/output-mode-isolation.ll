@@ -1,11 +1,11 @@
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   %s -o %t.s
 ; RUN: FileCheck %s --check-prefix=CANONICAL \
-; RUN:   --implicit-check-not=GETA --implicit-check-not=PUSHJ < %t.s
+; RUN:   --implicit-check-not=PUSHJ < %t.s
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=asm \
 ; RUN:   --output-asm-variant=1 %s -o %t.mms
 ; RUN: FileCheck %s --check-prefix=MMIXAL --implicit-check-not=: \
-; RUN:   --implicit-check-not=GETA --implicit-check-not=PUSHJ \
+; RUN:   --implicit-check-not=PUSHJ \
 ; RUN:   --implicit-check-not='{{^[[:space:]]*\.}}' < %t.mms
 ; RUN: llc -mtriple=mmix-unknown-elf -filetype=obj %s -o %t.o
 ; RUN: llvm-objdump --no-print-imm-hex -dr %t.o \
@@ -26,14 +26,8 @@
 ; CANONICAL:      .globl Main
 ; CANONICAL:      .type Main,@function
 ; CANONICAL-LABEL: Main:
-; CANONICAL:      SETH [[DATA:r[0-9]+]], (named.data>>48)&65535
-; CANONICAL-NEXT: INCMH [[DATA]], (named.data>>32)&65535
-; CANONICAL-NEXT: INCML [[DATA]], (named.data>>16)&65535
-; CANONICAL-NEXT: INCL [[DATA]], named.data&65535
-; CANONICAL:      SETH [[CALLEE:r[0-9]+]], (worker>>48)&65535
-; CANONICAL-NEXT: INCMH [[CALLEE]], (worker>>32)&65535
-; CANONICAL-NEXT: INCML [[CALLEE]], (worker>>16)&65535
-; CANONICAL-NEXT: INCL [[CALLEE]], worker&65535
+; CANONICAL:      GETA [[DATA:r[0-9]+]], %geta(named.data)
+; CANONICAL:      GETA [[CALLEE:r[0-9]+]], %geta(worker)
 ; CANONICAL-NEXT: PUSHGO r31, [[CALLEE]], 0
 ; CANONICAL:      .globl worker
 ; CANONICAL-LABEL: worker:
