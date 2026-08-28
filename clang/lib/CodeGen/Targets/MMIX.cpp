@@ -167,6 +167,9 @@ static bool isSupportedMMIXFixedVectorType(const ASTContext &Context,
 static MMIXUnsupportedObjectKind
 classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty,
                                   bool AllowSupportedVector = true) {
+  if (Ty.isNull())
+    return MMIXUnsupportedObjectKind::None;
+
   QualType OriginalTy = Ty;
   Ty = Ty.getCanonicalType();
   if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)

@@ -7,6 +7,7 @@
 #--- properties.cpp
 #include "src/__support/complex_type.h"
 #include "src/__support/macros/attributes.h"
+#include "include/llvm-libc-types/fenv_t.h"
 
 #ifndef LIBC_TARGET_ARCH_IS_MMIX
 #error "LLVM libc did not recognize the MMIX source architecture"
@@ -19,6 +20,9 @@
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__
 #error "MMIX must use big-endian byte order"
 #endif
+
+static_assert(sizeof(fenv_t) == 8 && alignof(fenv_t) == 8,
+              "unexpected MMIX floating environment representation");
 
 #if !defined(LIBC_TYPES_HAS_INT64) || defined(LIBC_TYPES_HAS_INT128)
 #error "unexpected LLVM libc integer capabilities"
