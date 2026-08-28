@@ -1444,7 +1444,51 @@ static bool hasCompatibleMMIXTailResultAttributes(const Function &Caller,
   return true;
 }
 
-static bool isSupportedMMIXABIType(Type *Ty) {
+static std::optional<unsigned>
+getMMIXFixedVectorABIWidth(Type *Ty, const DataLayout &DL) {
+  const auto *VectorTy = dyn_cast<FixedVectorType>(Ty);
+  if (!VectorTy)
+    return std::nullopt;
+
+  unsigned Lanes = VectorTy->getNumElements();
+  if (!isPowerOf2_32(Lanes))
+    return std::nullopt;
+
+  Type *ElementTy = VectorTy->getElementType();
+  unsigned ElementWidth;
+  if (ElementTy->isIntegerTy(1)) {
+    if (Lanes < 8)
+      return std::nullopt;
+    ElementWidth = 1;
+  } else if (ElementTy->isIntegerTy()) {
+    ElementWidth = ElementTy->getIntegerBitWidth();
+    if (ElementWidth != 8 && ElementWidth != 16 && ElementWidth != 32 &&
+        ElementWidth != 64)
+      return std::nullopt;
+  } else if (ElementTy->isFloatTy()) {
+    ElementWidth = 32;
+  } else if (ElementTy->isDoubleTy()) {
+    ElementWidth = 64;
+  } else {
+    return std::nullopt;
+  }
+
+  if (Lanes > 64 / ElementWidth)
+    return std::nullopt;
+  unsigned Width = ElementWidth * Lanes;
+  if (Width != 8 && Width != 16 && Width != 32 && Width != 64)
+    return std::nullopt;
+
+  TypeSize AllocSize = DL.getTypeAllocSize(Ty);
+  if (AllocSize.isScalable() || AllocSize.getFixedValue() != Width / 8 ||
+      DL.getABITypeAlign(Ty) != Align(Width / 8))
+    return std::nullopt;
+  return Width;
+}
+
+static bool isSupportedMMIXABIType(Type *Ty, const DataLayout &DL) {
+  if (Ty->isVectorTy())
+    return getMMIXFixedVectorABIWidth(Ty, DL).has_value();
   if (Ty->isVoidTy() || Ty->isAggregateType() || Ty->isPointerTy() ||
       Ty->isFloatTy() || Ty->isDoubleTy())
     return true;
@@ -1596,14 +1640,31 @@ static SDValue unpackMMIXDirectAggregatePart(
   return DAG.getNode(ISD::TRUNCATE, DL, Part.VT, Bits);
 }
 
+static Type *getMMIXFixedVectorFormalArgumentType(const TargetLowering &TLI,
+                                                  const Function &F,
+                                                  const DataLayout &DL,
+                                                  unsigned PartIndex) {
+  unsigned FirstPart = 0;
+  for (const Argument &Arg : F.args()) {
+    SmallVector<EVT, 4> ValueVTs;
+    ComputeValueVTs(TLI, DL, Arg.getType(), ValueVTs);
+    if (PartIndex < FirstPart + ValueVTs.size())
+      return Arg.getType()->isVectorTy() ? Arg.getType() : nullptr;
+    FirstPart += ValueVTs.size();
+  }
+  return nullptr;
+}
+
 struct MMIXFormalArgMapping {
   SmallVector<unsigned, 4> OriginalParts;
   SmallVector<uint64_t, 4> PartOffsets;
   uint64_t AggregateSize = 0;
   uint64_t LocalCopySize = 0;
   Align LocalCopyAlignment = Align(1);
+  bool IsFixedVector = false;
 
   bool isDirectAggregate() const { return !PartOffsets.empty(); }
+  bool isFixedVector() const { return IsFixedVector; }
   bool needsLocalCopy() const { return LocalCopySize != 0; }
 };
 
@@ -1715,6 +1776,38 @@ validateMMIXVariadicCallOperands(const TargetLowering::CallLoweringInfo &CLI,
   }
 }
 
+static bool isSingleMMIXVectorABISlot(EVT VT) {
+  return VT.isVector() && !VT.isScalableVector() &&
+         VT.getSizeInBits().getFixedValue() <= 64;
+}
+
+MVT MMIXTargetLowering::getRegisterTypeForCallingConv(
+    LLVMContext &Context, CallingConv::ID CC, EVT VT) const {
+  if (isSingleMMIXVectorABISlot(VT))
+    return MVT::i64;
+  return TargetLowering::getRegisterTypeForCallingConv(Context, CC, VT);
+}
+
+unsigned MMIXTargetLowering::getNumRegistersForCallingConv(
+    LLVMContext &Context, CallingConv::ID CC, EVT VT) const {
+  if (isSingleMMIXVectorABISlot(VT))
+    return 1;
+  return TargetLowering::getNumRegistersForCallingConv(Context, CC, VT);
+}
+
+unsigned MMIXTargetLowering::getVectorTypeBreakdownForCallingConv(
+    LLVMContext &Context, CallingConv::ID CC, EVT VT, EVT &IntermediateVT,
+    unsigned &NumIntermediates, MVT &RegisterVT) const {
+  if (isSingleMMIXVectorABISlot(VT)) {
+    IntermediateVT = MVT::i64;
+    NumIntermediates = 1;
+    RegisterVT = MVT::i64;
+    return 1;
+  }
+  return TargetLowering::getVectorTypeBreakdownForCallingConv(
+      Context, CC, VT, IntermediateVT, NumIntermediates, RegisterVT);
+}
+
 SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                       SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = CLI.DAG.getMachineFunction();
@@ -1727,7 +1820,10 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
         Twine("MMIX supports only C and Fast calling conventions in ") +
         "function '" + MF.getName() + "'");
   validateMMIXVariadicCallOperands(CLI, MF.getName());
-  if (!isSupportedMMIXABIType(CLI.OrigRetTy))
+  const DataLayout &DataLayout = DAG.getDataLayout();
+  std::optional<unsigned> VectorResultWidth =
+      getMMIXFixedVectorABIWidth(CLI.OrigRetTy, DataLayout);
+  if (!isSupportedMMIXABIType(CLI.OrigRetTy, DataLayout))
     reportUnsupportedMMIXABIType(CLI.OrigRetTy, "call results", MF.getName());
   ISD::ArgFlagsTy ResultFlags;
   if (!CLI.Ins.empty())
@@ -1749,7 +1845,17 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<ISD::InputArg, 4> ABIIns;
   SmallVector<uint64_t, 4> ResultPartOffsets;
   uint64_t ResultAggregateSize = 0;
-  if (ResultClassification.Kind == MMIXAggregateABIKind::DirectResult) {
+  if (VectorResultWidth) {
+    if (CLI.Ins.size() != 1 || CLI.Ins.front().VT != MVT::i64)
+      reportFatalUsageError(
+          Twine("MMIX cannot lower this fixed-vector call result in function '") +
+          MF.getName() + "'");
+    ISD::ArgFlagsTy PackedFlags;
+    PackedFlags.setOrigAlign(DataLayout.getABITypeAlign(CLI.OrigRetTy));
+    Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+    ABIIns.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty,
+                        CLI.Ins.front().Used, ISD::InputArg::NoArgIndex, 0);
+  } else if (ResultClassification.Kind == MMIXAggregateABIKind::DirectResult) {
     for (const ISD::InputArg &Result : CLI.Ins)
       if (!isSupportedCallValueType(Result.VT))
         reportFatalUsageError(
@@ -1822,9 +1928,26 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
                         ? OriginalArg.IndirectType
                         : OriginalArg.OrigTy;
     }
-    if (AggregateTy && !isSupportedMMIXABIType(AggregateTy))
+    if (AggregateTy && !isSupportedMMIXABIType(AggregateTy, DataLayout))
       reportUnsupportedMMIXABIType(AggregateTy, "call arguments",
                                    MF.getName());
+    std::optional<unsigned> VectorWidth =
+        AggregateTy ? getMMIXFixedVectorABIWidth(AggregateTy, DataLayout)
+                    : std::nullopt;
+    if (VectorWidth) {
+      if (CLI.IsVarArg || Arg.VT != MVT::i64)
+        reportFatalUsageError(
+            Twine("MMIX does not support variadic or split fixed-vector call ") +
+            "arguments in function '" + MF.getName() + "'");
+      ISD::ArgFlagsTy PackedFlags;
+      PackedFlags.setOrigAlign(DataLayout.getABITypeAlign(AggregateTy));
+      Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+      ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty,
+                           Arg.OrigArgIndex, 0);
+      ABIOutVals.push_back(CLI.OutVals[I]);
+      ++I;
+      continue;
+    }
     MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
         MMIXAggregateABIRole::Argument, Arg.Flags, CLI.DAG.getDataLayout(),
         AggregateTy);
@@ -1939,7 +2062,12 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
         CalleeSRet ? MMIXTailCallResultShape::Indirect
                    : classifyMMIXTailCallResultShape(ResultClassification.Kind,
                                                      ABIIns.size());
-    ABI.ArgumentsAreCompatible = true;
+    bool HasVectorArgument =
+        llvm::any_of(CLI.Args, [&](const ArgListEntry &Arg) {
+          Type *Ty = Arg.IndirectType ? Arg.IndirectType : Arg.OrigTy;
+          return getMMIXFixedVectorABIWidth(Ty, DataLayout).has_value();
+        });
+    ABI.ArgumentsAreCompatible = !HasVectorArgument && !VectorResultWidth;
     ABI.ForwardsIndirectResult = ForwardsSRet;
     ABI.HasCallerCopy = HasCallerCopy;
     ABI.CallerCopySurvivesTransfer = false;
@@ -2112,7 +2240,9 @@ SDValue MMIXTargetLowering::LowerCall(CallLoweringInfo &CLI,
     default:
       report_fatal_error("MMIX does not support this call result conversion");
     }
-    if (ResultClassification.Kind == MMIXAggregateABIKind::DirectResult &&
+    if (VectorResultWidth) {
+      InVals.push_back(Value);
+    } else if (ResultClassification.Kind == MMIXAggregateABIKind::DirectResult &&
         !IsWideComplexResult) {
       for (unsigned Part = 0; Part != CLI.Ins.size(); ++Part)
         InVals.push_back(unpackMMIXDirectAggregatePart(
@@ -2165,6 +2295,7 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
         F.getName() + "'");
   SmallVector<ISD::InputArg, 16> ABIIns;
   SmallVector<MMIXFormalArgMapping, 16> ArgMappings;
+  const DataLayout &DataLayout = DAG.getDataLayout();
   for (unsigned I = 0; I != Ins.size();) {
     const ISD::InputArg &Arg = Ins[I];
     Type *AggregateTy = nullptr;
@@ -2177,9 +2308,30 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
       else
         AggregateTy = OriginalArg.getType();
     }
-    if (AggregateTy && !isSupportedMMIXABIType(AggregateTy))
+    if (!AggregateTy)
+      AggregateTy =
+          getMMIXFixedVectorFormalArgumentType(*this, F, DataLayout, I);
+    if (AggregateTy && !isSupportedMMIXABIType(AggregateTy, DataLayout))
       reportUnsupportedMMIXABIType(AggregateTy, "formal arguments",
                                    F.getName());
+    std::optional<unsigned> VectorWidth =
+        AggregateTy ? getMMIXFixedVectorABIWidth(AggregateTy, DataLayout)
+                    : std::nullopt;
+    if (VectorWidth) {
+      if (IsVarArg || Arg.VT != MVT::i64)
+        reportFatalUsageError(
+            Twine("MMIX does not support variadic or split fixed-vector formal ") +
+            "arguments in function '" + F.getName() + "'");
+      ISD::ArgFlagsTy PackedFlags;
+      PackedFlags.setOrigAlign(DataLayout.getABITypeAlign(AggregateTy));
+      Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+      ABIIns.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, Arg.Used,
+                          Arg.getOrigArgIndex(), 0);
+      MMIXFormalArgMapping &Mapping = ArgMappings.emplace_back();
+      Mapping.IsFixedVector = true;
+      ++I;
+      continue;
+    }
     MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
         MMIXAggregateABIRole::Argument, Arg.Flags, DAG.getDataLayout(),
         AggregateTy);
@@ -2320,6 +2472,10 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
     }
 
     const MMIXFormalArgMapping &Mapping = ArgMappings[I];
+    if (Mapping.isFixedVector()) {
+      InVals.push_back(Arg);
+      continue;
+    }
     if (Mapping.isDirectAggregate()) {
       for (unsigned Part = 0; Part != Mapping.OriginalParts.size(); ++Part) {
         const ISD::InputArg &Original = Ins[Mapping.OriginalParts[Part]];
@@ -2388,6 +2544,22 @@ bool MMIXTargetLowering::CanLowerReturn(
   MMIXAggregateABIClassification Classification = classifyMMIXABIValue(
       MMIXAggregateABIRole::Result, ResultFlags, MF.getDataLayout(),
       const_cast<Type *>(RetTy), Outs.size());
+  std::optional<unsigned> VectorWidth = getMMIXFixedVectorABIWidth(
+      const_cast<Type *>(RetTy), MF.getDataLayout());
+  if (VectorWidth) {
+    if (!isSupportedMMIXCallingConv(CallConv) || Outs.size() != 1 ||
+        Outs.front().VT != MVT::i64)
+      return false;
+    ISD::ArgFlagsTy PackedFlags;
+    PackedFlags.setOrigAlign(
+        MF.getDataLayout().getABITypeAlign(const_cast<Type *>(RetTy)));
+    SmallVector<ISD::OutputArg, 1> ABIOuts;
+    ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64,
+                         Type::getInt64Ty(Context), 0, 0);
+    SmallVector<CCValAssign, 1> RetLocs;
+    CCState CCInfo(CallConv, IsVarArg, MF, RetLocs, Context);
+    return CCInfo.CheckReturn(ABIOuts, RetCC_MMIX);
+  }
   if (Classification.Kind == MMIXAggregateABIKind::Empty)
     return Classification.isValid() && Outs.empty() &&
            isSupportedMMIXCallingConv(CallConv);
@@ -2457,7 +2629,10 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
             "MMIX supports only C and Fast calling conventions in function '") +
         F.getName() + "'");
 
-  if (!isSupportedMMIXABIType(F.getReturnType()))
+  const DataLayout &DataLayout = DAG.getDataLayout();
+  std::optional<unsigned> VectorWidth =
+      getMMIXFixedVectorABIWidth(F.getReturnType(), DataLayout);
+  if (!isSupportedMMIXABIType(F.getReturnType(), DataLayout))
     reportUnsupportedMMIXABIType(F.getReturnType(), "function results",
                                  F.getName());
 
@@ -2482,7 +2657,17 @@ MMIXTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   SmallVector<ISD::OutputArg, 2> ABIOuts;
   SmallVector<SDValue, 2> ABIOutVals;
-  if (Classification.Kind == MMIXAggregateABIKind::DirectResult) {
+  if (VectorWidth) {
+    if (Outs.size() != 1 || Outs.front().VT != MVT::i64)
+      reportFatalUsageError(
+          Twine("MMIX cannot lower this fixed-vector function result in '") +
+          F.getName() + "'");
+    ABIOutVals.push_back(OutVals.front());
+    ISD::ArgFlagsTy PackedFlags;
+    PackedFlags.setOrigAlign(DataLayout.getABITypeAlign(F.getReturnType()));
+    Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+    ABIOuts.emplace_back(PackedFlags, MVT::i64, MVT::i64, I64Ty, 0, 0);
+  } else if (Classification.Kind == MMIXAggregateABIKind::DirectResult) {
     SmallVector<uint64_t, 4> PartOffsets =
         getMMIXAggregatePartOffsets(F.getReturnType(), DAG.getDataLayout());
     if (PartOffsets.size() != Outs.size())
