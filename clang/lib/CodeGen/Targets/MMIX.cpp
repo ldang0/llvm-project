@@ -29,7 +29,8 @@ using namespace clang::CodeGen;
 namespace {
 
 static bool isDeferredMMIXBoundaryType(QualType Ty) {
-  return Ty->isRecordType() || Ty->isArrayType() || Ty->isAtomicType();
+  return Ty->isRecordType() || Ty->isArrayType() || Ty->isAtomicType() ||
+         Ty->isReferenceType();
 }
 
 static bool isSupportedMMIXScalarType(const ASTContext &Context, QualType Ty,
@@ -42,6 +43,9 @@ static bool isSupportedMMIXScalarType(const ASTContext &Context, QualType Ty,
       return false;
     return Context.getTypeSize(Ty) <= 64;
   }
+
+  if (Ty->isNullPtrType())
+    return true;
 
   if (const auto *PT = Ty->getAs<PointerType>())
     return Context.getTargetAddressSpace(
@@ -90,10 +94,6 @@ static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
                                                SourceLocation Loc,
                                                StringRef ValueKind,
                                                QualType Ty) {
-  if (Ty->isReferenceType())
-    return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, ("reference " + ValueKind).str());
-
   const auto *RT = Ty->getAs<RecordType>();
   if (RT && isa<CXXRecordDecl>(RT->getDecl()))
     return diagnoseUnsupportedMMIXCXXFeature(
@@ -142,6 +142,9 @@ classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
       return MMIXUnsupportedObjectKind::AddressSpace;
     return MMIXUnsupportedObjectKind::None;
   }
+
+  if (const auto *RT = Ty->getAs<ReferenceType>())
+    return classifyUnsupportedMMIXObjectType(Context, RT->getPointeeType());
 
   if (const auto *AT = Context.getAsArrayType(Ty))
     return classifyUnsupportedMMIXObjectType(Context, AT->getElementType());
@@ -293,10 +296,10 @@ public:
 
   bool VisitCXXMemberCallExpr(CXXMemberCallExpr *E) {
     const CXXMethodDecl *Method = E->getMethodDecl();
-    return !diagnoseUnsupportedMMIXCXXFeature(
-        CGM, E->getExprLoc(), Method && Method->isVirtual()
-                                  ? "virtual dispatch"
-                                  : "nonvirtual member calls");
+    if (!Method || !Method->isVirtual())
+      return true;
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              "virtual dispatch");
   }
 
   bool VisitCXXConstructExpr(CXXConstructExpr *E) {
@@ -843,11 +846,16 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
   if (CGM.getLangOpts().CPlusPlus) {
     if (const auto *Method = dyn_cast<CXXMethodDecl>(FD)) {
-      diagnoseUnsupportedMMIXCXXFeature(CGM, FD->getLocation(),
-                                        Method->isVirtual()
-                                            ? "virtual member functions"
-                                            : "nonvirtual member functions");
-      return;
+      if (Method->isVirtual()) {
+        diagnoseUnsupportedMMIXCXXFeature(CGM, FD->getLocation(),
+                                          "virtual member functions");
+        return;
+      }
+      if (isa<CXXConstructorDecl, CXXDestructorDecl>(Method)) {
+        diagnoseUnsupportedMMIXCXXFeature(
+            CGM, FD->getLocation(), "class construction and destruction");
+        return;
+      }
     }
 
     if (diagnoseUnsupportedMMIXCXXBoundary(CGM, FD->getLocation(), "returns",
