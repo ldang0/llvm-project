@@ -1,0 +1,40 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding \
+# RUN:   -fsyntax-only -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc %t/fallbacks.cpp
+# RUN: clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding -O0 \
+# RUN:   -S -emit-llvm -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc %t/fallbacks.cpp -o %t/debug.ll
+# RUN: clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding -O2 \
+# RUN:   -S -emit-llvm -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc %t/fallbacks.cpp -o %t/release.ll
+# RUN: FileCheck %s --check-prefix=IR --input-file=%t/debug.ll
+# RUN: FileCheck %s --check-prefix=IR --input-file=%t/release.ll
+
+#--- fallbacks.cpp
+#include "src/__support/macros/attributes.h"
+#include "src/string/memory_utils/inline_memcpy.h"
+#include "src/string/memory_utils/inline_memset.h"
+#include "src/string/string_length.h"
+
+#if LIBC_HAS_VECTOR_TYPE
+#error "MMIX must not select LLVM libc native-vector implementations"
+#endif
+
+extern "C" unsigned long fallback_copy_and_length(char *Dst, const char *Src,
+                                                   unsigned long Size) {
+  __llvm_libc::inline_memcpy(Dst, Src, Size);
+  return __llvm_libc::internal::string_length(Dst);
+}
+
+extern "C" void fallback_clear(char *Dst, unsigned long Size) {
+  __llvm_libc::inline_memset(Dst, 0, Size);
+}
+
+// IR-LABEL: define{{.*}} @fallback_copy_and_length(
+// IR-NOT: <{{[0-9]+}} x
+// IR: ret i64
+// IR-LABEL: define{{.*}} @fallback_clear(
+// IR-NOT: <{{[0-9]+}} x
+// IR: ret void
