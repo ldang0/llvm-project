@@ -104,15 +104,10 @@ static bool diagnoseUnsupportedMMIXCXXObjectLifetime(CodeGenModule &CGM,
 
 static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
                                                SourceLocation Loc,
-                                               StringRef ValueKind,
                                                QualType Ty) {
   const auto *RT = Ty->getAs<RecordType>();
   const auto *RD = RT ? dyn_cast<CXXRecordDecl>(RT->getDecl()) : nullptr;
-  if (RD && !RD->canPassInRegisters())
-    return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, ("non-trivial C++ record " + ValueKind).str());
-
-  return false;
+  return RD && diagnoseUnsupportedMMIXCXXObjectLifetime(CGM, Loc, RD);
 }
 
 static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
@@ -874,12 +869,12 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
         return;
     }
 
-    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, FD->getLocation(), "returns",
+    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, FD->getLocation(),
                                            FD->getReturnType()))
       return;
     for (const ParmVarDecl *Param : FD->parameters()) {
-      if (diagnoseUnsupportedMMIXCXXBoundary(CGM, Param->getLocation(),
-                                             "arguments", Param->getType()))
+      if (diagnoseUnsupportedMMIXCXXBoundary(
+              CGM, Param->getLocation(), Param->getType()))
         return;
     }
   }
@@ -932,12 +927,10 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
   diagnoseUnsupportedMMIXVariadicSignature(CGM, CallLoc, Callee);
 
   if (CGM.getLangOpts().CPlusPlus) {
-    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, "returns",
-                                           ReturnType))
+    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, ReturnType))
       return;
     for (const CallArg &Arg : Args) {
-      if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, "arguments",
-                                             Arg.getType()))
+      if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, Arg.getType()))
         return;
     }
   }

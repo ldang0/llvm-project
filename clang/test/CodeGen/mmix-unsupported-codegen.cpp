@@ -5,10 +5,9 @@
 
 struct Value {
   int field;
-  ~Value();
-  int get() const { return field; }
+  virtual int get() const;
 };
 
 int read(Value value) { return value.get(); }
 
-// CHECK: error: MMIX C++ producer profile does not support non-trivial C++ record arguments
+// CHECK: error: MMIX C++ producer profile does not support polymorphic object lifetime

@@ -19,14 +19,6 @@
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_UNSUPPORTED_FIELD %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=UNSUPPORTED-FIELD
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_NONTRIVIAL_ARGUMENT_CALL %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=NONTRIVIAL-ARGUMENT-CALL
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_NONTRIVIAL_RESULT_CALL %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=NONTRIVIAL-RESULT-CALL
 
 #if defined(TEST_OVERALIGNED_ARGUMENT_DEFINITION) ||                         \
     defined(TEST_OVERALIGNED_ARGUMENT_CALL) ||                              \
@@ -60,20 +52,4 @@ struct WithVector {
 
 int2 read(WithVector Value) { return Value.Value; }
 // UNSUPPORTED-FIELD: error: MMIX GNU ABI does not support vector value CodeGen involving type 'WithVector'
-#elif defined(TEST_NONTRIVIAL_ARGUMENT_CALL) ||                             \
-    defined(TEST_NONTRIVIAL_RESULT_CALL)
-struct NonTrivial {
-  long Value;
-  ~NonTrivial();
-};
-
-#if defined(TEST_NONTRIVIAL_ARGUMENT_CALL)
-long read(NonTrivial Value);
-long call_read(NonTrivial *Value) { return read(*Value); }
-// NONTRIVIAL-ARGUMENT-CALL: error: MMIX C++ producer profile does not support non-trivial C++ record arguments
-#else
-NonTrivial make(long Value);
-void call_make(long Value) { (void)make(Value); }
-// NONTRIVIAL-RESULT-CALL: error: MMIX C++ producer profile does not support non-trivial C++ record returns
-#endif
 #endif
