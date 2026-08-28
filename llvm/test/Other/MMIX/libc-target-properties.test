@@ -12,8 +12,8 @@
 #error "LLVM libc did not recognize the MMIX source architecture"
 #endif
 
-#if LIBC_TARGET_SUPPORTS_NATIVE_VECTOR_TYPE || LIBC_HAS_VECTOR_TYPE
-#error "MMIX must not advertise native vector CodeGen to LLVM libc"
+#if !LIBC_HAS_VECTOR_TYPE
+#error "MMIX must advertise its bounded fixed-vector CodeGen to LLVM libc"
 #endif
 
 #if __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__

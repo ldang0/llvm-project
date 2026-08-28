@@ -43,4 +43,5 @@ _Static_assert(sizeof(enum SignedEnum) == 4 && _Alignof(enum SignedEnum) == 4,
 
 _Float16 unsupported_half; // expected-error {{_Float16 is not supported on this target}}
 __float128 unsupported_quad; // expected-error {{__float128 is not supported on this target}}
-_BitInt(17) unsupported_bitint; // expected-error {{_BitInt is not supported on this target}}
+_BitInt(17) parsed_bitint;
+_BitInt(65) oversized_bitint; // expected-error {{signed _BitInt of bit sizes greater than 64 not supported}}

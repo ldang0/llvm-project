@@ -54,13 +54,6 @@
 #define LIBC_TARGET_ARCH_IS_MMIX
 #endif
 
-// Frontend vector syntax does not imply that a target can lower vector types.
-#if defined(LIBC_TARGET_ARCH_IS_MMIX)
-#define LIBC_TARGET_SUPPORTS_NATIVE_VECTOR_TYPE 0
-#else
-#define LIBC_TARGET_SUPPORTS_NATIVE_VECTOR_TYPE 1
-#endif
-
 #if defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64)
 #define LIBC_TARGET_ARCH_IS_AARCH64
 #endif

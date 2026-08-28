@@ -149,8 +149,7 @@ LIBC_THREAD_MODE_EXTERNAL.
 #endif
 
 #if __has_attribute(ext_vector_type) &&                                        \
-    LIBC_HAS_FEATURE(ext_vector_type_boolean) &&                               \
-    LIBC_TARGET_SUPPORTS_NATIVE_VECTOR_TYPE
+    LIBC_HAS_FEATURE(ext_vector_type_boolean)
 #define LIBC_HAS_VECTOR_TYPE 1
 #else
 #define LIBC_HAS_VECTOR_TYPE 0

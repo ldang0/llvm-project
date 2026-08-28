@@ -424,6 +424,13 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
                                      const CallBase &Call) const {
   const auto *IA = dyn_cast<InlineAsm>(Call.getCalledOperand());
+  if (Call.getType()->isVectorTy() ||
+      llvm::any_of(Call.args(), [](const Use &Arg) {
+        return Arg->getType()->isVectorTy();
+      }))
+    reportFatalUsageError(
+        "MMIX inline assembly does not support vector operands");
+
   MMIXModuleOnlyInstruction ModuleOnlyInstruction =
       IA ? findMMIXModuleOnlyInstruction(IA->getAsmString())
          : MMIXModuleOnlyInstruction{};

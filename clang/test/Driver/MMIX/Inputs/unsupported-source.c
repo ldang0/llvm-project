@@ -1,7 +1,9 @@
 #if defined(TEST_HALF)
 _Float16 value;
 #elif defined(TEST_BITINT)
-_BitInt(17) value;
+_BitInt(17) add_bitint(_BitInt(17) lhs, _BitInt(17) rhs) {
+  return lhs + rhs;
+}
 #elif defined(TEST_COMPLEX)
 _Complex int consume(_Complex int value) { return value; }
 #elif defined(TEST_VECTOR)

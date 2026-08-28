@@ -80,6 +80,11 @@ public:
 
   bool hasInt128Type() const override { return false; }
 
+  // LLVM libc uses dependent bounded _BitInt aliases in vector support
+  // headers. CodeGen retains its separate target-owned _BitInt boundary.
+  bool hasBitIntType() const override { return true; }
+  size_t getMaxBitIntWidth() const override { return 64; }
+
   bool isValidCPUName(StringRef Name) const override;
 
   void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override;

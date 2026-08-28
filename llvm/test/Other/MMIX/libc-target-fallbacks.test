@@ -18,8 +18,8 @@
 #include "src/string/memory_utils/inline_memset.h"
 #include "src/string/string_length.h"
 
-#if LIBC_HAS_VECTOR_TYPE
-#error "MMIX must not select LLVM libc native-vector implementations"
+#if !LIBC_HAS_VECTOR_TYPE
+#error "MMIX must expose its bounded fixed-vector implementation"
 #endif
 
 extern "C" unsigned long fallback_copy_and_length(char *Dst, const char *Src,

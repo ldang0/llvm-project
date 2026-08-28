@@ -7,19 +7,10 @@
 // RUN:   | FileCheck %s --check-prefixes=COMMON,O2
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_VECTOR_REFERENCE %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=VECTOR-REFERENCE
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_POLYMORPHIC_CONSTRUCTION %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=POLYMORPHIC-CONSTRUCTION
 
-#if defined(TEST_VECTOR_REFERENCE)
-using int2 = int __attribute__((ext_vector_type(2)));
-
-int first(int2 &Value) { return Value[0]; }
-// VECTOR-REFERENCE: error: MMIX GNU ABI does not support vector value CodeGen involving type 'int2 &'
-#elif defined(TEST_POLYMORPHIC_CONSTRUCTION)
+#if defined(TEST_POLYMORPHIC_CONSTRUCTION)
 struct Polymorphic {
   Polymorphic();
   virtual long value() const;
@@ -33,6 +24,10 @@ struct Counter {
 
   long add(long Delta) { return Value + Delta; }
 };
+
+using int2 = int __attribute__((ext_vector_type(2)));
+
+int first(int2 &Value) { return Value[0]; }
 
 long update(long &Value, long Delta) {
   Value += Delta;
@@ -50,6 +45,7 @@ extern "C" long reference_entry(Counter *Object, long *Value, long Delta) {
          consume(static_cast<long &&>(*Value)) + is_null(nullptr);
 }
 
+// COMMON-LABEL: define dso_local noundef i32 @_Z5firstRDv2_i(ptr {{.*}}nonnull{{.*}}align 8{{.*}}dereferenceable(8) %Value)
 // COMMON-LABEL: define dso_local noundef i64 @_Z6updateRll(ptr {{[^,]*}}noundef nonnull {{[^,]*}}%Value,
 // COMMON-LABEL: define dso_local noundef i64 @_Z7consumeOl(ptr {{[^,]*}}noundef nonnull {{[^,]*}}%Value)
 // COMMON-LABEL: define dso_local noundef i1 @_Z7is_nullDn(ptr {{[^,]*}}%Value)

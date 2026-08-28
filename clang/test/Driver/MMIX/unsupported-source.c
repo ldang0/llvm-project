@@ -86,7 +86,7 @@
 // RUN: not test -s %t.cxx.o
 
 // HALF: error: _Float16 is not supported on this target
-// BITINT: error: _BitInt is not supported on this target
+// BITINT: error: MMIX GNU ABI does not support extended scalar operation CodeGen involving type '_BitInt(17)'
 // COMPLEX: error: MMIX GNU ABI does not support return type '_Complex int'
 // COMPLEX: error: MMIX GNU ABI does not support argument type '_Complex int'
 // VECTOR: error: MMIX GNU ABI does not support vector value CodeGen involving type 'int4'

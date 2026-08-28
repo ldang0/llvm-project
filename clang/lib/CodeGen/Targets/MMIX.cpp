@@ -166,16 +166,18 @@ static bool isSupportedMMIXFixedVectorType(const ASTContext &Context,
 
 static MMIXUnsupportedObjectKind
 classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty,
-                                  bool IsSubobject = false) {
+                                  bool AllowSupportedVector = true) {
+  QualType OriginalTy = Ty;
   Ty = Ty.getCanonicalType();
   if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)
     return MMIXUnsupportedObjectKind::AddressSpace;
   if (const auto *AT = Ty->getAs<AtomicType>()) {
     return classifyUnsupportedMMIXObjectType(Context, AT->getValueType(),
-                                             /*IsSubobject=*/true);
+                                             /*AllowSupportedVector=*/false);
   }
   if (Ty->isVectorType())
-    return !IsSubobject && isSupportedMMIXFixedVectorType(Context, Ty)
+    return AllowSupportedVector &&
+                   isSupportedMMIXFixedVectorType(Context, OriginalTy)
                ? MMIXUnsupportedObjectKind::None
                : MMIXUnsupportedObjectKind::Vector;
 
@@ -188,16 +190,16 @@ classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty,
 
   if (const auto *RT = Ty->getAs<ReferenceType>())
     return classifyUnsupportedMMIXObjectType(Context, RT->getPointeeType(),
-                                             /*IsSubobject=*/true);
+                                             AllowSupportedVector);
 
   if (const auto *AT = Context.getAsArrayType(Ty))
     return classifyUnsupportedMMIXObjectType(Context, AT->getElementType(),
-                                             /*IsSubobject=*/true);
+                                             AllowSupportedVector);
 
   if (const auto *RT = Ty->getAs<RecordType>()) {
     for (const FieldDecl *Field : RT->getDecl()->fields()) {
       MMIXUnsupportedObjectKind Kind = classifyUnsupportedMMIXObjectType(
-          Context, Field->getType(), /*IsSubobject=*/true);
+          Context, Field->getType(), AllowSupportedVector);
       if (Kind != MMIXUnsupportedObjectKind::None)
         return Kind;
     }

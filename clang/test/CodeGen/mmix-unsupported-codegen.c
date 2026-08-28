@@ -10,6 +10,9 @@
 // RUN:   -DTEST_WIDE_OPERATION %s 2>&1 | FileCheck %s --check-prefix=WIDE
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
+// RUN:   -DTEST_BITINT %s 2>&1 | FileCheck %s --check-prefix=BITINT
+// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
+// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_COMPLEX_INTEGER_OPERATION %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=COMPLEX-INTEGER
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
@@ -41,6 +44,11 @@ long multiply(long value) {
   return (long)wide;
 }
 // WIDE: error: __int128 is not supported on this target
+#elif defined(TEST_BITINT)
+_BitInt(17) add_bitint(_BitInt(17) lhs, _BitInt(17) rhs) {
+  return lhs + rhs;
+}
+// BITINT: error: MMIX GNU ABI does not support extended scalar operation CodeGen involving type '_BitInt(17)'
 #elif defined(TEST_COMPLEX_INTEGER_OPERATION)
 _Complex int add_complex_integer(_Complex int lhs, _Complex int rhs) {
   return lhs + rhs;
