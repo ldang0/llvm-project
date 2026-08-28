@@ -107,9 +107,10 @@ static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
                                                StringRef ValueKind,
                                                QualType Ty) {
   const auto *RT = Ty->getAs<RecordType>();
-  if (RT && isa<CXXRecordDecl>(RT->getDecl()))
+  const auto *RD = RT ? dyn_cast<CXXRecordDecl>(RT->getDecl()) : nullptr;
+  if (RD && !RD->canPassInRegisters())
     return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, ("C++ record " + ValueKind).str());
+        CGM, Loc, ("non-trivial C++ record " + ValueKind).str());
 
   return false;
 }
@@ -715,6 +716,11 @@ ABIArgInfo MMIXABIInfo::classifyAggregateReturn(QualType Ty) const {
 }
 
 ABIArgInfo MMIXABIInfo::classifyAggregateArgument(QualType Ty) const {
+  if (CGCXXABI::RecordArgABI RAA = getRecordArgABI(Ty, getCXXABI()))
+    return getNaturalAlignIndirect(
+        Ty, getDataLayout().getAllocaAddrSpace(),
+        /*ByVal=*/RAA == CGCXXABI::RAA_DirectInMemory);
+
   if (isEmptyRecord(getContext(), Ty, /*AllowArrays=*/true))
     return ABIArgInfo::getIgnore();
 
@@ -924,6 +930,17 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
     const FunctionDecl *Callee, const CallArgList &Args,
     QualType ReturnType) const {
   diagnoseUnsupportedMMIXVariadicSignature(CGM, CallLoc, Callee);
+
+  if (CGM.getLangOpts().CPlusPlus) {
+    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, "returns",
+                                           ReturnType))
+      return;
+    for (const CallArg &Arg : Args) {
+      if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, "arguments",
+                                             Arg.getType()))
+        return;
+    }
+  }
 
   ASTContext &Context = CGM.getContext();
   if (!(isDeferredMMIXBoundaryType(ReturnType) &&
