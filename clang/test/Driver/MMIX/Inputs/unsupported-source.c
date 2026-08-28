@@ -5,8 +5,8 @@ _BitInt(17) value;
 #elif defined(TEST_COMPLEX)
 _Complex int consume(_Complex int value) { return value; }
 #elif defined(TEST_VECTOR)
-typedef int int2 __attribute__((ext_vector_type(2)));
-int2 value;
+typedef int int4 __attribute__((ext_vector_type(4)));
+int4 value;
 #elif defined(TEST_ATOMIC)
 struct ThreeBytes {
   unsigned char bytes[3];

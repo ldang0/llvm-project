@@ -133,16 +133,47 @@ enum class MMIXUnsupportedObjectKind {
   AddressSpace,
 };
 
+static bool isSupportedMMIXFixedVectorType(const ASTContext &Context,
+                                           QualType Ty) {
+  const auto *VT = Ty->getAs<VectorType>();
+  if (!VT || VT->getVectorKind() != VectorKind::Generic ||
+      !llvm::isPowerOf2_64(VT->getNumElements()))
+    return false;
+
+  QualType ElementTy = VT->getElementType();
+  uint64_t ElementBits = Context.getTypeSize(ElementTy);
+  uint64_t LaneBits = ElementTy->isBooleanType() ? 1 : ElementBits;
+  bool SupportedElement =
+      ElementTy->isBooleanType() && VT->getNumElements() >= 8;
+  if (!ElementTy->isBooleanType() && ElementTy->isIntegerType() &&
+      !ElementTy->isBitIntType())
+    SupportedElement |= ElementBits == 8 || ElementBits == 16 ||
+                        ElementBits == 32 || ElementBits == 64;
+  SupportedElement |= ElementTy->isSpecificBuiltinType(BuiltinType::Float) ||
+                      ElementTy->isSpecificBuiltinType(BuiltinType::Double) ||
+                      ElementTy->isSpecificBuiltinType(BuiltinType::LongDouble);
+  if (!SupportedElement || LaneBits * uint64_t(VT->getNumElements()) > 64)
+    return false;
+
+  uint64_t Size = Context.getTypeSize(Ty);
+  uint64_t Align = Context.getTypeAlign(Ty);
+  return (Size == 8 || Size == 16 || Size == 32 || Size == 64) && Align == Size;
+}
+
 static MMIXUnsupportedObjectKind
-classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
+classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty,
+                                  bool IsSubobject = false) {
   Ty = Ty.getCanonicalType();
   if (Context.getTargetAddressSpace(Ty.getAddressSpace()) != 0)
     return MMIXUnsupportedObjectKind::AddressSpace;
   if (const auto *AT = Ty->getAs<AtomicType>()) {
-    return classifyUnsupportedMMIXObjectType(Context, AT->getValueType());
+    return classifyUnsupportedMMIXObjectType(Context, AT->getValueType(),
+                                             /*IsSubobject=*/true);
   }
   if (Ty->isVectorType())
-    return MMIXUnsupportedObjectKind::Vector;
+    return !IsSubobject && isSupportedMMIXFixedVectorType(Context, Ty)
+               ? MMIXUnsupportedObjectKind::None
+               : MMIXUnsupportedObjectKind::Vector;
 
   if (const auto *PT = Ty->getAs<PointerType>()) {
     if (Context.getTargetAddressSpace(PT->getPointeeType().getAddressSpace()) !=
@@ -152,15 +183,17 @@ classifyUnsupportedMMIXObjectType(const ASTContext &Context, QualType Ty) {
   }
 
   if (const auto *RT = Ty->getAs<ReferenceType>())
-    return classifyUnsupportedMMIXObjectType(Context, RT->getPointeeType());
+    return classifyUnsupportedMMIXObjectType(Context, RT->getPointeeType(),
+                                             /*IsSubobject=*/true);
 
   if (const auto *AT = Context.getAsArrayType(Ty))
-    return classifyUnsupportedMMIXObjectType(Context, AT->getElementType());
+    return classifyUnsupportedMMIXObjectType(Context, AT->getElementType(),
+                                             /*IsSubobject=*/true);
 
   if (const auto *RT = Ty->getAs<RecordType>()) {
     for (const FieldDecl *Field : RT->getDecl()->fields()) {
-      MMIXUnsupportedObjectKind Kind =
-          classifyUnsupportedMMIXObjectType(Context, Field->getType());
+      MMIXUnsupportedObjectKind Kind = classifyUnsupportedMMIXObjectType(
+          Context, Field->getType(), /*IsSubobject=*/true);
       if (Kind != MMIXUnsupportedObjectKind::None)
         return Kind;
     }
