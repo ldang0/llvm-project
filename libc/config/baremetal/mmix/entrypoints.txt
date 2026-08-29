@@ -7,12 +7,10 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.llabs
     libc.src.stdlib.lldiv
     libc.src.errno.errno
-    libc.src.__support.OSUtil.baremetal.mmix.platform_io
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
     libc.src.stdlib.exit
     libc.src.__support.OSUtil.baremetal.mmix.abort
-    libc.src.__support.OSUtil.baremetal.mmix.termination
     libc.src.stdlib.aligned_alloc
     libc.src.stdlib.calloc
     libc.src.stdlib.free
@@ -31,6 +29,11 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.string.strlen
 )
 
+set(TARGET_LIBC_PLATFORM_ENTRYPOINTS
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.OSUtil.baremetal.mmix.termination
+)
+
 set(TARGET_LIBM_ENTRYPOINTS
     libc.src.math.copysign
     libc.src.math.copysignf
@@ -41,6 +44,7 @@ set(TARGET_LIBM_ENTRYPOINTS
 set(TARGET_LLVMLIBC_ENTRYPOINTS
     ${TARGET_LIBC_ENTRYPOINTS}
     ${TARGET_LIBM_ENTRYPOINTS}
+    ${TARGET_LIBC_PLATFORM_ENTRYPOINTS}
 )
 
 set(TARGET_LINKER_SCRIPT

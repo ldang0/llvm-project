@@ -12,8 +12,14 @@
 # RUN:   -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
 # RUN:   -DLIBC_ENABLE_USE_BY_CLANG=ON -DCMAKE_BUILD_TYPE=Release \
 # RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/install
-# RUN: ninja -C %t.dir/build -j 4 libc-startup libc libm
+# RUN: ninja -C %t.dir/build -j 4 libc-startup libc libm libc-platform
 # RUN: cmake --install %t.dir/build --component libc
+# RUN: ninja -C %t.dir/build -j 4 install-libc-platform
+# RUN: find %t.dir/install/lib/mmix-unknown-unknown -maxdepth 1 -type f \
+# RUN:   -printf '%f\n' | sort | FileCheck %s --check-prefix=INSTALLED
+# RUN: test ! -e %t.dir/install/lib/mmix-unknown-elf
+# RUN: test ! -e \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cp %t.dir/build/libc/startup/baremetal/mmix/CMakeFiles/libc.startup.baremetal.mmix.crt1.dir/start.cpp.o %t.dir/crt1.o
 # RUN: cmp %t.dir/crt1.o %t.dir/install/lib/mmix-unknown-unknown/crt1.o
 # RUN: llvm-objdump -dr %t.dir/crt1.o | FileCheck %s --check-prefix=ENTRY
@@ -27,7 +33,16 @@
 # RUN:   FileCheck %s --check-prefix=RELOCS
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/install/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   FileCheck %s --check-prefix=RUNTIME-SYMBOLS
+# RUN:   FileCheck %s --check-prefix=LIBC-SYMBOLS
+# RUN: llvm-ar t \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libmmixplatform.a | \
+# RUN:   FileCheck %s --check-prefix=PLATFORM-MEMBERS
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libmmixplatform.a | \
+# RUN:   FileCheck %s --check-prefix=PLATFORM-SYMBOLS
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libmmixplatform.a | \
+# RUN:   FileCheck %s --check-prefix=PLATFORM-UNDEFINED
 # RUN: llvm-objdump -dr \
 # RUN:   %t.dir/build/libc/src/__support/OSUtil/baremetal/mmix/CMakeFiles/libc.src.__support.OSUtil.baremetal.mmix.termination.dir/termination.cpp.o | \
 # RUN:   FileCheck %s --check-prefix=TERMINATION
@@ -37,9 +52,11 @@
 # RUN: clang --target=mmix-unknown-unknown -ffreestanding -fno-builtin -O2 \
 # RUN:   -c %t.dir/main.c -o %t.dir/main.o
 # RUN: ld.lld -static \
-# RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   -T %t.dir/install/lib/mmix-unknown-unknown/mmix-qemu.ld \
 # RUN:   %t.dir/crt1.o %t.dir/main.o \
-# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libc.a -o %t.dir/image
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libc.a \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libmmixplatform.a \
+# RUN:   -o %t.dir/image
 # RUN: llvm-readobj --file-headers --sections --program-headers %t.dir/image | \
 # RUN:   FileCheck %s --check-prefix=IMAGE \
 # RUN:   --implicit-check-not=PT_INTERP --implicit-check-not=SHT_DYNAMIC \
@@ -48,6 +65,25 @@
 # RUN:   FileCheck %s --check-prefix=IMAGE-SYMBOLS
 # RUN: llvm-readobj --relocations %t.dir/image | \
 # RUN:   FileCheck %s --check-prefix=FINAL-RELOCS
+# RUN: clang --target=mmix-unknown-elf -ffreestanding -fno-builtin -O2 \
+# RUN:   -c %t.dir/main.c -o %t.dir/main-compat.o
+# RUN: ld.lld -static \
+# RUN:   -T %t.dir/install/lib/mmix-unknown-unknown/mmix-qemu.ld \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/crt1.o \
+# RUN:   %t.dir/main-compat.o \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libc.a \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/libmmixplatform.a \
+# RUN:   -o %t.dir/image-compat
+# RUN: llvm-readobj --file-headers %t.dir/image-compat | \
+# RUN:   FileCheck %s --check-prefix=COMPAT
+# RUN: llvm-readobj --relocations %t.dir/image-compat | \
+# RUN:   FileCheck %s --check-prefix=FINAL-RELOCS
+
+# INSTALLED: crt1.o
+# INSTALLED-NEXT: libc.a
+# INSTALLED-NEXT: libm.a
+# INSTALLED-NEXT: libmmixplatform.a
+# INSTALLED-NEXT: mmix-qemu.ld
 
 # ENTRY-LABEL: <_start>:
 # ENTRY-NEXT:  SETL r255, 0xe7
@@ -76,33 +112,39 @@
 # RELOCS: R_MMIX_PUSHJ_STUBBABLE __llvm_libc_mmix_start_main
 # RELOCS: R_MMIX_PUSHJ_STUBBABLE main
 
-# RUNTIME-SYMBOLS-DAG: T _Exit
-# RUNTIME-SYMBOLS-DAG: T abort
-# RUNTIME-SYMBOLS-DAG: T atexit
-# RUNTIME-SYMBOLS-DAG: T exit
-# RUNTIME-SYMBOLS-DAG: T __cxa_atexit
-# RUNTIME-SYMBOLS-DAG: T __cxa_finalize
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_exit
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_errno
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_mmix_file_close
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_mmix_file_open
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_mmix_file_read
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_mmix_file_seek
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_mmix_file_tell
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_mmix_file_write
-# RUNTIME-SYMBOLS-DAG: D __llvm_libc_stderr_cookie
-# RUNTIME-SYMBOLS-DAG: B __llvm_libc_stdin_cookie
-# RUNTIME-SYMBOLS-DAG: D __llvm_libc_stdout_cookie
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_stdio_read
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_stdio_teardown
-# RUNTIME-SYMBOLS-DAG: T __llvm_libc_stdio_write
-# RUNTIME-SYMBOLS-DAG: T __mmix_stack_chk_terminate
-# RUNTIME-SYMBOLS-DAG: T aligned_alloc
-# RUNTIME-SYMBOLS-DAG: T calloc
-# RUNTIME-SYMBOLS-DAG: T free
-# RUNTIME-SYMBOLS-DAG: T malloc
-# RUNTIME-SYMBOLS-DAG: T malloc_usable_size
-# RUNTIME-SYMBOLS-DAG: T realloc
+# LIBC-SYMBOLS-DAG: T _Exit
+# LIBC-SYMBOLS-DAG: T abort
+# LIBC-SYMBOLS-DAG: T atexit
+# LIBC-SYMBOLS-DAG: T exit
+# LIBC-SYMBOLS-DAG: T __cxa_atexit
+# LIBC-SYMBOLS-DAG: T __cxa_finalize
+# LIBC-SYMBOLS-DAG: T aligned_alloc
+# LIBC-SYMBOLS-DAG: T calloc
+# LIBC-SYMBOLS-DAG: T free
+# LIBC-SYMBOLS-DAG: T malloc
+# LIBC-SYMBOLS-DAG: T malloc_usable_size
+# LIBC-SYMBOLS-DAG: T realloc
+
+# PLATFORM-MEMBERS: platform_io.cpp.o
+# PLATFORM-MEMBERS-NEXT: termination.cpp.o
+
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_exit
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_errno
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_file_close
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_file_open
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_file_read
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_file_seek
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_file_tell
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_file_write
+# PLATFORM-SYMBOLS-DAG: D __llvm_libc_stderr_cookie
+# PLATFORM-SYMBOLS-DAG: B __llvm_libc_stdin_cookie
+# PLATFORM-SYMBOLS-DAG: D __llvm_libc_stdout_cookie
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_stdio_read
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_stdio_teardown
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_stdio_write
+# PLATFORM-SYMBOLS-DAG: T __mmix_stack_chk_terminate
+
+# PLATFORM-UNDEFINED-NOT: U
 
 # TERMINATION-LABEL: <__llvm_libc_exit>:
 # TERMINATION:       AND {{.*}}, r231, 0xff
@@ -129,6 +171,9 @@
 
 # FINAL-RELOCS: Relocations [
 # FINAL-RELOCS-NEXT: ]
+
+# COMPAT: Format: elf64-mmix
+# COMPAT: Machine: EM_MMIX
 
 #--- main.c
 int main(int argc, char **argv, char **envp) {

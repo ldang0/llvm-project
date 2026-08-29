@@ -17,7 +17,7 @@
 # RUN:   FileCheck %s --check-prefix=LIBM-MEMBERS
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 33
+# RUN:   grep 'Machine: EM_MMIX' | count 31
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -31,12 +31,10 @@
 # LIBC-MEMBERS-NEXT: libc_errno.cpp.o
 # LIBC-MEMBERS-NEXT: io.cpp.o
 # LIBC-MEMBERS-NEXT: exit.cpp.o
-# LIBC-MEMBERS-NEXT: platform_io.cpp.o
 # LIBC-MEMBERS-NEXT: _Exit.cpp.o
 # LIBC-MEMBERS-NEXT: atexit.cpp.o
 # LIBC-MEMBERS-NEXT: exit.cpp.o
 # LIBC-MEMBERS-NEXT: abort.cpp.o
-# LIBC-MEMBERS-NEXT: termination.cpp.o
 # LIBC-MEMBERS-NEXT: freelist_heap.cpp.o
 # LIBC-MEMBERS-NEXT: freelist.cpp.o
 # LIBC-MEMBERS-NEXT: new.cpp.o

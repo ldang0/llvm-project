@@ -9,7 +9,8 @@
 #include "platform_io.h"
 
 #include "hdr/errno_macros.h"
-#include "src/__support/OSUtil/baremetal/io.h"
+#include "include/llvm-libc-types/size_t.h"
+#include "include/llvm-libc-types/ssize_t.h"
 #include "src/__support/OSUtil/baremetal/mmix/semihosting.h"
 
 namespace LIBC_NAMESPACE_DECL {

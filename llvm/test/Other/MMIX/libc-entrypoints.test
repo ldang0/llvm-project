@@ -14,12 +14,10 @@ set(expected_libc
     libc.src.stdlib.llabs
     libc.src.stdlib.lldiv
     libc.src.errno.errno
-    libc.src.__support.OSUtil.baremetal.mmix.platform_io
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
     libc.src.stdlib.exit
     libc.src.__support.OSUtil.baremetal.mmix.abort
-    libc.src.__support.OSUtil.baremetal.mmix.termination
     libc.src.stdlib.aligned_alloc
     libc.src.stdlib.calloc
     libc.src.stdlib.free
@@ -39,6 +37,9 @@ set(expected_libm
     libc.src.math.copysignf
     libc.src.math.fabs
     libc.src.math.fabsf)
+set(expected_platform
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.OSUtil.baremetal.mmix.termination)
 
 if(NOT TARGET_LIBC_ENTRYPOINTS STREQUAL expected_libc)
   message(FATAL_ERROR
@@ -48,8 +49,12 @@ if(NOT TARGET_LIBM_ENTRYPOINTS STREQUAL expected_libm)
   message(FATAL_ERROR
     "unexpected MMIX libm entrypoints: ${TARGET_LIBM_ENTRYPOINTS}")
 endif()
+if(NOT TARGET_LIBC_PLATFORM_ENTRYPOINTS STREQUAL expected_platform)
+  message(FATAL_ERROR
+    "unexpected MMIX platform entrypoints: ${TARGET_LIBC_PLATFORM_ENTRYPOINTS}")
+endif()
 
-set(expected_all ${expected_libc} ${expected_libm})
+set(expected_all ${expected_libc} ${expected_libm} ${expected_platform})
 if(NOT TARGET_LLVMLIBC_ENTRYPOINTS STREQUAL expected_all)
   message(FATAL_ERROR
     "unexpected combined MMIX entrypoints: ${TARGET_LLVMLIBC_ENTRYPOINTS}")
@@ -70,5 +75,11 @@ endforeach()
 foreach(entrypoint IN LISTS TARGET_LIBM_ENTRYPOINTS)
   if(NOT entrypoint MATCHES "^libc[.]src[.]math[.]")
     message(FATAL_ERROR "unreviewed MMIX libm family: ${entrypoint}")
+  endif()
+endforeach()
+foreach(entrypoint IN LISTS TARGET_LIBC_PLATFORM_ENTRYPOINTS)
+  if(NOT entrypoint MATCHES
+      "^libc[.]src[.]__support[.]OSUtil[.]baremetal[.]mmix[.]")
+    message(FATAL_ERROR "unreviewed MMIX platform family: ${entrypoint}")
   endif()
 endforeach()
