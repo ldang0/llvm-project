@@ -51,6 +51,31 @@ selectedCStdlib(llvm::ArrayRef<const char *> SelectionArgs) {
       Compilation->getArgs());
 }
 
+static mmix::ExecutionPlatformInputs
+llvmLibcPlatformInputs(llvm::ArrayRef<const char *> PlatformArgs) {
+  auto FileSystem = llvm::makeIntrusiveRefCnt<llvm::vfs::InMemoryFileSystem>();
+  FileSystem->addFile("/input.c", 0,
+                      llvm::MemoryBuffer::getMemBuffer("int value;\n"));
+
+  clang::DiagnosticOptions DiagnosticOptions;
+  clang::DiagnosticsEngine Diagnostics(clang::DiagnosticIDs::create(),
+                                       DiagnosticOptions,
+                                       new SimpleDiagnosticConsumer);
+  clang::driver::Driver Driver("/bin/clang", "mmix-unknown-unknown",
+                               Diagnostics, "clang LLVM compiler", FileSystem);
+  llvm::SmallVector<const char *, 8> Args = {"-fsyntax-only", "/input.c",
+                                             "--cstdlib=llvm-libc"};
+  Args.append(PlatformArgs.begin(), PlatformArgs.end());
+  std::unique_ptr<clang::driver::Compilation> Compilation(
+      Driver.BuildCompilation(Args));
+  EXPECT_TRUE(Compilation);
+  if (!Compilation)
+    return {};
+  return mmix::getLLVMlibcExecutionPlatformInputs(
+      mmix::ExecutionPlatform::QEMU, Compilation->getArgs(),
+      mmix::getLLVMlibcInstallation("/sysroot"));
+}
+
 TEST(MMIXLLVMlibcTest, CanonicalInstallationPaths) {
   mmix::LLVMlibcInstallation Installation =
       mmix::getLLVMlibcInstallation("/sysroot");
@@ -97,6 +122,30 @@ TEST(MMIXLLVMlibcTest, QEMUInputsOwnProviderResourcePaths) {
             "/sysroot/lib/mmix-unknown-unknown/crt1.o");
   EXPECT_EQ(normalized(Inputs.PlatformLibrary),
             "/sysroot/lib/mmix-unknown-unknown/libmmixplatform.a");
+}
+
+TEST(MMIXLLVMlibcTest, ComposesProviderSpecificPlatformInputs) {
+  mmix::ExecutionPlatformInputs Inputs = llvmLibcPlatformInputs({});
+  EXPECT_EQ(normalized(Inputs.DefaultLinkerScript),
+            "/sysroot/lib/mmix-unknown-unknown/mmix-qemu.ld");
+  ASSERT_EQ(Inputs.StartFiles.size(), 1u);
+  EXPECT_EQ(normalized(Inputs.StartFiles.front()),
+            "/sysroot/lib/mmix-unknown-unknown/crt1.o");
+  EXPECT_TRUE(Inputs.TerminationFile.empty());
+  ASSERT_EQ(Inputs.ServiceLibraries.size(), 1u);
+  EXPECT_EQ(normalized(Inputs.ServiceLibraries.front()),
+            "/sysroot/lib/mmix-unknown-unknown/libmmixplatform.a");
+
+  Inputs = llvmLibcPlatformInputs({"-T", "/custom.ld"});
+  EXPECT_TRUE(Inputs.DefaultLinkerScript.empty());
+  Inputs = llvmLibcPlatformInputs({"-nostartfiles"});
+  EXPECT_TRUE(Inputs.StartFiles.empty());
+  Inputs = llvmLibcPlatformInputs({"-nodefaultlibs"});
+  EXPECT_TRUE(Inputs.ServiceLibraries.empty());
+  Inputs = llvmLibcPlatformInputs({"-nostdlib", "-T", "/custom.ld"});
+  EXPECT_TRUE(Inputs.DefaultLinkerScript.empty());
+  EXPECT_TRUE(Inputs.StartFiles.empty());
+  EXPECT_TRUE(Inputs.ServiceLibraries.empty());
 }
 
 TEST(MMIXLLVMlibcTest, SelectsExplicitLLVMlibc) {

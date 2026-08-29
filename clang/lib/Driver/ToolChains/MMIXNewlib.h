@@ -9,6 +9,7 @@
 #ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXNEWLIB_H
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXNEWLIB_H
 
+#include "MMIXPlatform.h"
 #include "clang/Driver/ToolChain.h"
 
 #include <optional>
@@ -19,6 +20,9 @@ namespace driver {
 namespace toolchains {
 namespace mmix {
 
+std::optional<ExecutionPlatformInputs> getNewlibExecutionPlatformInputs(
+    ExecutionPlatform Platform, const ToolChain &TC,
+    const llvm::opt::ArgList &Args, llvm::StringRef LibraryPath);
 void addNewlibSystemIncludeArgs(const ToolChain &TC,
                                 const llvm::opt::ArgList &DriverArgs,
                                 llvm::opt::ArgStringList &CC1Args);

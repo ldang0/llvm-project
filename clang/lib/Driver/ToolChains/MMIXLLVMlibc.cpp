@@ -92,6 +92,25 @@ mmix::getLLVMlibcQEMUInputs(const LLVMlibcInstallation &Installation) {
           Installation.PlatformLibrary};
 }
 
+mmix::ExecutionPlatformInputs mmix::getLLVMlibcExecutionPlatformInputs(
+    ExecutionPlatform Platform, const ArgList &Args,
+    const LLVMlibcInstallation &Installation) {
+  switch (Platform) {
+  case ExecutionPlatform::QEMU: {
+    LLVMlibcQEMUInputs QEMUInputs = getLLVMlibcQEMUInputs(Installation);
+    ExecutionPlatformInputs Inputs;
+    if (!Args.hasArg(options::OPT_T_Group))
+      Inputs.DefaultLinkerScript = std::move(QEMUInputs.LinkerScript);
+    if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles))
+      Inputs.StartFiles.push_back(std::move(QEMUInputs.StartFile));
+    if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs))
+      Inputs.ServiceLibraries.push_back(std::move(QEMUInputs.PlatformLibrary));
+    return Inputs;
+  }
+  }
+  llvm_unreachable("unhandled MMIX execution platform");
+}
+
 void mmix::addLLVMlibcSystemIncludeArgs(
     const ToolChain &TC, const ArgList &DriverArgs, ArgStringList &CC1Args,
     const LLVMlibcInstallation &Installation) {

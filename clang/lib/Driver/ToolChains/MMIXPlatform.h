@@ -10,21 +10,11 @@
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXPLATFORM_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
 
-#include <optional>
 #include <string>
-
-namespace llvm {
-namespace opt {
-class ArgList;
-}
-} // namespace llvm
 
 namespace clang {
 namespace driver {
-class ToolChain;
-
 namespace toolchains {
 namespace mmix {
 
@@ -38,10 +28,6 @@ struct ExecutionPlatformInputs {
 };
 
 ExecutionPlatform getExecutionPlatform();
-std::optional<ExecutionPlatformInputs>
-getExecutionPlatformInputs(ExecutionPlatform Platform, const ToolChain &TC,
-                           const llvm::opt::ArgList &Args,
-                           llvm::StringRef LibraryPath);
 
 } // namespace mmix
 } // namespace toolchains

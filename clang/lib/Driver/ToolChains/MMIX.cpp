@@ -155,7 +155,7 @@ public:
           return;
         }
         mmix::ExecutionPlatform Platform = mmix::getExecutionPlatform();
-        if (auto PlatformInputs = mmix::getExecutionPlatformInputs(
+        if (auto PlatformInputs = mmix::getNewlibExecutionPlatformInputs(
                 Platform, TC, Args, LibraryPath)) {
           DefaultScript = std::move(PlatformInputs->DefaultLinkerScript);
           StartFiles = std::move(PlatformInputs->StartFiles);
@@ -178,6 +178,12 @@ public:
         mmix::LLVMlibcInstallation Installation =
             mmix::getLLVMlibcInstallation(D.SysRoot);
         LibraryPath = Installation.LibraryDirectory;
+        mmix::ExecutionPlatformInputs PlatformInputs =
+            mmix::getLLVMlibcExecutionPlatformInputs(
+                mmix::getExecutionPlatform(), Args, Installation);
+        DefaultScript = std::move(PlatformInputs.DefaultLinkerScript);
+        StartFiles = std::move(PlatformInputs.StartFiles);
+        PlatformLibraries = std::move(PlatformInputs.ServiceLibraries);
         InputsValid &= mmix::validateLLVMlibcRuntimeInputs(
             TC, Args, Installation);
         break;

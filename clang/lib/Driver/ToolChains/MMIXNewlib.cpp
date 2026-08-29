@@ -11,6 +11,7 @@
 #include "clang/Driver/Driver.h"
 #include "clang/Options/Options.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/VirtualFileSystem.h"
 
@@ -32,7 +33,54 @@ static std::string getLibraryPath(StringRef LibraryPath, StringRef Name) {
   return std::string(Path);
 }
 
+static bool requireFile(const ToolChain &TC, StringRef Path) {
+  if (isRegularFile(TC, Path))
+    return true;
+  TC.getDriver().Diag(diag::err_drv_no_such_file) << Path;
+  return false;
+}
+
 } // namespace
+
+std::optional<mmix::ExecutionPlatformInputs>
+mmix::getNewlibExecutionPlatformInputs(ExecutionPlatform Platform,
+                                       const ToolChain &TC, const ArgList &Args,
+                                       StringRef LibraryPath) {
+  switch (Platform) {
+  case ExecutionPlatform::QEMU: {
+    ExecutionPlatformInputs Inputs;
+    bool InputsValid = true;
+    if (!Args.hasArg(options::OPT_T_Group)) {
+      Inputs.DefaultLinkerScript = getLibraryPath(LibraryPath, "mmix-qemu.ld");
+      InputsValid &= requireFile(TC, Inputs.DefaultLinkerScript);
+    }
+    if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
+      std::string CRT0 = getLibraryPath(LibraryPath, "crt0.o");
+      std::string TripVectors = getLibraryPath(LibraryPath, "trip-vectors.o");
+      InputsValid &= requireFile(TC, CRT0);
+      InputsValid &= requireFile(TC, TripVectors);
+      Inputs.StartFiles.push_back(std::move(CRT0));
+      Inputs.StartFiles.push_back(std::move(TripVectors));
+
+      std::string CRTI = getLibraryPath(LibraryPath, "crti.o");
+      if (TC.getVFS().exists(CRTI))
+        Inputs.StartFiles.push_back(std::move(CRTI));
+      std::string CRTN = getLibraryPath(LibraryPath, "crtn.o");
+      if (TC.getVFS().exists(CRTN))
+        Inputs.TerminationFile = std::move(CRTN);
+    }
+    if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
+      std::string LibGloss = getLibraryPath(LibraryPath, "libgloss.a");
+      InputsValid &= requireFile(TC, LibGloss);
+      Inputs.ServiceLibraries.push_back(std::move(LibGloss));
+    }
+    if (!InputsValid)
+      return std::nullopt;
+    return Inputs;
+  }
+  }
+  llvm_unreachable("unhandled MMIX execution platform");
+}
 
 void mmix::addNewlibSystemIncludeArgs(const ToolChain &TC,
                                       const ArgList &DriverArgs,

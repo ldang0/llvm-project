@@ -9,6 +9,7 @@
 #ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXLLVMLIBC_H
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXLLVMLIBC_H
 
+#include "MMIXPlatform.h"
 #include "clang/Driver/ToolChain.h"
 
 #include <string>
@@ -47,6 +48,10 @@ struct LLVMlibcQEMUInputs {
 LLVMlibcInstallation getLLVMlibcInstallation(llvm::StringRef SysRoot);
 LLVMlibcQEMUInputs
 getLLVMlibcQEMUInputs(const LLVMlibcInstallation &Installation);
+ExecutionPlatformInputs
+getLLVMlibcExecutionPlatformInputs(ExecutionPlatform Platform,
+                                   const llvm::opt::ArgList &Args,
+                                   const LLVMlibcInstallation &Installation);
 void addLLVMlibcSystemIncludeArgs(const ToolChain &TC,
                                   const llvm::opt::ArgList &DriverArgs,
                                   llvm::opt::ArgStringList &CC1Args,
