@@ -1,0 +1,43 @@
+# REQUIRES: mmix-registered-target
+# RUN: rm -rf %t.dir
+# RUN: cmake -S %S/../../../../runtimes -B %t.dir/build -G Ninja \
+# RUN:   -DLLVM_ENABLE_RUNTIMES=libc -DCMAKE_C_COMPILER=clang \
+# RUN:   -DCMAKE_CXX_COMPILER=clang++ \
+# RUN:   -DCMAKE_C_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_CXX_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+# RUN:   -DLLVM_DEFAULT_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_LIBC_FULL_BUILD=ON -DLIBC_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+# RUN:   -DLIBC_ENABLE_USE_BY_CLANG=ON -DCMAKE_BUILD_TYPE=Release
+# RUN: ninja -C %t.dir/build -j 4 libc libm
+# RUN: llvm-ar t %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   FileCheck %s --check-prefix=LIBC-MEMBERS
+# RUN: llvm-ar t %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
+# RUN:   FileCheck %s --check-prefix=LIBM-MEMBERS
+# RUN: llvm-readobj --file-headers \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   grep 'Machine: EM_MMIX' | count 14
+# RUN: llvm-readobj --file-headers \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
+# RUN:   grep 'Machine: EM_MMIX' | count 4
+
+# LIBC-MEMBERS: abs.cpp.o
+# LIBC-MEMBERS-NEXT: div.cpp.o
+# LIBC-MEMBERS-NEXT: labs.cpp.o
+# LIBC-MEMBERS-NEXT: ldiv.cpp.o
+# LIBC-MEMBERS-NEXT: llabs.cpp.o
+# LIBC-MEMBERS-NEXT: lldiv.cpp.o
+# LIBC-MEMBERS-NEXT: memchr.cpp.o
+# LIBC-MEMBERS-NEXT: memcmp.cpp.o
+# LIBC-MEMBERS-NEXT: memcpy.cpp.o
+# LIBC-MEMBERS-NEXT: memmove.cpp.o
+# LIBC-MEMBERS-NEXT: memset.cpp.o
+# LIBC-MEMBERS-NEXT: strcmp.cpp.o
+# LIBC-MEMBERS-NEXT: strncmp.cpp.o
+# LIBC-MEMBERS-NEXT: strlen.cpp.o
+
+# LIBM-MEMBERS: copysign.cpp.o
+# LIBM-MEMBERS-NEXT: copysignf.cpp.o
+# LIBM-MEMBERS-NEXT: fabs.cpp.o
+# LIBM-MEMBERS-NEXT: fabsf.cpp.o
