@@ -9,14 +9,12 @@
 #ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXLLVMLIBC_H
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MMIXLLVMLIBC_H
 
-#include "llvm/ADT/StringRef.h"
+#include "clang/Driver/ToolChain.h"
 
 #include <string>
 
 namespace clang {
 namespace driver {
-class ToolChain;
-
 namespace toolchains {
 namespace mmix {
 
@@ -49,11 +47,18 @@ struct LLVMlibcQEMUInputs {
 LLVMlibcInstallation getLLVMlibcInstallation(llvm::StringRef SysRoot);
 LLVMlibcQEMUInputs
 getLLVMlibcQEMUInputs(const LLVMlibcInstallation &Installation);
+void addLLVMlibcSystemIncludeArgs(const ToolChain &TC,
+                                  const llvm::opt::ArgList &DriverArgs,
+                                  llvm::opt::ArgStringList &CC1Args,
+                                  const LLVMlibcInstallation &Installation);
 bool validateLLVMlibcIncludeDirectory(const ToolChain &TC,
                                       const LLVMlibcInstallation &Installation);
 bool validateLLVMlibcResource(const ToolChain &TC,
                               const LLVMlibcInstallation &Installation,
                               LLVMlibcResource Resource);
+bool validateLLVMlibcRuntimeInputs(const ToolChain &TC,
+                                   const llvm::opt::ArgList &Args,
+                                   const LLVMlibcInstallation &Installation);
 
 } // namespace mmix
 } // namespace toolchains

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIX.h"
+#include "MMIXLLVMlibc.h"
 #include "MMIXNewlib.h"
 #include "MMIXPlatform.h"
 #include "clang/Basic/DiagnosticDriver.h"
@@ -127,6 +128,7 @@ public:
     const bool AddDefaultLibraries =
         IsHosted &&
         !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
+    ToolChain::CStdlibType CStdlib = TC.GetCStdlibType(Args);
 
     if (IsHosted && !isDirectory(TC, D.SysRoot)) {
       D.Diag(diag::err_missing_sysroot) << D.SysRoot;
@@ -145,25 +147,23 @@ public:
     bool InputsValid = true;
 
     if (IsHosted) {
-      LibraryPath = getSysrootLibraryPath(D);
-      if (!isDirectory(TC, LibraryPath)) {
-        D.Diag(diag::err_drv_no_such_file) << LibraryPath;
-        return;
-      }
-
-      mmix::ExecutionPlatform Platform = mmix::getExecutionPlatform();
-      if (auto PlatformInputs = mmix::getExecutionPlatformInputs(
-              Platform, TC, Args, LibraryPath)) {
-        DefaultScript = std::move(PlatformInputs->DefaultLinkerScript);
-        StartFiles = std::move(PlatformInputs->StartFiles);
-        TerminationFile = std::move(PlatformInputs->TerminationFile);
-        PlatformLibraries = std::move(PlatformInputs->ServiceLibraries);
-      } else {
-        InputsValid = false;
-      }
-
-      switch (TC.GetCStdlibType(Args)) {
-      case ToolChain::CST_Newlib:
+      switch (CStdlib) {
+      case ToolChain::CST_Newlib: {
+        LibraryPath = getSysrootLibraryPath(D);
+        if (!isDirectory(TC, LibraryPath)) {
+          D.Diag(diag::err_drv_no_such_file) << LibraryPath;
+          return;
+        }
+        mmix::ExecutionPlatform Platform = mmix::getExecutionPlatform();
+        if (auto PlatformInputs = mmix::getExecutionPlatformInputs(
+                Platform, TC, Args, LibraryPath)) {
+          DefaultScript = std::move(PlatformInputs->DefaultLinkerScript);
+          StartFiles = std::move(PlatformInputs->StartFiles);
+          TerminationFile = std::move(PlatformInputs->TerminationFile);
+          PlatformLibraries = std::move(PlatformInputs->ServiceLibraries);
+        } else {
+          InputsValid = false;
+        }
         if (AddDefaultLibraries) {
           if (auto Path = mmix::getNewlibLibCPath(TC, LibraryPath))
             LibC = std::move(*Path);
@@ -173,8 +173,16 @@ public:
         InputsValid &=
             mmix::validateNewlibExplicitLibraries(TC, Args, LibraryPath);
         break;
+      }
+      case ToolChain::CST_LLVMLibC: {
+        mmix::LLVMlibcInstallation Installation =
+            mmix::getLLVMlibcInstallation(D.SysRoot);
+        LibraryPath = Installation.LibraryDirectory;
+        InputsValid &= mmix::validateLLVMlibcRuntimeInputs(
+            TC, Args, Installation);
+        break;
+      }
       case ToolChain::CST_Picolibc:
-      case ToolChain::CST_LLVMLibC:
       case ToolChain::CST_System:
         llvm_unreachable("unsupported MMIX C library survived validation");
       }
@@ -192,6 +200,11 @@ public:
 
     if (!InputsValid)
       return;
+    if (IsHosted && CStdlib == ToolChain::CST_LLVMLibC) {
+      D.Diag(diag::err_drv_clang_unsupported)
+          << "LLVM libc link composition for MMIX";
+      return;
+    }
 
     ArgStringList CmdArgs;
     CmdArgs.push_back("-m");
@@ -327,8 +340,12 @@ void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   case ToolChain::CST_Newlib:
     mmix::addNewlibSystemIncludeArgs(*this, DriverArgs, CC1Args);
     return;
-  case ToolChain::CST_Picolibc:
   case ToolChain::CST_LLVMLibC:
+    mmix::addLLVMlibcSystemIncludeArgs(
+        *this, DriverArgs, CC1Args,
+        mmix::getLLVMlibcInstallation(D.SysRoot));
+    return;
+  case ToolChain::CST_Picolibc:
   case ToolChain::CST_System:
     llvm_unreachable("unsupported MMIX C library survived validation");
   }
