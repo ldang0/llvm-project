@@ -18,6 +18,12 @@ set(expected_libc
     libc.src.stdlib.exit
     libc.src.__support.OSUtil.baremetal.mmix.abort
     libc.src.__support.OSUtil.baremetal.mmix.termination
+    libc.src.stdlib.aligned_alloc
+    libc.src.stdlib.calloc
+    libc.src.stdlib.free
+    libc.src.stdlib.malloc
+    libc.src.stdlib.malloc_usable_size
+    libc.src.stdlib.realloc
     libc.src.string.memchr
     libc.src.string.memcmp
     libc.src.string.memcpy

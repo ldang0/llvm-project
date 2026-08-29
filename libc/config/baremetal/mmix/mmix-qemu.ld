@@ -78,13 +78,17 @@ SECTIONS {
     *(.gcc_except_table .gcc_except_table.*)
   } :NONE
 
-  _end = 0x4000000000000000;
+  __llvm_libc_argument_start = 0x4000000000000000;
+  __llvm_libc_argument_limit = 0x4000000000010000;
+  _end = __llvm_libc_argument_limit;
   __llvm_libc_heap_limit = 0x4000000000800000;
 
   ASSERT(_start == 0x00100000,
          "MMIX LLVM libc process entry moved")
   ASSERT(__llvm_libc_image_end <= 0x06000000,
          "MMIX LLVM libc image exceeds QEMU Low RAM")
+  ASSERT(_end < __llvm_libc_heap_limit,
+         "MMIX LLVM libc argument reserve consumes the Pool heap")
   ASSERT(SIZEOF(.dynamic) + SIZEOF(.dynsym) + SIZEOF(.dynstr) +
              SIZEOF(.interp) + SIZEOF(.got) + SIZEOF(.plt) +
              SIZEOF(.tdata) + SIZEOF(.tbss) + SIZEOF(.eh_frame) +

@@ -85,6 +85,12 @@
 # RUNTIME-SYMBOLS-DAG: T __llvm_libc_exit
 # RUNTIME-SYMBOLS-DAG: T __llvm_libc_stdio_teardown
 # RUNTIME-SYMBOLS-DAG: T __mmix_stack_chk_terminate
+# RUNTIME-SYMBOLS-DAG: T aligned_alloc
+# RUNTIME-SYMBOLS-DAG: T calloc
+# RUNTIME-SYMBOLS-DAG: T free
+# RUNTIME-SYMBOLS-DAG: T malloc
+# RUNTIME-SYMBOLS-DAG: T malloc_usable_size
+# RUNTIME-SYMBOLS-DAG: T realloc
 
 # TERMINATION-LABEL: <__llvm_libc_exit>:
 # TERMINATION:       AND {{.*}}, r231, 0xff

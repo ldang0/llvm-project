@@ -67,10 +67,12 @@
 # SYMBOLS-DAG: __data_size A 8 0
 # SYMBOLS-DAG: __data_source A 104000 0
 # SYMBOLS-DAG: __data_start D 104000 0
+# SYMBOLS-DAG: __llvm_libc_argument_limit A 4000000000010000 0
+# SYMBOLS-DAG: __llvm_libc_argument_start A 4000000000000000 0
 # SYMBOLS-DAG: __llvm_libc_heap_limit A 4000000000800000 0
 # SYMBOLS-DAG: __llvm_libc_image_end B 108000 0
 # SYMBOLS-DAG: __llvm_libc_image_start T 100000 0
-# SYMBOLS-DAG: _end A 4000000000000000 0
+# SYMBOLS-DAG: _end A 4000000000010000 0
 # SYMBOLS-DAG: _start T 100000 4
 # PHDR:      Type: PT_LOAD
 # PHDR:      Flags [ (0x5)

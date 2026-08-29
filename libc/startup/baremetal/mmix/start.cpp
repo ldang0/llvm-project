@@ -13,8 +13,8 @@
 
 extern "C" int main(int argc, char **argv, char **envp);
 extern "C" {
-extern char _end[];
-extern char __llvm_libc_heap_limit[];
+extern char __llvm_libc_argument_start[];
+extern char __llvm_libc_argument_limit[];
 extern char __data_source[];
 extern char __data_start[];
 extern char __data_size[];
@@ -44,18 +44,36 @@ bool valid_arguments(__UINT64_TYPE__ argc, char **argv) {
   if ((address & (alignof(char *) - 1)) != 0)
     return false;
 
-  __UINT64_TYPE__ entries = argc + 1;
-  __UINT64_TYPE__ pool_begin =
-      static_cast<__UINT64_TYPE__>(reinterpret_cast<__UINTPTR_TYPE__>(_end));
+  __UINT64_TYPE__ pool_begin = static_cast<__UINT64_TYPE__>(
+      reinterpret_cast<__UINTPTR_TYPE__>(__llvm_libc_argument_start));
   __UINT64_TYPE__ pool_end = static_cast<__UINT64_TYPE__>(
-      reinterpret_cast<__UINTPTR_TYPE__>(__llvm_libc_heap_limit));
-  if (address < pool_begin || address >= pool_end ||
-      entries > (pool_end - address) / sizeof(char *))
+      reinterpret_cast<__UINTPTR_TYPE__>(__llvm_libc_argument_limit));
+  if (address != pool_begin + sizeof(char *) || address >= pool_end)
     return false;
 
-  for (__UINT64_TYPE__ index = 0; index < argc; ++index)
-    if (argv[index] == nullptr)
+  __UINT64_TYPE__ entries = argc + 1;
+  if (entries > (pool_end - address) / sizeof(char *))
+    return false;
+  __UINT64_TYPE__ strings_begin = address + entries * sizeof(char *);
+  __UINT64_TYPE__ argument_end = *reinterpret_cast<__UINT64_TYPE__ *>(
+      static_cast<__UINTPTR_TYPE__>(pool_begin));
+  if ((argument_end & (alignof(char *) - 1)) != 0 ||
+      argument_end < strings_begin || argument_end > pool_end)
+    return false;
+
+  for (__UINT64_TYPE__ index = 0; index < argc; ++index) {
+    __UINT64_TYPE__ string = static_cast<__UINT64_TYPE__>(
+        reinterpret_cast<__UINTPTR_TYPE__>(argv[index]));
+    if (string < strings_begin || string >= argument_end)
       return false;
+    const char *cursor = argv[index];
+    const char *end = reinterpret_cast<const char *>(
+        static_cast<__UINTPTR_TYPE__>(argument_end));
+    while (cursor != end && *cursor != '\0')
+      ++cursor;
+    if (cursor == end)
+      return false;
+  }
   return argv[argc] == nullptr;
 }
 

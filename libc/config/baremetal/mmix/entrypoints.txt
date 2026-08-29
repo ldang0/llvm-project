@@ -11,6 +11,12 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.exit
     libc.src.__support.OSUtil.baremetal.mmix.abort
     libc.src.__support.OSUtil.baremetal.mmix.termination
+    libc.src.stdlib.aligned_alloc
+    libc.src.stdlib.calloc
+    libc.src.stdlib.free
+    libc.src.stdlib.malloc
+    libc.src.stdlib.malloc_usable_size
+    libc.src.stdlib.realloc
 
     # string.h entrypoints
     libc.src.string.memchr
