@@ -5,6 +5,8 @@ add_startup_object(
   DEPENDS
     libc.src.__support.common
     libc.src.__support.OSUtil.baremetal.mmix.semihosting
+    libc.src.__support.OSUtil.baremetal.mmix.atexit
+    libc.src.stdlib.exit
   COMPILE_OPTIONS
     -ffreestanding
     -fno-builtin
