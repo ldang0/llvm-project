@@ -63,5 +63,8 @@ def int_mmix_ldvts
     : Intrinsic<[llvm_i64_ty], [llvm_i64_ty],
                 [IntrInaccessibleMemOnly, IntrNoDuplicate,
                  NoUndef<RetIndex>, Range<RetIndex, 0, 4>]>;
+def int_mmix_trap
+    : Intrinsic<[llvm_i64_ty], [llvm_i64_ty, llvm_i32_ty, llvm_i32_ty],
+                [ImmArg<ArgIndex<1>>, ImmArg<ArgIndex<2>>, IntrNoDuplicate]>;
 
 } // TargetPrefix = "mmix"

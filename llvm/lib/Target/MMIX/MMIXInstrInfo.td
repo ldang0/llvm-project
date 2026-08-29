@@ -2101,7 +2101,10 @@ class MMIXTrapInstructionOpcode<bits<8> Opcode, string Mnemonic>
   let MMIXOpcode = Opcode;
 }
 
-def TRAP : MMIXTrapInstructionOpcode<0x00, "TRAP">;
+def TRAP : MMIXTrapInstructionOpcode<0x00, "TRAP"> {
+  let Uses = [R255];
+  let Defs = [R255];
+}
 def TRIP : MMIXTrapInstructionOpcode<0xFF, "TRIP">;
 
 class MMIXResume
@@ -2294,6 +2297,16 @@ def ATOMIC_CMP_SWAP
 
 def : Pat<(atomic_cmp_swap_i64 GPR64:$ptr, GPR64:$expected, GPR64:$new),
           (ATOMIC_CMP_SWAP GPR64:$ptr, GPR64:$expected, GPR64:$new)>;
+
+def TRAP_STATE
+    : MMIXPseudoInstruction<(outs GPR64Op:$result),
+                            (ins GPR64Op:$argument, MMIXUImm8:$service,
+                                 MMIXUImm8:$handle), ""> {
+  let Defs = [R255];
+  let mayLoad = true;
+  let mayStore = true;
+  let hasSideEffects = true;
+}
 
 // Mode 3 orders every load or store before the fence with respect to every
 // load or store after it, which implements LLVM's system-scope fences.

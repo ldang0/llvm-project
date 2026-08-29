@@ -171,6 +171,24 @@ bool MMIXInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     return true;
   }
 
+  if (MI.getOpcode() == MMIX::TRAP_STATE) {
+    MachineBasicBlock &MBB = *MI.getParent();
+    MachineBasicBlock::iterator MBBI = MI.getIterator();
+    const DebugLoc &DL = MI.getDebugLoc();
+    Register Result = MI.getOperand(0).getReg();
+    Register Argument = MI.getOperand(1).getReg();
+
+    copyPhysReg(MBB, MBBI, DL, MMIX::R255, Argument, MI.getOperand(1).isKill());
+    BuildMI(MBB, MBBI, DL, get(MMIX::TRAP))
+        .addImm(0)
+        .add(MI.getOperand(2))
+        .add(MI.getOperand(3));
+    if (!MI.getOperand(0).isDead())
+      copyPhysReg(MBB, MBBI, DL, Result, MMIX::R255, true);
+    MI.eraseFromParent();
+    return true;
+  }
+
   if (MI.getOpcode() == MMIX::CALL_STATE) {
     MachineBasicBlock &MBB = *MI.getParent();
     MachineInstrBuilder MIB;

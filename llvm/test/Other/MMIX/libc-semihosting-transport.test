@@ -1,0 +1,101 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding -O2 \
+# RUN:   -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc -c %t/transport.cpp -o %t/transport.o
+# RUN: llvm-objdump -d %t/transport.o | FileCheck %s --check-prefix=ASM
+# RUN: llvm-objdump -d %t/transport.o | FileCheck %s --check-prefix=TRAPCOUNT
+# RUN: llvm-objdump -d %t/transport.o | FileCheck %s --check-prefix=ARGCOUNT
+# RUN: llvm-objdump -d %t/transport.o | FileCheck %s --check-prefix=RESULTCOUNT
+# RUN: llvm-readobj --relocations %t/transport.o | \
+# RUN:   FileCheck %s --check-prefix=RELOCS
+# RUN: llvm-nm --undefined-only %t/transport.o | count 0
+# RUN: clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding -O0 \
+# RUN:   -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc -S -emit-llvm %t/transport.cpp -o %t/transport.ll
+# RUN: FileCheck %s --check-prefix=IR --input-file=%t/transport.ll
+# RUN: not clang --target=mmix-unknown-unknown -std=c++17 -ffreestanding \
+# RUN:   -DLIBC_FULL_BUILD -DLIBC_NAMESPACE=__llvm_libc \
+# RUN:   -I %S/../../../../libc -fsyntax-only %t/unchecked.cpp 2>&1 | \
+# RUN:   FileCheck %s --check-prefix=REJECT
+
+#--- transport.cpp
+#include "src/__support/OSUtil/baremetal/mmix/semihosting.h"
+
+using __llvm_libc::internal::mmix::FileMode;
+using __llvm_libc::internal::mmix::Semihosting;
+using __llvm_libc::internal::mmix::SemihostingResult;
+using __llvm_libc::internal::mmix::TransferResult;
+
+static_assert(sizeof(SemihostingResult) == 8);
+static_assert(sizeof(TransferResult) == 16);
+
+extern "C" __UINT64_TYPE__ transport_open(const char *path) {
+  return Semihosting::open<3>(path, FileMode::BINARY_READ).value;
+}
+
+extern "C" __UINT64_TYPE__ transport_close() {
+  return Semihosting::close<3>().value;
+}
+
+extern "C" __UINT64_TYPE__ transport_read(char *buffer, __UINT64_TYPE__ size) {
+  TransferResult result = Semihosting::read<0>(buffer, size);
+  return result.succeeded ? result.count : static_cast<__UINT64_TYPE__>(-1);
+}
+
+extern "C" __UINT64_TYPE__ transport_get_line(char *buffer,
+                                                __UINT64_TYPE__ size) {
+  TransferResult result = Semihosting::get_line<3>(buffer, size);
+  return result.succeeded ? result.count : static_cast<__UINT64_TYPE__>(-1);
+}
+
+extern "C" __UINT64_TYPE__ transport_write(const char *buffer,
+                                             __UINT64_TYPE__ size) {
+  TransferResult result = Semihosting::write<1>(buffer, size);
+  return result.succeeded ? result.count : static_cast<__UINT64_TYPE__>(-1);
+}
+
+extern "C" __UINT64_TYPE__ transport_put_string(const char *string) {
+  return Semihosting::put_string<2>(string).value;
+}
+
+extern "C" __UINT64_TYPE__ transport_seek(__INT64_TYPE__ offset) {
+  return Semihosting::seek<3>(offset).value;
+}
+
+extern "C" __UINT64_TYPE__ transport_tell() {
+  return Semihosting::tell<3>().value;
+}
+
+extern "C" [[noreturn]] void transport_halt(unsigned status) {
+  Semihosting::halt(status);
+}
+
+// ASM-DAG: TRAP 0x0, 0x0, 0x0
+// ASM-DAG: TRAP 0x0, 0x1, 0x3
+// ASM-DAG: TRAP 0x0, 0x2, 0x3
+// ASM-DAG: TRAP 0x0, 0x3, 0x0
+// ASM-DAG: TRAP 0x0, 0x4, 0x3
+// ASM-DAG: TRAP 0x0, 0x6, 0x1
+// ASM-DAG: TRAP 0x0, 0x7, 0x2
+// ASM-DAG: TRAP 0x0, 0x9, 0x3
+// ASM-DAG: TRAP 0x0, 0xa, 0x3
+// TRAPCOUNT-COUNT-9: TRAP 0x0,
+// ARGCOUNT-COUNT-9: OR r255,
+// RESULTCOUNT-COUNT-8: OR {{r[0-9]+}}, r255, 0
+
+// RELOCS: Relocations [
+// RELOCS-NEXT: ]
+
+// IR-COUNT-9: call{{.*}}@llvm.mmix.trap(
+
+#--- unchecked.cpp
+#include "src/__support/OSUtil/baremetal/mmix/semihosting.h"
+
+using __llvm_libc::internal::mmix::Semihosting;
+
+__UINT64_TYPE__ unchecked_service() {
+  return Semihosting::trap_intrinsic(0, 5, 0);
+}
+
+// REJECT: error: 'trap_intrinsic' is a private member of

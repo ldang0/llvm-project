@@ -419,6 +419,28 @@ static SDValue lowerMMIXVirtualTranslationIntrinsic(SDValue Op,
                      {Op.getOperand(0), Op.getOperand(2)});
 }
 
+static SDValue lowerMMIXTrapIntrinsic(SDValue Op, SelectionDAG &DAG) {
+  auto *Service = dyn_cast<ConstantSDNode>(Op.getOperand(3));
+  auto *Handle = dyn_cast<ConstantSDNode>(Op.getOperand(4));
+  if (!Service || !Handle)
+    return emitMMIXIntrinsicError(Op, "llvm.mmix.trap",
+                                  "service and handle must be immediate", DAG);
+  if (Service->getZExtValue() > 255 || Handle->getZExtValue() > 255)
+    return emitMMIXIntrinsicError(
+        Op, "llvm.mmix.trap", "service and handle must fit in one byte", DAG);
+
+  SDLoc DL(Op);
+  SDValue ServiceImm =
+      DAG.getTargetConstant(Service->getZExtValue(), DL, MVT::i64);
+  SDValue HandleImm =
+      DAG.getTargetConstant(Handle->getZExtValue(), DL, MVT::i64);
+  return SDValue(DAG.getMachineNode(MMIX::TRAP_STATE, DL,
+                                    {MVT::i64, MVT::Other},
+                                    {Op.getOperand(2), ServiceImm, HandleImm,
+                                     Op.getOperand(0)}),
+                 0);
+}
+
 MMIXTargetLowering::AsmOperandInfoVector
 MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
@@ -1089,6 +1111,8 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
       return lowerMMIXUncachedMemoryIntrinsic(Op, IntrinsicID, DAG);
     case Intrinsic::mmix_ldvts:
       return lowerMMIXVirtualTranslationIntrinsic(Op, DAG);
+    case Intrinsic::mmix_trap:
+      return lowerMMIXTrapIntrinsic(Op, DAG);
     default:
       report_fatal_error("unsupported chained MMIX intrinsic");
     }
