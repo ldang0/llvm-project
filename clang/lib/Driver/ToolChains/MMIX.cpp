@@ -186,6 +186,8 @@ public:
         PlatformLibraries = std::move(PlatformInputs.ServiceLibraries);
         InputsValid &= mmix::validateLLVMlibcRuntimeInputs(
             TC, Args, Installation);
+        if (AddDefaultLibraries)
+          LibC = Installation.LibC;
         break;
       }
       case ToolChain::CST_Picolibc:
@@ -206,11 +208,6 @@ public:
 
     if (!InputsValid)
       return;
-    if (IsHosted && CStdlib == ToolChain::CST_LLVMLibC) {
-      D.Diag(diag::err_drv_clang_unsupported)
-          << "LLVM libc link composition for MMIX";
-      return;
-    }
 
     ArgStringList CmdArgs;
     CmdArgs.push_back("-m");
