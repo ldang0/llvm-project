@@ -62,6 +62,20 @@ install(
   COMPONENT libc
 )
 
+if(TARGET_LINKER_SCRIPT)
+  install(
+    FILES ${TARGET_LINKER_SCRIPT}
+    DESTINATION ${LIBC_INSTALL_LIBRARY_DIR}
+    COMPONENT libc-platform
+  )
+  add_custom_target(
+    install-libc-linker-script
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=libc-platform
+            -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+  )
+endif()
+
 foreach(file ${added_bitcode_targets})
   install(FILES $<TARGET_FILE:${file}>
           DESTINATION ${LIBC_INSTALL_LIBRARY_DIR}

@@ -1,0 +1,95 @@
+ENTRY(_start)
+
+PHDRS {
+  text PT_LOAD FLAGS(5);
+  rodata PT_LOAD FLAGS(4);
+  data PT_LOAD FLAGS(6);
+}
+
+SECTIONS {
+  . = 0x00100000;
+  __llvm_libc_image_start = .;
+
+  .text : ALIGN(0x2000) {
+    KEEP(*(.text.init.enter))
+    KEEP(*(.text.entry))
+    *(.text .text.*)
+  } :text
+
+  .rodata : ALIGN(0x2000) {
+    *(.rodata .rodata.*)
+  } :rodata
+
+  .preinit_array : ALIGN(8) {
+    PROVIDE_HIDDEN(__preinit_array_start = .);
+    KEEP(*(.preinit_array))
+    PROVIDE_HIDDEN(__preinit_array_end = .);
+  } :data
+
+  .init_array : ALIGN(8) {
+    PROVIDE_HIDDEN(__init_array_start = .);
+    KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
+    KEEP(*(.init_array))
+    PROVIDE_HIDDEN(__init_array_end = .);
+  } :data
+
+  .fini_array : ALIGN(8) {
+    PROVIDE_HIDDEN(__fini_array_start = .);
+    KEEP(*(SORT_BY_INIT_PRIORITY(.fini_array.*)))
+    KEEP(*(.fini_array))
+    PROVIDE_HIDDEN(__fini_array_end = .);
+  } :data
+
+  .data : ALIGN(0x2000) {
+    __data_start = .;
+    *(.data .data.*)
+    __data_end = .;
+  } :data
+  __data_source = LOADADDR(.data);
+  __data_size = SIZEOF(.data);
+
+  .bss (NOLOAD) : ALIGN(0x2000) {
+    __bss_start = .;
+    *(.bss .bss.*)
+    *(COMMON)
+    __bss_end = .;
+  } :data
+  __bss_size = SIZEOF(.bss);
+
+  . = ALIGN(0x2000);
+  __llvm_libc_image_end = .;
+
+  .MMIX.reg_contents : {
+    KEEP(*(.MMIX.reg_contents.linker_allocated))
+    KEEP(*(.MMIX.reg_contents))
+  } :NONE
+
+  .dynamic : { *(.dynamic) } :NONE
+  .dynsym : { *(.dynsym) } :NONE
+  .dynstr : { *(.dynstr) } :NONE
+  .interp : { *(.interp) } :NONE
+  .got : { *(.got .got.*) } :NONE
+  .plt : { *(.plt .plt.*) } :NONE
+  .tdata : { *(.tdata .tdata.*) } :NONE
+  .tbss (NOLOAD) : { *(.tbss .tbss.*) } :NONE
+  .eh_frame : { *(.eh_frame) } :NONE
+  .eh_frame_hdr : { *(.eh_frame_hdr) } :NONE
+  .gcc_except_table : {
+    *(.gcc_except_table .gcc_except_table.*)
+  } :NONE
+
+  _end = 0x4000000000000000;
+  __llvm_libc_heap_limit = 0x4000000000800000;
+
+  ASSERT(_start == 0x00100000,
+         "MMIX LLVM libc process entry moved")
+  ASSERT(__llvm_libc_image_end <= 0x06000000,
+         "MMIX LLVM libc image exceeds QEMU Low RAM")
+  ASSERT(SIZEOF(.dynamic) + SIZEOF(.dynsym) + SIZEOF(.dynstr) +
+             SIZEOF(.interp) + SIZEOF(.got) + SIZEOF(.plt) +
+             SIZEOF(.tdata) + SIZEOF(.tbss) + SIZEOF(.eh_frame) +
+             SIZEOF(.eh_frame_hdr) + SIZEOF(.gcc_except_table) == 0,
+         "MMIX LLVM libc process image contains unsupported sections")
+
+  /DISCARD/ : { *(.comment) *(.note.GNU-stack) }
+}

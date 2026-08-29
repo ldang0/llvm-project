@@ -1,0 +1,129 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t.dir && split-file %s %t.dir
+# RUN: llvm-mc -triple=mmix -filetype=obj %t.dir/image.s -o %t.dir/image.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t.dir/forbidden.s \
+# RUN:   -o %t.dir/forbidden.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t.dir/overflow.s \
+# RUN:   -o %t.dir/overflow.o
+# RUN: ld.lld -static -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/image.o -o %t.dir/image
+# RUN: llvm-readobj --file-headers --sections --program-headers --symbols \
+# RUN:   --relocations %t.dir/image | FileCheck %s --check-prefix=IMAGE \
+# RUN:   --implicit-check-not=R_MMIX_
+# RUN: llvm-readobj --sections %t.dir/image | \
+# RUN:   FileCheck %s --check-prefix=FORBIDDEN \
+# RUN:   --implicit-check-not='.dynamic' --implicit-check-not='.interp' \
+# RUN:   --implicit-check-not='.tdata' --implicit-check-not='.tbss' \
+# RUN:   --implicit-check-not='.eh_frame'
+# RUN: llvm-nm --format=posix %t.dir/image | \
+# RUN:   FileCheck %s --check-prefix=SYMBOLS
+# RUN: llvm-readobj --program-headers %t.dir/image | \
+# RUN:   FileCheck %s --check-prefix=PHDR
+# RUN: not ld.lld -static \
+# RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/forbidden.o -o /dev/null 2>&1 | \
+# RUN:   FileCheck %s --check-prefix=REJECT
+# RUN: not ld.lld -static \
+# RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/overflow.o -o /dev/null 2>&1 | \
+# RUN:   FileCheck %s --check-prefix=OVERFLOW
+# RUN: cmake -S %S/../../../../runtimes -B %t.dir/build -G Ninja \
+# RUN:   -DLLVM_ENABLE_RUNTIMES=libc -DCMAKE_C_COMPILER=clang \
+# RUN:   -DCMAKE_CXX_COMPILER=clang++ \
+# RUN:   -DCMAKE_C_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_CXX_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+# RUN:   -DLLVM_DEFAULT_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_LIBC_FULL_BUILD=ON -DLIBC_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+# RUN:   -DLIBC_ENABLE_USE_BY_CLANG=ON \
+# RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/install -DCMAKE_BUILD_TYPE=Release
+# RUN: ninja -C %t.dir/build -j 4 install-libc-linker-script
+# RUN: cmp %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/install/lib/mmix-unknown-unknown/mmix-qemu.ld
+
+# IMAGE:      Format: elf64-mmix
+# IMAGE:      Type: Executable
+# IMAGE:      Entry: 0x100000
+# IMAGE:      Name: .text
+# IMAGE:      Address: 0x100000
+# IMAGE:      Name: .rodata
+# IMAGE:      Name: .preinit_array
+# IMAGE:      Name: .init_array
+# IMAGE:      Name: .fini_array
+# IMAGE:      Name: .data
+# IMAGE:      Name: .bss
+# IMAGE:      Name: .MMIX.reg_contents
+# IMAGE-COUNT-3: Type: PT_LOAD
+# IMAGE:      Relocations [
+# IMAGE-NEXT: ]
+
+# FORBIDDEN: Name: .text
+# SYMBOLS-DAG: __bss_end B 106010 0
+# SYMBOLS-DAG: __bss_size A 10 0
+# SYMBOLS-DAG: __bss_start B 106000 0
+# SYMBOLS-DAG: __data_end D 104008 0
+# SYMBOLS-DAG: __data_size A 8 0
+# SYMBOLS-DAG: __data_source A 104000 0
+# SYMBOLS-DAG: __data_start D 104000 0
+# SYMBOLS-DAG: __llvm_libc_heap_limit A 4000000000800000 0
+# SYMBOLS-DAG: __llvm_libc_image_end B 108000 0
+# SYMBOLS-DAG: __llvm_libc_image_start T 100000 0
+# SYMBOLS-DAG: _end A 4000000000000000 0
+# SYMBOLS-DAG: _start T 100000 4
+# PHDR:      Type: PT_LOAD
+# PHDR:      Flags [ (0x5)
+# PHDR-NEXT: PF_R
+# PHDR-NEXT: PF_X
+# PHDR:      Type: PT_LOAD
+# PHDR:      Flags [ (0x4)
+# PHDR-NEXT: PF_R
+# PHDR:      Type: PT_LOAD
+# PHDR:      Flags [ (0x6)
+# PHDR-NEXT: PF_R
+# PHDR-NEXT: PF_W
+# REJECT: MMIX LLVM libc process image contains unsupported sections
+# OVERFLOW: MMIX LLVM libc image exceeds QEMU Low RAM
+
+#--- image.s
+.section .text.init.enter,"ax",@progbits
+.global _start
+.type _start,@function
+_start:
+  SWYM 0, 0, 0
+.size _start, .-_start
+
+.section .rodata.runtime,"a",@progbits
+.quad 0x1122334455667788
+
+.section .preinit_array,"aw",@preinit_array
+.quad _start
+.section .init_array,"aw",@init_array
+.quad _start
+.section .fini_array,"aw",@fini_array
+.quad _start
+
+.section .data.runtime,"aw",@progbits
+.quad 0x8877665544332211
+.section .bss.runtime,"aw",@nobits
+.space 16
+
+.section .MMIX.reg_contents,"",@progbits
+.quad 0
+
+#--- forbidden.s
+.section .text.init.enter,"ax",@progbits
+.global _start
+_start:
+  SWYM 0, 0, 0
+.section .tdata,"awT",@progbits
+.quad 0
+
+#--- overflow.s
+.section .text.init.enter,"ax",@progbits
+.global _start
+_start:
+  SWYM 0, 0, 0
+.section .bss.runtime,"aw",@nobits
+.space 0x06000000
