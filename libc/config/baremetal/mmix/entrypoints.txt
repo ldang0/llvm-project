@@ -6,6 +6,8 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.ldiv
     libc.src.stdlib.llabs
     libc.src.stdlib.lldiv
+    libc.src.errno.errno
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
     libc.src.stdlib.exit

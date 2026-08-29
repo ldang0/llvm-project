@@ -13,6 +13,8 @@ set(expected_libc
     libc.src.stdlib.ldiv
     libc.src.stdlib.llabs
     libc.src.stdlib.lldiv
+    libc.src.errno.errno
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
     libc.src.stdlib.exit
@@ -61,7 +63,7 @@ endif()
 
 foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   if(NOT entrypoint MATCHES
-      "^libc[.]src[.](stdlib|string|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
+      "^libc[.]src[.](stdlib|string|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
     message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
   endif()
 endforeach()

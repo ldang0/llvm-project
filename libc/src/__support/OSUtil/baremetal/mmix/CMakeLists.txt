@@ -7,6 +7,19 @@ add_header_library(
 )
 
 add_entrypoint_object(
+  platform_io
+  SRCS
+    platform_io.cpp
+  HDRS
+    platform_io.h
+  DEPENDS
+    .semihosting
+    libc.hdr.errno_macros
+    libc.src.__support.OSUtil.baremetal.baremetal_util
+    libc.src.__support.common
+)
+
+add_entrypoint_object(
   atexit
   SRCS
     atexit.cpp

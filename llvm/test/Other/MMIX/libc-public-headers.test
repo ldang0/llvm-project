@@ -8,6 +8,9 @@
 # RUN:   -o %t/include/ctype.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/ctype.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/errno.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/errno.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/float.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/float.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
@@ -43,6 +46,7 @@
 include(${MMIX_HEADERS})
 set(expected_headers
     libc.include.ctype
+    libc.include.errno
     libc.include.float
     libc.include.inttypes
     libc.include.limits
@@ -58,6 +62,7 @@ endif()
 
 #--- properties.c
 #include <ctype.h>
+#include <errno.h>
 #include <float.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -72,6 +77,7 @@ endif()
 #define SAME_TYPE(T, U) __builtin_types_compatible_p(T, U)
 
 _Static_assert(CHAR_BIT == 8 && CHAR_MIN < 0, "plain char model");
+_Static_assert(SAME_TYPE(__typeof__(errno), int), "process errno type");
 _Static_assert(sizeof(int8_t) == 1 && sizeof(int16_t) == 2,
                "narrow integer types");
 _Static_assert(sizeof(int32_t) == 4 && sizeof(int64_t) == 8,
