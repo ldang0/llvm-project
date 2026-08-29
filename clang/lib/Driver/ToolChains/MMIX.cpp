@@ -78,8 +78,19 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ArgList &Args) {
     if (StringRef(A->getValue()) != "lld")
       return Diagnose("non-lld linker selection for MMIX");
   }
-  if (IsHosted)
+  if (IsHosted) {
+    if (const Arg *A = Args.getLastArg(options::OPT_rtlib_EQ)) {
+      Args.claimAllArgs(options::OPT_rtlib_EQ);
+      if (StringRef(A->getValue()) != "compiler-rt")
+        return Diagnose("non-compiler-rt runtime selection for MMIX");
+    }
+    if (const Arg *A = Args.getLastArg(options::OPT_unwindlib_EQ)) {
+      Args.claimAllArgs(options::OPT_unwindlib_EQ);
+      if (StringRef(A->getValue()) != "none")
+        return Diagnose("unwind library selection for MMIX");
+    }
     return false;
+  }
   if (Args.hasArg(options::OPT_rtlib_EQ, options::OPT_unwindlib_EQ))
     return Diagnose("runtime library selection for MMIX freestanding linking");
   if (!Args.hasArg(options::OPT_ffreestanding))
