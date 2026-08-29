@@ -83,3 +83,19 @@ foreach(entrypoint IN LISTS TARGET_LIBC_PLATFORM_ENTRYPOINTS)
     message(FATAL_ERROR "unreviewed MMIX platform family: ${entrypoint}")
   endif()
 endforeach()
+
+set(unsupported_capability_families
+    "^libc[.]src[.](spawn|unistd[.](exec|fork)|sys[.]wait)"
+    "^libc[.]src[.]signal[.]"
+    "^libc[.]src[.](time|unistd[.](sleep|usleep))[.]"
+    "^libc[.]src[.]sys[.]random[.]"
+    "^libc[.]src[.](pthread|threads)[.]"
+    "^libc[.]src[.](dlfcn|link)[.]")
+foreach(entrypoint IN LISTS TARGET_LLVMLIBC_ENTRYPOINTS)
+  foreach(family IN LISTS unsupported_capability_families)
+    if(entrypoint MATCHES "${family}")
+      message(FATAL_ERROR
+        "unsupported MMIX runtime capability selected: ${entrypoint}")
+    endif()
+  endforeach()
+endforeach()
