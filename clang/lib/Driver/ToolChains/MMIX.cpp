@@ -258,12 +258,11 @@ MMIXToolChain::GetCStdlibType(const ArgList &Args) const {
     return ToolChain::CST_Newlib;
 
   CStdlibType Type = ToolChain::GetCStdlibType(Args);
-  if (Type == ToolChain::CST_Newlib)
+  if (Type == ToolChain::CST_Newlib || Type == ToolChain::CST_LLVMLibC)
     return Type;
 
   StringRef Name = A->getValue();
   bool IsKnownUnsupported = Type == ToolChain::CST_Picolibc ||
-                            Type == ToolChain::CST_LLVMLibC ||
                             (Type == ToolChain::CST_System && Name == "system");
   if (IsKnownUnsupported && !DiagnosedUnsupportedCStdlib) {
     getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
@@ -271,7 +270,7 @@ MMIXToolChain::GetCStdlibType(const ArgList &Args) const {
     DiagnosedUnsupportedCStdlib = true;
   }
 
-  // Keep later target-private policy dispatch on the only supported provider.
+  // Keep later target-private policy dispatch on a supported provider.
   return ToolChain::CST_Newlib;
 }
 

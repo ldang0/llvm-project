@@ -12,6 +12,9 @@
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
+#include "clang/Driver/ToolChain.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/VirtualFileSystem.h"
@@ -23,6 +26,29 @@ namespace {
 
 static std::string normalized(llvm::StringRef Path) {
   return llvm::sys::path::convert_to_slash(Path);
+}
+
+static clang::driver::ToolChain::CStdlibType
+selectedCStdlib(llvm::ArrayRef<const char *> SelectionArgs) {
+  auto FileSystem = llvm::makeIntrusiveRefCnt<llvm::vfs::InMemoryFileSystem>();
+  FileSystem->addFile("/input.c", 0,
+                      llvm::MemoryBuffer::getMemBuffer("int value;\n"));
+
+  clang::DiagnosticOptions DiagnosticOptions;
+  clang::DiagnosticsEngine Diagnostics(clang::DiagnosticIDs::create(),
+                                       DiagnosticOptions,
+                                       new SimpleDiagnosticConsumer);
+  clang::driver::Driver Driver("/bin/clang", "mmix-unknown-unknown",
+                               Diagnostics, "clang LLVM compiler", FileSystem);
+  llvm::SmallVector<const char *, 8> Args = {"-fsyntax-only", "/input.c"};
+  Args.append(SelectionArgs.begin(), SelectionArgs.end());
+  std::unique_ptr<clang::driver::Compilation> Compilation(
+      Driver.BuildCompilation(Args));
+  EXPECT_TRUE(Compilation);
+  if (!Compilation)
+    return clang::driver::ToolChain::CST_System;
+  return Compilation->getDefaultToolChain().GetCStdlibType(
+      Compilation->getArgs());
 }
 
 TEST(MMIXLLVMlibcTest, CanonicalInstallationPaths) {
@@ -71,6 +97,18 @@ TEST(MMIXLLVMlibcTest, QEMUInputsOwnProviderResourcePaths) {
             "/sysroot/lib/mmix-unknown-unknown/crt1.o");
   EXPECT_EQ(normalized(Inputs.PlatformLibrary),
             "/sysroot/lib/mmix-unknown-unknown/libmmixplatform.a");
+}
+
+TEST(MMIXLLVMlibcTest, SelectsExplicitLLVMlibc) {
+  using ToolChain = clang::driver::ToolChain;
+
+  EXPECT_EQ(selectedCStdlib({}), ToolChain::CST_Newlib);
+  EXPECT_EQ(selectedCStdlib({"--cstdlib=newlib"}), ToolChain::CST_Newlib);
+  EXPECT_EQ(selectedCStdlib({"--cstdlib=llvm-libc"}), ToolChain::CST_LLVMLibC);
+  EXPECT_EQ(selectedCStdlib({"--cstdlib=picolibc", "--cstdlib=llvm-libc"}),
+            ToolChain::CST_LLVMLibC);
+  EXPECT_EQ(selectedCStdlib({"--cstdlib=llvm-libc", "--cstdlib=newlib"}),
+            ToolChain::CST_Newlib);
 }
 
 TEST(MMIXLLVMlibcTest, ValidatesResourcesThroughVFS) {
