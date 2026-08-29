@@ -1,0 +1,87 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t.dir && split-file %s %t.dir
+# RUN: cmake -S %S/../../../../runtimes -B %t.dir/build -G Ninja \
+# RUN:   -DLLVM_ENABLE_RUNTIMES=libc -DCMAKE_C_COMPILER=clang \
+# RUN:   -DCMAKE_CXX_COMPILER=clang++ \
+# RUN:   -DCMAKE_C_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_CXX_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+# RUN:   -DLLVM_DEFAULT_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_LIBC_FULL_BUILD=ON -DLIBC_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+# RUN:   -DLIBC_ENABLE_USE_BY_CLANG=ON -DCMAKE_BUILD_TYPE=Release \
+# RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/install
+# RUN: ninja -C %t.dir/build -j 4 libc-startup libc libm
+# RUN: cmake --install %t.dir/build --component libc
+# RUN: cp %t.dir/build/libc/startup/baremetal/mmix/CMakeFiles/libc.startup.baremetal.mmix.crt1.dir/start.cpp.o %t.dir/crt1.o
+# RUN: cmp %t.dir/crt1.o %t.dir/install/lib/mmix-unknown-unknown/crt1.o
+# RUN: llvm-objdump -dr %t.dir/crt1.o | FileCheck %s --check-prefix=ENTRY
+# RUN: llvm-readobj --sections %t.dir/crt1.o | \
+# RUN:   FileCheck %s --check-prefix=SECTIONS \
+# RUN:   --implicit-check-not=.tdata --implicit-check-not=.tbss \
+# RUN:   --implicit-check-not=.eh_frame --implicit-check-not=.gcc_except_table
+# RUN: llvm-readobj --symbols %t.dir/crt1.o | \
+# RUN:   FileCheck %s --check-prefix=SYMBOLS
+# RUN: llvm-readobj --relocations %t.dir/crt1.o | \
+# RUN:   FileCheck %s --check-prefix=RELOCS
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding -fno-builtin -O2 \
+# RUN:   -c %t.dir/main.c -o %t.dir/main.o
+# RUN: ld.lld -static \
+# RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/crt1.o %t.dir/main.o -o %t.dir/image
+# RUN: llvm-readobj --file-headers --sections --program-headers %t.dir/image | \
+# RUN:   FileCheck %s --check-prefix=IMAGE \
+# RUN:   --implicit-check-not=PT_INTERP --implicit-check-not=SHT_DYNAMIC \
+# RUN:   --implicit-check-not=R_MMIX_
+# RUN: llvm-readobj --symbols %t.dir/image | \
+# RUN:   FileCheck %s --check-prefix=IMAGE-SYMBOLS
+# RUN: llvm-readobj --relocations %t.dir/image | \
+# RUN:   FileCheck %s --check-prefix=FINAL-RELOCS
+
+# ENTRY-LABEL: <_start>:
+# ENTRY-NEXT:  SETL r255, 0xe7
+# ENTRY-NEXT:  PUT rG, r255
+# ENTRY-NEXT:  GET r254, rO
+# ENTRY-NEXT:  SETL r255, 0x8000
+# ENTRY-NEXT:  ADDU r254, r254, r255
+# ENTRY-NEXT:  OR r231, r0, 0x0
+# ENTRY-NEXT:  OR r232, r1, 0x0
+# ENTRY-NEXT:  PUSHJ r31,
+# ENTRY-NEXT:  {{.*}} R_MMIX_PUSHJ_STUBBABLE __llvm_libc_mmix_start_main
+# ENTRY-NEXT:  SETL r255, 0x7f
+# ENTRY-NEXT:  TRAP 0x0, 0x0, 0x0
+
+# SECTIONS: Name: .text.init.enter
+
+# SYMBOLS:      Name: _start
+# SYMBOLS:      Size: 40
+# SYMBOLS:      Binding: Global
+# SYMBOLS:      Type: Function
+# SYMBOLS:      Section: .text.init.enter
+# SYMBOLS:      Name: __llvm_libc_mmix_start_main
+# SYMBOLS:      Other [
+# SYMBOLS-NEXT: STV_HIDDEN
+
+# RELOCS: R_MMIX_PUSHJ_STUBBABLE __llvm_libc_mmix_start_main
+# RELOCS: R_MMIX_PUSHJ_STUBBABLE main
+
+# IMAGE:      Format: elf64-mmix
+# IMAGE:      Type: Executable
+# IMAGE:      Machine: EM_MMIX
+# IMAGE:      Entry: 0x100000
+
+# IMAGE-SYMBOLS:      Name: __llvm_libc_mmix_start_main
+# IMAGE-SYMBOLS:      Name: _start
+# IMAGE-SYMBOLS-NEXT: Value: 0x100000
+# IMAGE-SYMBOLS:      Name: main
+
+# FINAL-RELOCS: Relocations [
+# FINAL-RELOCS-NEXT: ]
+
+#--- main.c
+int main(int argc, char **argv, char **envp) {
+  return argc == 1 && argv != 0 && argv[0] != 0 && argv[1] == 0 && envp == 0
+             ? 0
+             : 1;
+}

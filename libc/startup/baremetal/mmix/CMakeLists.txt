@@ -1,0 +1,11 @@
+add_startup_object(
+  crt1
+  SRC
+    start.cpp
+  DEPENDS
+    libc.src.__support.common
+    libc.src.__support.OSUtil.baremetal.mmix.semihosting
+  COMPILE_OPTIONS
+    -ffreestanding
+    -fno-builtin
+)
