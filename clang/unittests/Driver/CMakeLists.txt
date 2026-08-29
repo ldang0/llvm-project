@@ -7,6 +7,7 @@ add_clang_unittest(ClangDriverTests
   ModuleCacheTest.cpp
   MultilibBuilderTest.cpp
   MultilibTest.cpp
+  MMIXLLVMlibcTest.cpp
   SanitizerArgsTest.cpp
   CLANG_LIBS
   clangDriver
