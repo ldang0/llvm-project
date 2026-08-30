@@ -36,6 +36,9 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.ldiv
     libc.src.stdlib.llabs
     libc.src.stdlib.lldiv
+    libc.src.stdlib.mblen
+    libc.src.stdlib.mbstowcs
+    libc.src.stdlib.mbtowc
     libc.src.stdlib.qsort
     libc.src.stdlib.rand
     libc.src.stdlib.srand
@@ -43,6 +46,8 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.strtoll
     libc.src.stdlib.strtoul
     libc.src.stdlib.strtoull
+    libc.src.stdlib.wcstombs
+    libc.src.stdlib.wctomb
     libc.src.errno.errno
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
@@ -54,6 +59,14 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.malloc
     libc.src.stdlib.malloc_usable_size
     libc.src.stdlib.realloc
+
+    # wchar.h entrypoints
+    libc.src.wchar.mbrlen
+    libc.src.wchar.mbrtowc
+    libc.src.wchar.mbsinit
+    libc.src.wchar.mbsrtowcs
+    libc.src.wchar.wcrtomb
+    libc.src.wchar.wcsrtombs
 
     # string.h entrypoints
     libc.src.string.memchr

@@ -17,13 +17,16 @@
 # RUN:   FileCheck %s --check-prefix=LIBM-MEMBERS
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   FileCheck %s --check-prefix=GENERAL-SYMBOLS
+# RUN:   FileCheck %s --check-prefix=SELECTED-SYMBOLS
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E '__(atomic|scoped_atomic)|__(div|mod|mul|udiv|umod)ti3'
+# RUN: llvm-readobj --sections --relocations \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 78
+# RUN:   grep 'Machine: EM_MMIX' | count 90
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -58,6 +61,10 @@
 # LIBC-MEMBERS-NEXT: ldiv.cpp.o
 # LIBC-MEMBERS-NEXT: llabs.cpp.o
 # LIBC-MEMBERS-NEXT: lldiv.cpp.o
+# LIBC-MEMBERS-NEXT: mbrtowc.cpp.o
+# LIBC-MEMBERS-NEXT: mblen.cpp.o
+# LIBC-MEMBERS-NEXT: mbstowcs.cpp.o
+# LIBC-MEMBERS-NEXT: mbtowc.cpp.o
 # LIBC-MEMBERS-NEXT: qsort.cpp.o
 # LIBC-MEMBERS-NEXT: rand_util.cpp.o
 # LIBC-MEMBERS-NEXT: rand.cpp.o
@@ -66,6 +73,8 @@
 # LIBC-MEMBERS-NEXT: strtoll.cpp.o
 # LIBC-MEMBERS-NEXT: strtoul.cpp.o
 # LIBC-MEMBERS-NEXT: strtoull.cpp.o
+# LIBC-MEMBERS-NEXT: wcstombs.cpp.o
+# LIBC-MEMBERS-NEXT: wctomb.cpp.o
 # LIBC-MEMBERS-NEXT: libc_errno.cpp.o
 # LIBC-MEMBERS-NEXT: io.cpp.o
 # LIBC-MEMBERS-NEXT: exit.cpp.o
@@ -83,6 +92,12 @@
 # LIBC-MEMBERS-NEXT: malloc.cpp.o
 # LIBC-MEMBERS-NEXT: malloc_usable_size.cpp.o
 # LIBC-MEMBERS-NEXT: realloc.cpp.o
+# LIBC-MEMBERS-NEXT: mbrlen.cpp.o
+# LIBC-MEMBERS-NEXT: mbrtowc.cpp.o
+# LIBC-MEMBERS-NEXT: mbsinit.cpp.o
+# LIBC-MEMBERS-NEXT: mbsrtowcs.cpp.o
+# LIBC-MEMBERS-NEXT: wcrtomb.cpp.o
+# LIBC-MEMBERS-NEXT: wcsrtombs.cpp.o
 # LIBC-MEMBERS-NEXT: memchr.cpp.o
 # LIBC-MEMBERS-NEXT: memcmp.cpp.o
 # LIBC-MEMBERS-NEXT: memcpy.cpp.o
@@ -107,27 +122,38 @@
 # LIBC-MEMBERS-NEXT: strtok.cpp.o
 # LIBC-MEMBERS-NEXT: strxfrm.cpp.o
 
-# GENERAL-SYMBOLS-DAG: T abs
-# GENERAL-SYMBOLS-DAG: T atoi
-# GENERAL-SYMBOLS-DAG: T atol
-# GENERAL-SYMBOLS-DAG: T atoll
-# GENERAL-SYMBOLS-DAG: T bsearch
-# GENERAL-SYMBOLS-DAG: T div
-# GENERAL-SYMBOLS-DAG: T imaxabs
-# GENERAL-SYMBOLS-DAG: T imaxdiv
-# GENERAL-SYMBOLS-DAG: T labs
-# GENERAL-SYMBOLS-DAG: T ldiv
-# GENERAL-SYMBOLS-DAG: T llabs
-# GENERAL-SYMBOLS-DAG: T lldiv
-# GENERAL-SYMBOLS-DAG: T qsort
-# GENERAL-SYMBOLS-DAG: T rand
-# GENERAL-SYMBOLS-DAG: T srand
-# GENERAL-SYMBOLS-DAG: T strtoimax
-# GENERAL-SYMBOLS-DAG: T strtol
-# GENERAL-SYMBOLS-DAG: T strtoll
-# GENERAL-SYMBOLS-DAG: T strtoul
-# GENERAL-SYMBOLS-DAG: T strtoull
-# GENERAL-SYMBOLS-DAG: T strtoumax
+# SELECTED-SYMBOLS-DAG: T abs
+# SELECTED-SYMBOLS-DAG: T atoi
+# SELECTED-SYMBOLS-DAG: T atol
+# SELECTED-SYMBOLS-DAG: T atoll
+# SELECTED-SYMBOLS-DAG: T bsearch
+# SELECTED-SYMBOLS-DAG: T div
+# SELECTED-SYMBOLS-DAG: T imaxabs
+# SELECTED-SYMBOLS-DAG: T imaxdiv
+# SELECTED-SYMBOLS-DAG: T labs
+# SELECTED-SYMBOLS-DAG: T ldiv
+# SELECTED-SYMBOLS-DAG: T llabs
+# SELECTED-SYMBOLS-DAG: T lldiv
+# SELECTED-SYMBOLS-DAG: T mblen
+# SELECTED-SYMBOLS-DAG: T mbrlen
+# SELECTED-SYMBOLS-DAG: T mbrtowc
+# SELECTED-SYMBOLS-DAG: T mbsinit
+# SELECTED-SYMBOLS-DAG: T mbsrtowcs
+# SELECTED-SYMBOLS-DAG: T mbstowcs
+# SELECTED-SYMBOLS-DAG: T mbtowc
+# SELECTED-SYMBOLS-DAG: T qsort
+# SELECTED-SYMBOLS-DAG: T rand
+# SELECTED-SYMBOLS-DAG: T srand
+# SELECTED-SYMBOLS-DAG: T strtoimax
+# SELECTED-SYMBOLS-DAG: T strtol
+# SELECTED-SYMBOLS-DAG: T strtoll
+# SELECTED-SYMBOLS-DAG: T strtoul
+# SELECTED-SYMBOLS-DAG: T strtoull
+# SELECTED-SYMBOLS-DAG: T strtoumax
+# SELECTED-SYMBOLS-DAG: T wcstombs
+# SELECTED-SYMBOLS-DAG: T wcrtomb
+# SELECTED-SYMBOLS-DAG: T wcsrtombs
+# SELECTED-SYMBOLS-DAG: T wctomb
 
 # LIBM-MEMBERS: copysign.cpp.o
 # LIBM-MEMBERS-NEXT: copysignf.cpp.o
