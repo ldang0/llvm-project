@@ -7,6 +7,22 @@
 include(${MMIX_ENTRYPOINTS})
 
 set(expected_libc
+    libc.src.ctype.isalnum
+    libc.src.ctype.isalpha
+    libc.src.ctype.isblank
+    libc.src.ctype.iscntrl
+    libc.src.ctype.isdigit
+    libc.src.ctype.isgraph
+    libc.src.ctype.islower
+    libc.src.ctype.isprint
+    libc.src.ctype.ispunct
+    libc.src.ctype.isspace
+    libc.src.ctype.isupper
+    libc.src.ctype.isxdigit
+    libc.src.ctype.tolower
+    libc.src.ctype.toupper
+    libc.src.locale.localeconv
+    libc.src.locale.setlocale
     libc.src.stdlib.abs
     libc.src.stdlib.div
     libc.src.stdlib.labs
@@ -68,7 +84,7 @@ endif()
 
 foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   if(NOT entrypoint MATCHES
-      "^libc[.]src[.](stdlib|string|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
+      "^libc[.]src[.](ctype|locale|stdlib|string|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
     message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
   endif()
 endforeach()

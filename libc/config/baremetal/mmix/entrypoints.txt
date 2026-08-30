@@ -1,4 +1,24 @@
 set(TARGET_LIBC_ENTRYPOINTS
+    # ctype.h entrypoints
+    libc.src.ctype.isalnum
+    libc.src.ctype.isalpha
+    libc.src.ctype.isblank
+    libc.src.ctype.iscntrl
+    libc.src.ctype.isdigit
+    libc.src.ctype.isgraph
+    libc.src.ctype.islower
+    libc.src.ctype.isprint
+    libc.src.ctype.ispunct
+    libc.src.ctype.isspace
+    libc.src.ctype.isupper
+    libc.src.ctype.isxdigit
+    libc.src.ctype.tolower
+    libc.src.ctype.toupper
+
+    # locale.h entrypoints
+    libc.src.locale.localeconv
+    libc.src.locale.setlocale
+
     # stdlib.h entrypoints
     libc.src.stdlib.abs
     libc.src.stdlib.div

@@ -15,9 +15,14 @@
 namespace LIBC_NAMESPACE_DECL {
 
 LLVM_LIBC_FUNCTION(char *, setlocale, (int category, const char *locale_name)) {
-  cpp::string_view name(locale_name);
-  if (category > LC_ALL || (!name.empty() && name != "C"))
+  if (category > LC_ALL)
     return nullptr;
+
+  if (locale_name != nullptr) {
+    cpp::string_view name(locale_name);
+    if (!name.empty() && name != "C")
+      return nullptr;
+  }
 
   static char locale_str[] = "C";
   return locale_str;

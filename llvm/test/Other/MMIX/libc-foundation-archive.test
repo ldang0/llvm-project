@@ -17,12 +17,28 @@
 # RUN:   FileCheck %s --check-prefix=LIBM-MEMBERS
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 31
+# RUN:   grep 'Machine: EM_MMIX' | count 47
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
 
-# LIBC-MEMBERS: abs.cpp.o
+# LIBC-MEMBERS: isalnum.cpp.o
+# LIBC-MEMBERS-NEXT: isalpha.cpp.o
+# LIBC-MEMBERS-NEXT: isblank.cpp.o
+# LIBC-MEMBERS-NEXT: iscntrl.cpp.o
+# LIBC-MEMBERS-NEXT: isdigit.cpp.o
+# LIBC-MEMBERS-NEXT: isgraph.cpp.o
+# LIBC-MEMBERS-NEXT: islower.cpp.o
+# LIBC-MEMBERS-NEXT: isprint.cpp.o
+# LIBC-MEMBERS-NEXT: ispunct.cpp.o
+# LIBC-MEMBERS-NEXT: isspace.cpp.o
+# LIBC-MEMBERS-NEXT: isupper.cpp.o
+# LIBC-MEMBERS-NEXT: isxdigit.cpp.o
+# LIBC-MEMBERS-NEXT: tolower.cpp.o
+# LIBC-MEMBERS-NEXT: toupper.cpp.o
+# LIBC-MEMBERS-NEXT: localeconv.cpp.o
+# LIBC-MEMBERS-NEXT: setlocale.cpp.o
+# LIBC-MEMBERS-NEXT: abs.cpp.o
 # LIBC-MEMBERS-NEXT: div.cpp.o
 # LIBC-MEMBERS-NEXT: labs.cpp.o
 # LIBC-MEMBERS-NEXT: ldiv.cpp.o
