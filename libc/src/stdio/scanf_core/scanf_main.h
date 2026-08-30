@@ -32,9 +32,10 @@ int scanf_main(Reader<T> *reader, const char *__restrict str,
        cur_section = parser.get_next_section()) {
     if (cur_section.has_conv) {
       ret_val = convert(reader, cur_section);
-      // The %n (current position) conversion doesn't increment the number of
-      // assignments.
-      if (cur_section.conv_name != 'n')
+      // Neither %n nor an assignment-suppressed conversion increments the
+      // number of assignments.
+      if (cur_section.conv_name != 'n' &&
+          (cur_section.flags & FormatFlags::NO_WRITE) == 0)
         conversions += ret_val == READ_OK ? 1 : 0;
     } else {
       ret_val = raw_match(reader, cur_section.raw_string);
