@@ -28,6 +28,7 @@ set(expected_libc
     libc.src.inttypes.strtoimax
     libc.src.inttypes.strtoumax
     libc.src.stdlib.abs
+    libc.src.stdlib.atof
     libc.src.stdlib.atoi
     libc.src.stdlib.atol
     libc.src.stdlib.atoll
@@ -43,6 +44,12 @@ set(expected_libc
     libc.src.stdlib.qsort
     libc.src.stdlib.rand
     libc.src.stdlib.srand
+    libc.src.stdlib.strfromd
+    libc.src.stdlib.strfromf
+    libc.src.stdlib.strfroml
+    libc.src.stdlib.strtod
+    libc.src.stdlib.strtof
+    libc.src.stdlib.strtold
     libc.src.stdlib.strtol
     libc.src.stdlib.strtoll
     libc.src.stdlib.strtoul

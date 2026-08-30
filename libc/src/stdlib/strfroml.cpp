@@ -8,6 +8,7 @@
 
 #include "src/stdlib/strfroml.h"
 #include "src/__support/CPP/limits.h"
+#include "src/__support/libc_errno.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/printf_core/core_structs.h"
 #include "src/__support/printf_core/error_mapper.h"

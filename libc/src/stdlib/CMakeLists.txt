@@ -115,6 +115,7 @@ add_entrypoint_object(
     strfromf.h
   DEPENDS
     .str_from_util
+    libc.src.errno.errno
     libc.src.__support.CPP.limits
     libc.src.__support.printf_core.error_mapper
 )
@@ -127,6 +128,7 @@ add_entrypoint_object(
     strfromd.h
   DEPENDS
     .str_from_util
+    libc.src.errno.errno
     libc.src.__support.CPP.limits
     libc.src.__support.printf_core.error_mapper
 )
@@ -139,6 +141,7 @@ add_entrypoint_object(
     strfroml.h
   DEPENDS
     .str_from_util
+    libc.src.errno.errno
     libc.src.__support.CPP.limits
     libc.src.__support.printf_core.error_mapper
 )

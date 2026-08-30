@@ -21,12 +21,15 @@
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E '__(atomic|scoped_atomic)|__(div|mod|mul|udiv|umod)ti3'
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   not grep -E ' U (fegetround|fesetround|feraiseexcept|fetestexcept)$'
 # RUN: llvm-readobj --sections --relocations \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 90
+# RUN:   grep 'Machine: EM_MMIX' | count 97
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -52,6 +55,7 @@
 # LIBC-MEMBERS-NEXT: strtoimax.cpp.o
 # LIBC-MEMBERS-NEXT: strtoumax.cpp.o
 # LIBC-MEMBERS-NEXT: abs.cpp.o
+# LIBC-MEMBERS-NEXT: atof.cpp.o
 # LIBC-MEMBERS-NEXT: atoi.cpp.o
 # LIBC-MEMBERS-NEXT: atol.cpp.o
 # LIBC-MEMBERS-NEXT: atoll.cpp.o
@@ -69,6 +73,12 @@
 # LIBC-MEMBERS-NEXT: rand_util.cpp.o
 # LIBC-MEMBERS-NEXT: rand.cpp.o
 # LIBC-MEMBERS-NEXT: srand.cpp.o
+# LIBC-MEMBERS-NEXT: strfromd.cpp.o
+# LIBC-MEMBERS-NEXT: strfromf.cpp.o
+# LIBC-MEMBERS-NEXT: strfroml.cpp.o
+# LIBC-MEMBERS-NEXT: strtod.cpp.o
+# LIBC-MEMBERS-NEXT: strtof.cpp.o
+# LIBC-MEMBERS-NEXT: strtold.cpp.o
 # LIBC-MEMBERS-NEXT: strtol.cpp.o
 # LIBC-MEMBERS-NEXT: strtoll.cpp.o
 # LIBC-MEMBERS-NEXT: strtoul.cpp.o
@@ -123,6 +133,7 @@
 # LIBC-MEMBERS-NEXT: strxfrm.cpp.o
 
 # SELECTED-SYMBOLS-DAG: T abs
+# SELECTED-SYMBOLS-DAG: T atof
 # SELECTED-SYMBOLS-DAG: T atoi
 # SELECTED-SYMBOLS-DAG: T atol
 # SELECTED-SYMBOLS-DAG: T atoll
@@ -144,6 +155,12 @@
 # SELECTED-SYMBOLS-DAG: T qsort
 # SELECTED-SYMBOLS-DAG: T rand
 # SELECTED-SYMBOLS-DAG: T srand
+# SELECTED-SYMBOLS-DAG: T strfromd
+# SELECTED-SYMBOLS-DAG: T strfromf
+# SELECTED-SYMBOLS-DAG: T strfroml
+# SELECTED-SYMBOLS-DAG: T strtod
+# SELECTED-SYMBOLS-DAG: T strtof
+# SELECTED-SYMBOLS-DAG: T strtold
 # SELECTED-SYMBOLS-DAG: T strtoimax
 # SELECTED-SYMBOLS-DAG: T strtol
 # SELECTED-SYMBOLS-DAG: T strtoll
