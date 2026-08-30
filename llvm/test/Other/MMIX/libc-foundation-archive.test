@@ -15,9 +15,15 @@
 # RUN:   FileCheck %s --check-prefix=LIBC-MEMBERS
 # RUN: llvm-ar t %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   FileCheck %s --check-prefix=LIBM-MEMBERS
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   FileCheck %s --check-prefix=GENERAL-SYMBOLS
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   not grep -E '__(atomic|scoped_atomic)|__(div|mod|mul|udiv|umod)ti3'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 62
+# RUN:   grep 'Machine: EM_MMIX' | count 78
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -38,12 +44,28 @@
 # LIBC-MEMBERS-NEXT: toupper.cpp.o
 # LIBC-MEMBERS-NEXT: localeconv.cpp.o
 # LIBC-MEMBERS-NEXT: setlocale.cpp.o
+# LIBC-MEMBERS-NEXT: imaxabs.cpp.o
+# LIBC-MEMBERS-NEXT: imaxdiv.cpp.o
+# LIBC-MEMBERS-NEXT: strtoimax.cpp.o
+# LIBC-MEMBERS-NEXT: strtoumax.cpp.o
 # LIBC-MEMBERS-NEXT: abs.cpp.o
+# LIBC-MEMBERS-NEXT: atoi.cpp.o
+# LIBC-MEMBERS-NEXT: atol.cpp.o
+# LIBC-MEMBERS-NEXT: atoll.cpp.o
+# LIBC-MEMBERS-NEXT: bsearch.cpp.o
 # LIBC-MEMBERS-NEXT: div.cpp.o
 # LIBC-MEMBERS-NEXT: labs.cpp.o
 # LIBC-MEMBERS-NEXT: ldiv.cpp.o
 # LIBC-MEMBERS-NEXT: llabs.cpp.o
 # LIBC-MEMBERS-NEXT: lldiv.cpp.o
+# LIBC-MEMBERS-NEXT: qsort.cpp.o
+# LIBC-MEMBERS-NEXT: rand_util.cpp.o
+# LIBC-MEMBERS-NEXT: rand.cpp.o
+# LIBC-MEMBERS-NEXT: srand.cpp.o
+# LIBC-MEMBERS-NEXT: strtol.cpp.o
+# LIBC-MEMBERS-NEXT: strtoll.cpp.o
+# LIBC-MEMBERS-NEXT: strtoul.cpp.o
+# LIBC-MEMBERS-NEXT: strtoull.cpp.o
 # LIBC-MEMBERS-NEXT: libc_errno.cpp.o
 # LIBC-MEMBERS-NEXT: io.cpp.o
 # LIBC-MEMBERS-NEXT: exit.cpp.o
@@ -84,6 +106,28 @@
 # LIBC-MEMBERS-NEXT: strstr.cpp.o
 # LIBC-MEMBERS-NEXT: strtok.cpp.o
 # LIBC-MEMBERS-NEXT: strxfrm.cpp.o
+
+# GENERAL-SYMBOLS-DAG: T abs
+# GENERAL-SYMBOLS-DAG: T atoi
+# GENERAL-SYMBOLS-DAG: T atol
+# GENERAL-SYMBOLS-DAG: T atoll
+# GENERAL-SYMBOLS-DAG: T bsearch
+# GENERAL-SYMBOLS-DAG: T div
+# GENERAL-SYMBOLS-DAG: T imaxabs
+# GENERAL-SYMBOLS-DAG: T imaxdiv
+# GENERAL-SYMBOLS-DAG: T labs
+# GENERAL-SYMBOLS-DAG: T ldiv
+# GENERAL-SYMBOLS-DAG: T llabs
+# GENERAL-SYMBOLS-DAG: T lldiv
+# GENERAL-SYMBOLS-DAG: T qsort
+# GENERAL-SYMBOLS-DAG: T rand
+# GENERAL-SYMBOLS-DAG: T srand
+# GENERAL-SYMBOLS-DAG: T strtoimax
+# GENERAL-SYMBOLS-DAG: T strtol
+# GENERAL-SYMBOLS-DAG: T strtoll
+# GENERAL-SYMBOLS-DAG: T strtoul
+# GENERAL-SYMBOLS-DAG: T strtoull
+# GENERAL-SYMBOLS-DAG: T strtoumax
 
 # LIBM-MEMBERS: copysign.cpp.o
 # LIBM-MEMBERS-NEXT: copysignf.cpp.o

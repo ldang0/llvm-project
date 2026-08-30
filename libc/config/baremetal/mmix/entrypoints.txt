@@ -19,13 +19,30 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.locale.localeconv
     libc.src.locale.setlocale
 
+    # inttypes.h entrypoints
+    libc.src.inttypes.imaxabs
+    libc.src.inttypes.imaxdiv
+    libc.src.inttypes.strtoimax
+    libc.src.inttypes.strtoumax
+
     # stdlib.h entrypoints
     libc.src.stdlib.abs
+    libc.src.stdlib.atoi
+    libc.src.stdlib.atol
+    libc.src.stdlib.atoll
+    libc.src.stdlib.bsearch
     libc.src.stdlib.div
     libc.src.stdlib.labs
     libc.src.stdlib.ldiv
     libc.src.stdlib.llabs
     libc.src.stdlib.lldiv
+    libc.src.stdlib.qsort
+    libc.src.stdlib.rand
+    libc.src.stdlib.srand
+    libc.src.stdlib.strtol
+    libc.src.stdlib.strtoll
+    libc.src.stdlib.strtoul
+    libc.src.stdlib.strtoull
     libc.src.errno.errno
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
