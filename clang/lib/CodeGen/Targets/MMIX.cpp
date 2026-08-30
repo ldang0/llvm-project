@@ -241,7 +241,8 @@ static bool diagnoseUnsupportedMMIXObject(CodeGenModule &CGM,
 
 static bool isMMIXAtomicBuiltinName(StringRef Name) {
   return Name.starts_with("__atomic_") || Name.starts_with("__sync_") ||
-         Name.starts_with("__c11_atomic_");
+         Name.starts_with("__c11_atomic_") ||
+         Name.starts_with("__scoped_atomic_");
 }
 
 static bool isSupportedMMIXAtomicFenceBuiltin(unsigned BuiltinID) {
@@ -250,6 +251,7 @@ static bool isSupportedMMIXAtomicFenceBuiltin(unsigned BuiltinID) {
   case Builtin::BI__atomic_signal_fence:
   case Builtin::BI__c11_atomic_thread_fence:
   case Builtin::BI__c11_atomic_signal_fence:
+  case Builtin::BI__scoped_atomic_thread_fence:
     return true;
   default:
     return false;
@@ -469,6 +471,14 @@ public:
     case AtomicExpr::AO__atomic_compare_exchange_n:
     case AtomicExpr::AO__atomic_test_and_set:
     case AtomicExpr::AO__atomic_clear:
+    case AtomicExpr::AO__scoped_atomic_load:
+    case AtomicExpr::AO__scoped_atomic_load_n:
+    case AtomicExpr::AO__scoped_atomic_store:
+    case AtomicExpr::AO__scoped_atomic_store_n:
+    case AtomicExpr::AO__scoped_atomic_exchange:
+    case AtomicExpr::AO__scoped_atomic_exchange_n:
+    case AtomicExpr::AO__scoped_atomic_compare_exchange:
+    case AtomicExpr::AO__scoped_atomic_compare_exchange_n:
       break;
     case AtomicExpr::AO__c11_atomic_fetch_add:
     case AtomicExpr::AO__c11_atomic_fetch_sub:
@@ -494,6 +504,11 @@ public:
     case AtomicExpr::AO__atomic_nand_fetch:
     case AtomicExpr::AO__atomic_min_fetch:
     case AtomicExpr::AO__atomic_max_fetch:
+    case AtomicExpr::AO__scoped_atomic_fetch_add:
+    case AtomicExpr::AO__scoped_atomic_fetch_sub:
+    case AtomicExpr::AO__scoped_atomic_fetch_and:
+    case AtomicExpr::AO__scoped_atomic_fetch_or:
+    case AtomicExpr::AO__scoped_atomic_fetch_xor:
       if (!isSupportedMMIXAtomicRMWType(E->getValueType()))
         return diagnoseAtomicOperation(E->getExprLoc(), E->getOpAsString());
       break;
@@ -726,9 +741,27 @@ public:
                             QualType ReturnType) const override;
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGenModule &CGM) const override;
+  StringRef getLLVMSyncScopeStr(const LangOptions &LangOpts, SyncScope Scope,
+                                llvm::AtomicOrdering Ordering) const override;
 };
 
 } // namespace
+
+StringRef MMIXTargetCodeGenInfo::getLLVMSyncScopeStr(
+    const LangOptions &LangOpts, SyncScope Scope,
+    llvm::AtomicOrdering Ordering) const {
+  switch (Scope) {
+  case SyncScope::SystemScope:
+  case SyncScope::DeviceScope:
+  case SyncScope::WorkgroupScope:
+  case SyncScope::ClusterScope:
+  case SyncScope::WavefrontScope:
+  case SyncScope::SingleScope:
+    return "";
+  default:
+    return TargetCodeGenInfo::getLLVMSyncScopeStr(LangOpts, Scope, Ordering);
+  }
+}
 
 void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
                                                 llvm::GlobalValue *,
