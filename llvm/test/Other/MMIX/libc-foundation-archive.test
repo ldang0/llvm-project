@@ -17,7 +17,7 @@
 # RUN:   FileCheck %s --check-prefix=LIBM-MEMBERS
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 47
+# RUN:   grep 'Machine: EM_MMIX' | count 62
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -66,9 +66,24 @@
 # LIBC-MEMBERS-NEXT: memcpy.cpp.o
 # LIBC-MEMBERS-NEXT: memmove.cpp.o
 # LIBC-MEMBERS-NEXT: memset.cpp.o
+# LIBC-MEMBERS-NEXT: strcat.cpp.o
+# LIBC-MEMBERS-NEXT: strchr.cpp.o
 # LIBC-MEMBERS-NEXT: strcmp.cpp.o
-# LIBC-MEMBERS-NEXT: strncmp.cpp.o
+# LIBC-MEMBERS-NEXT: strcoll.cpp.o
+# LIBC-MEMBERS-NEXT: strcpy.cpp.o
+# LIBC-MEMBERS-NEXT: strcspn.cpp.o
+# LIBC-MEMBERS-NEXT: error_to_string.cpp.o
+# LIBC-MEMBERS-NEXT: strerror.cpp.o
 # LIBC-MEMBERS-NEXT: strlen.cpp.o
+# LIBC-MEMBERS-NEXT: strncat.cpp.o
+# LIBC-MEMBERS-NEXT: strncmp.cpp.o
+# LIBC-MEMBERS-NEXT: strncpy.cpp.o
+# LIBC-MEMBERS-NEXT: strpbrk.cpp.o
+# LIBC-MEMBERS-NEXT: strrchr.cpp.o
+# LIBC-MEMBERS-NEXT: strspn.cpp.o
+# LIBC-MEMBERS-NEXT: strstr.cpp.o
+# LIBC-MEMBERS-NEXT: strtok.cpp.o
+# LIBC-MEMBERS-NEXT: strxfrm.cpp.o
 
 # LIBM-MEMBERS: copysign.cpp.o
 # LIBM-MEMBERS-NEXT: copysignf.cpp.o

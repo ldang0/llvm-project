@@ -44,9 +44,23 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.string.memcpy
     libc.src.string.memmove
     libc.src.string.memset
+    libc.src.string.strcat
+    libc.src.string.strchr
     libc.src.string.strcmp
-    libc.src.string.strncmp
+    libc.src.string.strcoll
+    libc.src.string.strcpy
+    libc.src.string.strcspn
+    libc.src.string.strerror
     libc.src.string.strlen
+    libc.src.string.strncat
+    libc.src.string.strncmp
+    libc.src.string.strncpy
+    libc.src.string.strpbrk
+    libc.src.string.strrchr
+    libc.src.string.strspn
+    libc.src.string.strstr
+    libc.src.string.strtok
+    libc.src.string.strxfrm
 )
 
 set(TARGET_LIBC_PLATFORM_ENTRYPOINTS
