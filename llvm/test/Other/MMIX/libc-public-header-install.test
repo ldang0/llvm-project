@@ -1,0 +1,90 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t.dir && split-file %s %t.dir
+# RUN: cmake -S %S/../../../../runtimes -B %t.dir/build -G Ninja \
+# RUN:   -DLLVM_ENABLE_RUNTIMES=libc -DCMAKE_C_COMPILER=clang \
+# RUN:   -DCMAKE_CXX_COMPILER=clang++ \
+# RUN:   -DCMAKE_C_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_CXX_COMPILER_TARGET=mmix-unknown-unknown \
+# RUN:   -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+# RUN:   -DLLVM_DEFAULT_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_LIBC_FULL_BUILD=ON -DLIBC_TARGET_TRIPLE=mmix-unknown-unknown \
+# RUN:   -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
+# RUN:   -DLIBC_ENABLE_USE_BY_CLANG=ON \
+# RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/install -DCMAKE_BUILD_TYPE=Release
+# RUN: ninja -C %t.dir/build -j 4 install-libc-headers
+# RUN: find %t.dir/install/include/mmix-unknown-unknown -maxdepth 1 \
+# RUN:   -type f -printf '%f\n' | sort | count 20
+# RUN: find %t.dir/install/include/mmix-unknown-unknown -maxdepth 1 \
+# RUN:   -type f -printf '%f\n' | sort | FileCheck %s --check-prefix=HEADERS
+# RUN: not test -e %t.dir/install/include/mmix-unknown-unknown/threads.h
+# RUN: not grep -RE '(/home/|/tmp/|[A-Za-z]:\\)' \
+# RUN:   %t.dir/install/include/mmix-unknown-unknown
+# RUN: clang --target=mmix-unknown-unknown -std=c17 -ffreestanding -nostdinc \
+# RUN:   -isystem %S/../../../../clang/lib/Headers \
+# RUN:   -isystem %t.dir/install/include/mmix-unknown-unknown \
+# RUN:   -fsyntax-only %t.dir/installed.c
+# RUN: clang --target=mmix-unknown-elf -std=c17 -ffreestanding -nostdinc \
+# RUN:   -isystem %S/../../../../clang/lib/Headers \
+# RUN:   -isystem %t.dir/install/include/mmix-unknown-unknown \
+# RUN:   -fsyntax-only %t.dir/installed.c
+
+# HEADERS:      __llvm-libc-common.h
+# HEADERS-NEXT: assert.h
+# HEADERS-NEXT: ctype.h
+# HEADERS-NEXT: errno.h
+# HEADERS-NEXT: float.h
+# HEADERS-NEXT: inttypes.h
+# HEADERS-NEXT: limits.h
+# HEADERS-NEXT: locale.h
+# HEADERS-NEXT: math.h
+# HEADERS-NEXT: setjmp.h
+# HEADERS-NEXT: signal.h
+# HEADERS-NEXT: stdint.h
+# HEADERS-NEXT: stdio.h
+# HEADERS-NEXT: stdlib.h
+# HEADERS-NEXT: string.h
+# HEADERS-NEXT: strings.h
+# HEADERS-NEXT: time.h
+# HEADERS-NEXT: uchar.h
+# HEADERS-NEXT: wchar.h
+# HEADERS-NEXT: wctype.h
+
+#--- installed.c
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <float.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <locale.h>
+#include <math.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <uchar.h>
+#include <wchar.h>
+#include <wctype.h>
+
+#define SAME_TYPE(T, U) __builtin_types_compatible_p(T, U)
+
+_Static_assert(SAME_TYPE(size_t, unsigned long), "size_t");
+_Static_assert(SAME_TYPE(ptrdiff_t, long), "ptrdiff_t");
+_Static_assert(SAME_TYPE(intmax_t, long), "intmax_t");
+_Static_assert(sizeof(jmp_buf) == 40 && _Alignof(jmp_buf) == 8, "jmp_buf");
+_Static_assert(SAME_TYPE(sig_atomic_t, int), "sig_atomic_t");
+_Static_assert(SIGINT == 2 && SIGILL == 4 && SIGABRT == 6, "signals");
+_Static_assert(SIGFPE == 8 && SIGSEGV == 11 && SIGTERM == 15, "signals");
+_Static_assert(SAME_TYPE(clock_t, long) && sizeof(time_t) == 8, "time types");
+_Static_assert(sizeof(mbstate_t) == 8 && _Alignof(mbstate_t) == 4,
+               "multibyte state");
+_Static_assert(sizeof(wchar_t) == 4 && sizeof(wint_t) == 4, "wide types");
+
+bool header_probe(void) { return EOF < 0 && WEOF != 0; }

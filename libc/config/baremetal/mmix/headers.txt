@@ -1,12 +1,22 @@
 set(TARGET_PUBLIC_HEADERS
+    libc.include.assert
     libc.include.ctype
     libc.include.errno
     libc.include.float
     libc.include.inttypes
     libc.include.limits
+    libc.include.locale
     libc.include.math
+    libc.include.setjmp
+    libc.include.signal
     libc.include.stdint
+    libc.include.stdio
     libc.include.stdlib
     libc.include.string
+    # Required by LLVM libc's generated string.h for compatibility only.
     libc.include.strings
+    libc.include.time
+    libc.include.uchar
+    libc.include.wchar
+    libc.include.wctype
 )

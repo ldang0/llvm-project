@@ -36,6 +36,10 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
 endif()
 
+if(LIBC_TARGET_ARCHITECTURE STREQUAL "mmix")
+  add_subdirectory(mmix)
+endif()
+
 add_macro_header(
   annex_k_macros
   HDR
@@ -195,10 +199,16 @@ add_macro_header(
     sched-macros.h
 )
 
+set(signal_macro_deps)
+if(TARGET libc.include.llvm-libc-macros.mmix.signal_macros)
+  list(APPEND signal_macro_deps .mmix.signal_macros)
+endif()
 add_macro_header(
   signal_macros
   HDR
     signal-macros.h
+  DEPENDS
+    ${signal_macro_deps}
 )
 
 add_macro_header(

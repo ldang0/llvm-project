@@ -5,6 +5,9 @@
 # RUN:   -P %t/check-config.cmake
 # RUN: mkdir -p %t/include
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/assert.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/assert.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/ctype.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/ctype.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
@@ -20,11 +23,23 @@
 # RUN:   -o %t/include/limits.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/limits.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/locale.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/locale.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/math.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/math.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/setjmp.h --write-if-changed -e setjmp -e longjmp \
+# RUN:   %S/../../../../libc/include/setjmp.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/signal.h --write-if-changed -e signal -e raise \
+# RUN:   %S/../../../../libc/include/signal.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/stdint.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/stdint.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/stdio.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/stdio.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/stdlib.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/stdlib.yaml
@@ -32,8 +47,17 @@
 # RUN:   -o %t/include/string.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/string.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
-# RUN:   -o %t/include/strings.h --write-if-changed -e __mmix_header_probe__ \
-# RUN:   %S/../../../../libc/include/strings.yaml
+# RUN:   -o %t/include/time.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/time.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/uchar.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/uchar.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/wchar.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/wchar.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/wctype.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/wctype.yaml
 # RUN: not grep -RE '(/home/|/tmp/|[A-Za-z]:\\)' %t/include
 # RUN: clang --target=mmix-unknown-unknown -std=c17 -ffreestanding -nostdinc \
 # RUN:   -isystem %S/../../../../clang/lib/Headers -I %t/include \
@@ -45,34 +69,52 @@
 #--- check-config.cmake
 include(${MMIX_HEADERS})
 set(expected_headers
+    libc.include.assert
     libc.include.ctype
     libc.include.errno
     libc.include.float
     libc.include.inttypes
     libc.include.limits
+    libc.include.locale
     libc.include.math
+    libc.include.setjmp
+    libc.include.signal
     libc.include.stdint
+    libc.include.stdio
     libc.include.stdlib
     libc.include.string
-    libc.include.strings)
+    libc.include.strings
+    libc.include.time
+    libc.include.uchar
+    libc.include.wchar
+    libc.include.wctype)
 if(NOT TARGET_PUBLIC_HEADERS STREQUAL expected_headers)
   message(FATAL_ERROR
     "unexpected MMIX public headers: ${TARGET_PUBLIC_HEADERS}")
 endif()
 
 #--- properties.c
+#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <locale.h>
 #include <math.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <uchar.h>
+#include <wchar.h>
+#include <wctype.h>
 
 #define SAME_TYPE(T, U) __builtin_types_compatible_p(T, U)
 
@@ -113,6 +155,21 @@ _Static_assert(offsetof(struct OffsetProbe, value) == 8, "offsetof");
 _Static_assert(sizeof(div_t) == 8 && _Alignof(div_t) == 4, "div_t");
 _Static_assert(sizeof(ldiv_t) == 16 && _Alignof(ldiv_t) == 8, "ldiv_t");
 _Static_assert(sizeof(lldiv_t) == 16 && _Alignof(lldiv_t) == 8, "lldiv_t");
+_Static_assert(sizeof(jmp_buf) == 40 && _Alignof(jmp_buf) == 8, "jmp_buf");
+_Static_assert(SAME_TYPE(sig_atomic_t, int), "sig_atomic_t");
+_Static_assert(SIGINT == 2 && SIGILL == 4 && SIGABRT == 6, "signals");
+_Static_assert(SIGFPE == 8 && SIGSEGV == 11 && SIGTERM == 15, "signals");
+_Static_assert(SAME_TYPE(clock_t, long) && sizeof(time_t) == 8, "time types");
+_Static_assert(sizeof(mbstate_t) == 8 && _Alignof(mbstate_t) == 4,
+               "multibyte state");
+_Static_assert(sizeof(wchar_t) == 4 && sizeof(wint_t) == 4, "wide types");
+
+typedef void (*signal_handler_t)(int);
+static int (*const setjmp_declaration)(jmp_buf) = setjmp;
+static void (*const longjmp_declaration)(jmp_buf, int) = longjmp;
+static signal_handler_t (*const signal_declaration)(int, signal_handler_t) =
+    signal;
+static int (*const raise_declaration)(int) = raise;
 
 static long read_variadic(int ignored, ...) {
   va_list args;

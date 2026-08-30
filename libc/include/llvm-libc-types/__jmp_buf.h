@@ -60,6 +60,13 @@ typedef struct {
 #if __ARM_FP
   long fopaque[8]; // d8-d15
 #endif
+#elif defined(__mmix__)
+  // The GNU MMIX ABI context used by the target's setjmp and longjmp.
+  __UINT64_TYPE__ frame_pointer;
+  __UINT64_TYPE__ return_address;
+  __UINT64_TYPE__ stack_pointer;
+  __UINT64_TYPE__ register_stack_offset;
+  __UINT64_TYPE__ return_value;
 #else
 #error "__jmp_buf not available for your target architecture."
 #endif
