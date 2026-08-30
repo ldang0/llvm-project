@@ -1,0 +1,88 @@
+add_entrypoint_object(
+  standard_streams
+  SRCS
+    standard_streams.c
+  DEPENDS
+    libc.hdr.types.FILE
+)
+
+add_entrypoint_object(
+  character_output
+  SRCS
+    character_output.cpp
+  DEPENDS
+    libc.hdr.stdio_macros
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+)
+
+add_entrypoint_object(
+  stream_status
+  SRCS
+    stream_status.cpp
+  DEPENDS
+    libc.hdr.stdio_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.common
+)
+
+add_entrypoint_object(
+  ungetc
+  SRCS
+    ungetc.cpp
+  DEPENDS
+    libc.hdr.stdio_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.common
+)
+
+add_entrypoint_object(
+  block_io
+  SRCS
+    block_io.cpp
+  DEPENDS
+    libc.hdr.errno_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.osutil
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+)
+
+add_entrypoint_object(
+  file_stream
+  SRCS
+    file_stream.cpp
+  DEPENDS
+    libc.hdr.errno_macros
+    libc.hdr.stdio_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+)
+
+add_entrypoint_object(
+  buffering
+  SRCS
+    buffering.cpp
+  DEPENDS
+    libc.hdr.errno_macros
+    libc.hdr.stdio_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+)
+
+add_entrypoint_object(
+  unavailable_file_operations
+  SRCS
+    unavailable_file_operations.cpp
+  DEPENDS
+    libc.hdr.errno_macros
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+)

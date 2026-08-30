@@ -29,7 +29,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 97
+# RUN:   grep 'Machine: EM_MMIX' | count 110
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -102,6 +102,19 @@
 # LIBC-MEMBERS-NEXT: malloc.cpp.o
 # LIBC-MEMBERS-NEXT: malloc_usable_size.cpp.o
 # LIBC-MEMBERS-NEXT: realloc.cpp.o
+# LIBC-MEMBERS-NEXT: standard_streams.c.o
+# LIBC-MEMBERS-NEXT: file_internal.cpp.o
+# LIBC-MEMBERS-NEXT: fgetc.cpp.o
+# LIBC-MEMBERS-NEXT: fgets.cpp.o
+# LIBC-MEMBERS-NEXT: fputs.cpp.o
+# LIBC-MEMBERS-NEXT: getc.cpp.o
+# LIBC-MEMBERS-NEXT: character_output.cpp.o
+# LIBC-MEMBERS-NEXT: stream_status.cpp.o
+# LIBC-MEMBERS-NEXT: ungetc.cpp.o
+# LIBC-MEMBERS-NEXT: block_io.cpp.o
+# LIBC-MEMBERS-NEXT: file_stream.cpp.o
+# LIBC-MEMBERS-NEXT: buffering.cpp.o
+# LIBC-MEMBERS-NEXT: unavailable_file_operations.cpp.o
 # LIBC-MEMBERS-NEXT: mbrlen.cpp.o
 # LIBC-MEMBERS-NEXT: mbrtowc.cpp.o
 # LIBC-MEMBERS-NEXT: mbsinit.cpp.o
@@ -171,6 +184,34 @@
 # SELECTED-SYMBOLS-DAG: T wcrtomb
 # SELECTED-SYMBOLS-DAG: T wcsrtombs
 # SELECTED-SYMBOLS-DAG: T wctomb
+# SELECTED-SYMBOLS-DAG: T clearerr
+# SELECTED-SYMBOLS-DAG: T fclose
+# SELECTED-SYMBOLS-DAG: T feof
+# SELECTED-SYMBOLS-DAG: T ferror
+# SELECTED-SYMBOLS-DAG: T fflush
+# SELECTED-SYMBOLS-DAG: T fgetc
+# SELECTED-SYMBOLS-DAG: T fgets
+# SELECTED-SYMBOLS-DAG: T fopen
+# SELECTED-SYMBOLS-DAG: T fputc
+# SELECTED-SYMBOLS-DAG: T fputs
+# SELECTED-SYMBOLS-DAG: T fread
+# SELECTED-SYMBOLS-DAG: T fseek
+# SELECTED-SYMBOLS-DAG: T ftell
+# SELECTED-SYMBOLS-DAG: T fwrite
+# SELECTED-SYMBOLS-DAG: T getc
+# SELECTED-SYMBOLS-DAG: T getchar
+# SELECTED-SYMBOLS-DAG: T putc
+# SELECTED-SYMBOLS-DAG: T putchar
+# SELECTED-SYMBOLS-DAG: T puts
+# SELECTED-SYMBOLS-DAG: T remove
+# SELECTED-SYMBOLS-DAG: T rename
+# SELECTED-SYMBOLS-DAG: T rewind
+# SELECTED-SYMBOLS-DAG: T setbuf
+# SELECTED-SYMBOLS-DAG: T setvbuf
+# SELECTED-SYMBOLS-DAG: D stderr
+# SELECTED-SYMBOLS-DAG: D stdin
+# SELECTED-SYMBOLS-DAG: D stdout
+# SELECTED-SYMBOLS-DAG: T ungetc
 
 # LIBM-MEMBERS: copysign.cpp.o
 # LIBM-MEMBERS-NEXT: copysignf.cpp.o

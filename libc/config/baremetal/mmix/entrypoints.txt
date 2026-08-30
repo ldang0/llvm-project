@@ -67,6 +67,20 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.malloc_usable_size
     libc.src.stdlib.realloc
 
+    # stdio.h entrypoints
+    libc.src.stdio.baremetal.mmix.standard_streams
+    libc.src.stdio.fgetc
+    libc.src.stdio.fgets
+    libc.src.stdio.fputs
+    libc.src.stdio.getc
+    libc.src.stdio.baremetal.mmix.character_output
+    libc.src.stdio.baremetal.mmix.stream_status
+    libc.src.stdio.baremetal.mmix.ungetc
+    libc.src.stdio.baremetal.mmix.block_io
+    libc.src.stdio.baremetal.mmix.file_stream
+    libc.src.stdio.baremetal.mmix.buffering
+    libc.src.stdio.baremetal.mmix.unavailable_file_operations
+
     # wchar.h entrypoints
     libc.src.wchar.mbrlen
     libc.src.wchar.mbrtowc

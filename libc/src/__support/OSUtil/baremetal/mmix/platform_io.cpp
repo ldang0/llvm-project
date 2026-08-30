@@ -17,11 +17,14 @@ namespace LIBC_NAMESPACE_DECL {
 
 extern "C" {
 __llvm_libc_stdio_cookie __llvm_libc_stdin_cookie = {
-    0, internal::mmix::PlatformFileMode::TEXT_READ, true, false, false};
+    0,     internal::mmix::PlatformFileMode::TEXT_READ,           true,  false,
+    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, false, 0};
 __llvm_libc_stdio_cookie __llvm_libc_stdout_cookie = {
-    1, internal::mmix::PlatformFileMode::TEXT_WRITE, true, false, false};
+    1,     internal::mmix::PlatformFileMode::TEXT_WRITE,          true,  false,
+    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, false, 0};
 __llvm_libc_stdio_cookie __llvm_libc_stderr_cookie = {
-    2, internal::mmix::PlatformFileMode::TEXT_WRITE, true, false, false};
+    2,     internal::mmix::PlatformFileMode::TEXT_WRITE,          true,  false,
+    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, false, 0};
 }
 
 namespace {
@@ -121,6 +124,12 @@ LIBC_INLINE __INT64_TYPE__ fail_stream_io(__llvm_libc_stdio_cookie *stream,
   if (stream != nullptr)
     stream->error = true;
   return fail_io(error);
+}
+
+LIBC_INLINE void orient_byte(__llvm_libc_stdio_cookie *stream) {
+  if (stream->orientation ==
+      internal::mmix::PlatformStreamOrientation::UNORIENTED)
+    stream->orientation = internal::mmix::PlatformStreamOrientation::BYTE;
 }
 
 // The MMIX TRAP handle is an immediate, so each admitted runtime handle must
@@ -285,7 +294,11 @@ extern "C" int __llvm_libc_mmix_file_open(const char *path, unsigned mode) {
   if (!transport_open(handle, path, transport_mode(platform_mode)).succeeded())
     return fail(EIO);
 
-  file_slots[index] = {handle, platform_mode, true, false, false};
+  file_slots[index] = {
+      handle, platform_mode,
+      true,   false,
+      false,  internal::mmix::PlatformStreamOrientation::UNORIENTED,
+      false,  0};
   return static_cast<int>(handle);
 }
 
@@ -372,11 +385,15 @@ extern "C" int __llvm_libc_mmix_stream_flush(__llvm_libc_stdio_cookie *stream) {
 
 extern "C" int __llvm_libc_mmix_stream_close(__llvm_libc_stdio_cookie *stream) {
   stream = stream_for(stream);
-  if (!is_regular_stream(stream) || !stream->open)
+  if (stream == nullptr || !stream->open)
     return fail(EBADF);
   if (__llvm_libc_mmix_stream_flush(stream) != 0) {
     stream->error = true;
     return -1;
+  }
+  if (!is_regular_stream(stream)) {
+    stream->open = false;
+    return 0;
   }
   if (__llvm_libc_mmix_file_close(static_cast<int>(stream->handle)) != 0) {
     stream->error = true;
@@ -396,6 +413,7 @@ extern "C" int __llvm_libc_mmix_stream_seek(__llvm_libc_stdio_cookie *stream,
     return -1;
   }
   stream->eof = false;
+  stream->has_ungetc = false;
   return 0;
 }
 
@@ -432,6 +450,43 @@ __llvm_libc_mmix_stream_clearerr(__llvm_libc_stdio_cookie *stream) {
   stream->error = false;
 }
 
+extern "C" int
+__llvm_libc_mmix_stream_ungetc(int c, __llvm_libc_stdio_cookie *stream) {
+  stream = stream_for(stream);
+  if (stream == nullptr || !stream->open || !can_read(stream->mode) ||
+      c == -1 || stream->has_ungetc)
+    return -1;
+  orient_byte(stream);
+  stream->has_ungetc = true;
+  stream->ungetc_value = static_cast<unsigned char>(c);
+  stream->eof = false;
+  return static_cast<int>(stream->ungetc_value);
+}
+
+extern "C" int __llvm_libc_mmix_stream_flush_all() {
+  int result = 0;
+  if (__llvm_libc_mmix_stream_flush(&__llvm_libc_stdout_cookie) != 0)
+    result = -1;
+  if (__llvm_libc_mmix_stream_flush(&__llvm_libc_stderr_cookie) != 0)
+    result = -1;
+  for (unsigned index = 0; index != FILE_CAPACITY; ++index)
+    if (file_slots[index].open &&
+        __llvm_libc_mmix_stream_flush(&file_slots[index]) != 0)
+      result = -1;
+  return result;
+}
+
+extern "C" void __llvm_libc_mmix_stream_teardown() {
+  __llvm_libc_mmix_stream_flush_all();
+  for (unsigned index = 0; index != FILE_CAPACITY; ++index)
+    if (file_slots[index].open)
+      __llvm_libc_mmix_stream_close(&file_slots[index]);
+}
+
+extern "C" void __llvm_libc_stdio_teardown() {
+  __llvm_libc_mmix_stream_teardown();
+}
+
 extern "C" ssize_t __llvm_libc_stdio_read(void *cookie, char *buffer,
                                           size_t size) {
   __llvm_libc_stdio_cookie *stream = stream_for(cookie);
@@ -445,21 +500,37 @@ extern "C" ssize_t __llvm_libc_stdio_read(void *cookie, char *buffer,
     return static_cast<ssize_t>(-error);
   }
 
+  orient_byte(stream);
+  size_t prefix = 0;
+  if (size != 0 && stream->has_ungetc) {
+    buffer[0] = static_cast<char>(stream->ungetc_value);
+    stream->has_ungetc = false;
+    prefix = 1;
+    if (size == 1)
+      return 1;
+  }
+
   __INT64_TYPE__ count;
   if (stream == &__llvm_libc_stdin_cookie) {
-    TransferResult result = Semihosting::read<0>(buffer, size);
+    TransferResult result =
+        Semihosting::read<0>(buffer + prefix, size - prefix);
     if (!result.succeeded) {
       fail_stream_io(stream, EIO);
-      return static_cast<ssize_t>(-EIO);
+      return prefix == 0 ? static_cast<ssize_t>(-EIO)
+                         : static_cast<ssize_t>(prefix);
     }
-    count = static_cast<__INT64_TYPE__>(result.count);
+    count = static_cast<__INT64_TYPE__>(result.count + prefix);
   } else {
-    count = __llvm_libc_mmix_file_read(static_cast<int>(stream->handle), buffer,
-                                       size);
+    count = __llvm_libc_mmix_file_read(static_cast<int>(stream->handle),
+                                       buffer + prefix, size - prefix);
     if (count < 0) {
       stream->error = true;
-      return static_cast<ssize_t>(-process_errno);
+      return prefix == 0 ? static_cast<ssize_t>(-process_errno)
+                         : static_cast<ssize_t>(prefix);
     }
+    count += static_cast<__INT64_TYPE__>(prefix);
+    if (count < static_cast<__INT64_TYPE__>(size))
+      stream->eof = true;
   }
   if (size != 0 && count == 0)
     stream->eof = true;
@@ -478,6 +549,8 @@ extern "C" ssize_t __llvm_libc_stdio_write(void *cookie, const char *buffer,
     fail_stream_io(stream, error);
     return static_cast<ssize_t>(-error);
   }
+
+  orient_byte(stream);
 
   __INT64_TYPE__ count;
   if (stream == &__llvm_libc_stdout_cookie ||

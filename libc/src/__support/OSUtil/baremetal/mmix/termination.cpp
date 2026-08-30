@@ -14,10 +14,6 @@ extern "C" [[noreturn]] void __llvm_libc_exit(int status) {
   Semihosting::halt(static_cast<unsigned>(status));
 }
 
-// MMIX bare-metal stdio is currently unbuffered. Keep the teardown boundary
-// explicit so later buffered streams do not need to alter CRT sequencing.
-extern "C" void __llvm_libc_stdio_teardown() {}
-
 // Override compiler-rt's weak standalone loop when LLVM libc owns the process.
 extern "C" [[noreturn]] void __mmix_stack_chk_terminate() {
   Semihosting::halt(127);

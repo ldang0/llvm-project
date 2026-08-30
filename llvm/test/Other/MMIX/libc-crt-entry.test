@@ -124,6 +124,34 @@
 # LIBC-SYMBOLS-DAG: T malloc
 # LIBC-SYMBOLS-DAG: T malloc_usable_size
 # LIBC-SYMBOLS-DAG: T realloc
+# LIBC-SYMBOLS-DAG: T clearerr
+# LIBC-SYMBOLS-DAG: T fclose
+# LIBC-SYMBOLS-DAG: T feof
+# LIBC-SYMBOLS-DAG: T ferror
+# LIBC-SYMBOLS-DAG: T fflush
+# LIBC-SYMBOLS-DAG: T fgetc
+# LIBC-SYMBOLS-DAG: T fgets
+# LIBC-SYMBOLS-DAG: T fopen
+# LIBC-SYMBOLS-DAG: T fputc
+# LIBC-SYMBOLS-DAG: T fputs
+# LIBC-SYMBOLS-DAG: T fread
+# LIBC-SYMBOLS-DAG: T fseek
+# LIBC-SYMBOLS-DAG: T ftell
+# LIBC-SYMBOLS-DAG: T fwrite
+# LIBC-SYMBOLS-DAG: T getc
+# LIBC-SYMBOLS-DAG: T getchar
+# LIBC-SYMBOLS-DAG: T putc
+# LIBC-SYMBOLS-DAG: T putchar
+# LIBC-SYMBOLS-DAG: T puts
+# LIBC-SYMBOLS-DAG: T remove
+# LIBC-SYMBOLS-DAG: T rename
+# LIBC-SYMBOLS-DAG: T rewind
+# LIBC-SYMBOLS-DAG: T setbuf
+# LIBC-SYMBOLS-DAG: T setvbuf
+# LIBC-SYMBOLS-DAG: D stderr
+# LIBC-SYMBOLS-DAG: D stdin
+# LIBC-SYMBOLS-DAG: D stdout
+# LIBC-SYMBOLS-DAG: T ungetc
 
 # PLATFORM-MEMBERS: platform_io.cpp.o
 # PLATFORM-MEMBERS-NEXT: termination.cpp.o
@@ -141,9 +169,12 @@
 # PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_eof
 # PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_error
 # PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_flush
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_flush_all
 # PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_open
 # PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_seek
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_teardown
 # PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_tell
+# PLATFORM-SYMBOLS-DAG: T __llvm_libc_mmix_stream_ungetc
 # PLATFORM-SYMBOLS-DAG: D __llvm_libc_stderr_cookie
 # PLATFORM-SYMBOLS-DAG: D __llvm_libc_stdin_cookie
 # PLATFORM-SYMBOLS-DAG: D __llvm_libc_stdout_cookie
@@ -157,8 +188,6 @@
 # TERMINATION-LABEL: <__llvm_libc_exit>:
 # TERMINATION:       AND {{.*}}, r231, 0xff
 # TERMINATION:       TRAP 0x0, 0x0, 0x0
-# TERMINATION-LABEL: <__llvm_libc_stdio_teardown>:
-# TERMINATION:       POP
 # TERMINATION-LABEL: <__mmix_stack_chk_terminate>:
 # TERMINATION:       SETL {{.*}}, 0x7f
 # TERMINATION:       TRAP 0x0, 0x0, 0x0

@@ -1,3 +1,7 @@
+if(LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+  add_subdirectory(mmix)
+endif()
+
 add_object_library(
   file_internal
   SRCS

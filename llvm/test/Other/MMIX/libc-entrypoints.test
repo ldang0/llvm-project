@@ -67,6 +67,18 @@ set(expected_libc
     libc.src.stdlib.malloc
     libc.src.stdlib.malloc_usable_size
     libc.src.stdlib.realloc
+    libc.src.stdio.baremetal.mmix.standard_streams
+    libc.src.stdio.fgetc
+    libc.src.stdio.fgets
+    libc.src.stdio.fputs
+    libc.src.stdio.getc
+    libc.src.stdio.baremetal.mmix.character_output
+    libc.src.stdio.baremetal.mmix.stream_status
+    libc.src.stdio.baremetal.mmix.ungetc
+    libc.src.stdio.baremetal.mmix.block_io
+    libc.src.stdio.baremetal.mmix.file_stream
+    libc.src.stdio.baremetal.mmix.buffering
+    libc.src.stdio.baremetal.mmix.unavailable_file_operations
     libc.src.wchar.mbrlen
     libc.src.wchar.mbrtowc
     libc.src.wchar.mbsinit
@@ -131,7 +143,7 @@ endif()
 
 foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   if(NOT entrypoint MATCHES
-      "^libc[.]src[.](ctype|inttypes|locale|stdlib|string|wchar|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
+      "^libc[.]src[.](ctype|inttypes|locale|stdlib|stdio|string|wchar|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
     message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
   endif()
 endforeach()
