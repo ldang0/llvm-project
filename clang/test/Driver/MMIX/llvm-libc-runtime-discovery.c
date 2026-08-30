@@ -115,6 +115,20 @@
 // RUN:   %s -o %t.dir/output 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-BUILTINS \
 // RUN:       --implicit-check-not=ld.lld
+// RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+// RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   %s -o %t.dir/output 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=MISSING-ATOMIC \
+// RUN:       --implicit-check-not=ld.lld
+// RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
+// RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   %s -o %t.dir/output 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=MISSING-STACK-PROTECTOR \
+// RUN:       --implicit-check-not=ld.lld
 
 // LINK: "{{.*}}ld.lld" "-m" "elf64mmix" "-static"
 // LINK-SAME: "-L[[LIBDIR:[^"]+]]"
@@ -148,5 +162,7 @@
 // MISSING-PLATFORM: error: no such file or directory: '{{.*}}lib{{/|\\}}mmix-unknown-unknown{{/|\\}}libmmixplatform.a'
 // MISSING-LIBM: error: no such file or directory: '{{.*}}lib{{/|\\}}mmix-unknown-unknown{{/|\\}}libm.a'
 // MISSING-BUILTINS: error: no such file or directory: '{{.*}}lib{{/|\\}}mmix-unknown-unknown{{/|\\}}libclang_rt.builtins.a'
+// MISSING-ATOMIC: error: no such file or directory: '{{.*}}lib{{/|\\}}mmix-unknown-unknown{{/|\\}}libclang_rt.atomic.a'
+// MISSING-STACK-PROTECTOR: error: no such file or directory: '{{.*}}lib{{/|\\}}mmix-unknown-unknown{{/|\\}}libclang_rt.stack_protector.a'
 
 int main(void) { return 0; }
