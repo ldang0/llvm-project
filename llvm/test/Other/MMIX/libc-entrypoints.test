@@ -23,6 +23,8 @@ set(expected_libc
     libc.src.ctype.toupper
     libc.src.locale.localeconv
     libc.src.locale.setlocale
+    libc.src.setjmp.longjmp
+    libc.src.setjmp.setjmp
     libc.src.inttypes.imaxabs
     libc.src.inttypes.imaxdiv
     libc.src.inttypes.strtoimax
@@ -206,7 +208,7 @@ endif()
 
 foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   if(NOT entrypoint MATCHES
-      "^libc[.]src[.](ctype|inttypes|locale|stdlib|stdio|string|time|wchar|wctype|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
+      "^libc[.]src[.](ctype|inttypes|locale|setjmp|stdlib|stdio|string|time|wchar|wctype|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
     message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
   endif()
 endforeach()

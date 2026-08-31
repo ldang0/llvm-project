@@ -66,7 +66,7 @@ typedef struct {
   __UINT64_TYPE__ return_address;
   __UINT64_TYPE__ stack_pointer;
   __UINT64_TYPE__ register_stack_offset;
-  __UINT64_TYPE__ return_value;
+  __UINT64_TYPE__ transfer_word;
 #else
 #error "__jmp_buf not available for your target architecture."
 #endif

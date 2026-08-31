@@ -19,6 +19,10 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.locale.localeconv
     libc.src.locale.setlocale
 
+    # setjmp.h entrypoints
+    libc.src.setjmp.longjmp
+    libc.src.setjmp.setjmp
+
     # inttypes.h entrypoints
     libc.src.inttypes.imaxabs
     libc.src.inttypes.imaxdiv
