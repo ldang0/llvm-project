@@ -1,12 +1,4 @@
 add_entrypoint_object(
-  standard_streams
-  SRCS
-    standard_streams.c
-  DEPENDS
-    libc.hdr.types.FILE
-)
-
-add_entrypoint_object(
   character_output
   SRCS
     character_output.cpp

@@ -32,7 +32,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 180
+# RUN:   grep 'Machine: EM_MMIX' | count 182
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -111,7 +111,9 @@
 # LIBC-MEMBERS-NEXT: malloc.cpp.o
 # LIBC-MEMBERS-NEXT: malloc_usable_size.cpp.o
 # LIBC-MEMBERS-NEXT: realloc.cpp.o
-# LIBC-MEMBERS-NEXT: standard_streams.c.o
+# LIBC-MEMBERS-NEXT: stderr.cpp.o
+# LIBC-MEMBERS-NEXT: stdin.cpp.o
+# LIBC-MEMBERS-NEXT: stdout.cpp.o
 # LIBC-MEMBERS-NEXT: file_internal.cpp.o
 # LIBC-MEMBERS-NEXT: fgetc.cpp.o
 # LIBC-MEMBERS-NEXT: fgets.cpp.o

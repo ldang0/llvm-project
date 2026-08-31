@@ -77,7 +77,9 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.stdlib.realloc
 
     # stdio.h entrypoints
-    libc.src.stdio.baremetal.mmix.standard_streams
+    libc.src.stdio.stderr
+    libc.src.stdio.stdin
+    libc.src.stdio.stdout
     libc.src.stdio.fgetc
     libc.src.stdio.fgets
     libc.src.stdio.fputs

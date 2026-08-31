@@ -72,7 +72,9 @@ set(expected_libc
     libc.src.stdlib.malloc
     libc.src.stdlib.malloc_usable_size
     libc.src.stdlib.realloc
-    libc.src.stdio.baremetal.mmix.standard_streams
+    libc.src.stdio.stderr
+    libc.src.stdio.stdin
+    libc.src.stdio.stdout
     libc.src.stdio.fgetc
     libc.src.stdio.fgets
     libc.src.stdio.fputs
