@@ -1,5 +1,9 @@
 ; RUN: llc -mtriple=mmix -verify-machineinstrs -stop-after=mmix-isel %s -o - | FileCheck %s --check-prefix=ISEL
 ; RUN: llc -mtriple=mmix -verify-machineinstrs -stop-after=prolog-epilog %s -o - | FileCheck %s --check-prefix=PEI
+; RUN: llc -mtriple=mmix -O0 -verify-machineinstrs -filetype=obj %s -o %t.o
+; RUN: llvm-objdump --no-print-imm-hex -dr %t.o | FileCheck %s --check-prefix=OBJ
+; RUN: llc -mtriple=mmix -O2 -verify-machineinstrs -filetype=obj %s -o %t.o
+; RUN: llvm-objdump --no-print-imm-hex -dr %t.o | FileCheck %s --check-prefix=OBJ
 
 target triple = "mmix"
 
@@ -8,6 +12,7 @@ declare i64 @i64_callee(i64)
 declare signext i8 @sext_callee(i8 signext)
 declare zeroext i32 @zext_callee(i32 zeroext)
 declare float @f32_callee(float)
+declare i16 @anyext_callee(i16)
 declare extern_weak void @weak_callee()
 declare double @many_callee(i64, i64, i64, i64, i64, i64, i64, i64,
                             i64, i64, i64, i64, i64, i64, i64, i64,
@@ -42,6 +47,10 @@ define i64 @call_i64(i64 %value) {
 ; ISEL-NEXT:  [[SEXT:%[0-9]+]]:{{[^ ]+}} = SRI killed [[SHIFTED]], 56
 ; ISEL:       $r231 = COPY [[SEXT]]
 ; ISEL:       DIRECT_CALL_STATE @sext_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
+; OBJ-LABEL: <call_signext>:
+; OBJ:       SLU r250, r231, 56
+; OBJ-NEXT:  SR r231, r250, 56
+; OBJ:       PUSHJ r31, 0
 define i64 @call_signext(i64 %value) {
   %narrow = trunc i64 %value to i8
   %result = call signext i8 @sext_callee(i8 signext %narrow)
@@ -53,6 +62,11 @@ define i64 @call_signext(i64 %value) {
 ; ISEL:       [[ZEXT:%[0-9]+]]:{{[^ ]+}} = AND
 ; ISEL:       $r231 = COPY [[ZEXT]]
 ; ISEL:       DIRECT_CALL_STATE @zext_callee, {{.*}}csr_mmix{{.*}}implicit $r254{{.*}}implicit $r231
+; OBJ-LABEL: <call_zeroext>:
+; OBJ:       SETL r250, 65535
+; OBJ-NEXT:  INCML r250, 65535
+; OBJ-NEXT:  AND r231, r231, r250
+; OBJ:       PUSHJ r31, 0
 define i64 @call_zeroext(i64 %value) {
   %narrow = trunc i64 %value to i32
   %result = call zeroext i32 @zext_callee(i32 zeroext %narrow)
@@ -68,6 +82,26 @@ define i64 @call_zeroext(i64 %value) {
 define float @call_f32(float %value) {
   %result = call float @f32_callee(float %value)
   ret float %result
+}
+
+; An unattributed raw LLVM narrow argument uses AExt. The caller preserves the
+; declared low bits without inventing C signedness, and the unextended result
+; is masked only when its consumer requests a zero extension.
+; ISEL-LABEL: name: call_anyext
+; ISEL:       $r231 = COPY %{{[0-9]+}}
+; ISEL:       DIRECT_CALL_STATE @anyext_callee, {{.*}}implicit $r231
+; ISEL:       [[RESULT:%[0-9]+]]:{{[^ ]+}} = COPY $r231
+; ISEL:       [[MASK:%[0-9]+]]:{{[^ ]+}} = LOAD_IMM64 65535
+; ISEL-NEXT:  %{{[0-9]+}}:{{[^ ]+}} = AND [[RESULT]], killed [[MASK]]
+; OBJ-LABEL: <call_anyext>:
+; OBJ:       PUSHJ r31, 0
+; OBJ:       SETL r250, 65535
+; OBJ-NEXT:  AND r231, r231, r250
+define i64 @call_anyext(i64 %value) {
+  %narrow = trunc i64 %value to i16
+  %result = call i16 @anyext_callee(i16 %narrow)
+  %wide = zext i16 %result to i64
+  ret i64 %wide
 }
 
 ; The first sixteen slots use r231-r246. Later slots occupy consecutive octas
