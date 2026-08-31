@@ -165,8 +165,7 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.time.asctime
     libc.src.time.difftime
     libc.src.time.baremetal.mmix.gmtime
-    # FIXME: Select strftime once MMIX lowers the ordinary LLVM trap used by
-    # the shared implementation.
+    libc.src.time.strftime
     # FIXME: Select clock, time, and timespec_get only with a platform clock;
     # localtime, ctime, and mktime additionally require a timezone contract.
 

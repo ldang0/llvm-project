@@ -20,7 +20,7 @@
 # RUN:   FileCheck %s --check-prefix=SELECTED-SYMBOLS
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   not grep -E ' T (clock|ctime|localtime|mktime|strftime|time|timespec_get)$'
+# RUN:   not grep -E ' T (clock|ctime|localtime|mktime|time|timespec_get)$'
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E '__(atomic|scoped_atomic)|__(div|mod|mul|udiv|umod)ti3'
@@ -32,7 +32,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 182
+# RUN:   grep 'Machine: EM_MMIX' | count 183
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -196,6 +196,7 @@
 # LIBC-MEMBERS-NEXT: asctime.cpp.o
 # LIBC-MEMBERS-NEXT: difftime.cpp.o
 # LIBC-MEMBERS-NEXT: gmtime.cpp.o
+# LIBC-MEMBERS-NEXT: strftime.cpp.o
 # LIBC-MEMBERS-NEXT: memchr.cpp.o
 # LIBC-MEMBERS-NEXT: memcmp.cpp.o
 # LIBC-MEMBERS-NEXT: memcpy.cpp.o
@@ -328,6 +329,7 @@
 # SELECTED-SYMBOLS-DAG: T asctime
 # SELECTED-SYMBOLS-DAG: T difftime
 # SELECTED-SYMBOLS-DAG: T gmtime
+# SELECTED-SYMBOLS-DAG: T strftime
 # SELECTED-SYMBOLS-DAG: T clearerr
 # SELECTED-SYMBOLS-DAG: T fclose
 # SELECTED-SYMBOLS-DAG: T feof
