@@ -27,6 +27,12 @@
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E ' U (fegetround|fesetround|feraiseexcept|fetestexcept)$'
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
+# RUN:   grep 'libc_errno' | sort -u | count 1
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
+# RUN:   not grep -E ' U (fegetround|fesetround|feraiseexcept|fetestexcept)$'
 # RUN: llvm-readobj --sections --relocations \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
@@ -35,7 +41,7 @@
 # RUN:   grep 'Machine: EM_MMIX' | count 183
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 4
+# RUN:   grep 'Machine: EM_MMIX' | count 131
 
 # LIBC-MEMBERS: isalnum.cpp.o
 # LIBC-MEMBERS-NEXT: isalpha.cpp.o
@@ -375,7 +381,134 @@
 # SELECTED-SYMBOLS-DAG: T vsprintf
 # SELECTED-SYMBOLS-DAG: T vsscanf
 
-# LIBM-MEMBERS: copysign.cpp.o
-# LIBM-MEMBERS-NEXT: copysignf.cpp.o
-# LIBM-MEMBERS-NEXT: fabs.cpp.o
+# LIBM-MEMBERS: copysignf.cpp.o
+# LIBM-MEMBERS-NEXT: copysign.cpp.o
+# LIBM-MEMBERS-NEXT: copysignl.cpp.o
 # LIBM-MEMBERS-NEXT: fabsf.cpp.o
+# LIBM-MEMBERS-NEXT: fabs.cpp.o
+# LIBM-MEMBERS-NEXT: fabsl.cpp.o
+# LIBM-MEMBERS-NEXT: fdimf.cpp.o
+# LIBM-MEMBERS-NEXT: fdim.cpp.o
+# LIBM-MEMBERS-NEXT: fdiml.cpp.o
+# LIBM-MEMBERS-NEXT: fmaxf.cpp.o
+# LIBM-MEMBERS-NEXT: fmax.cpp.o
+# LIBM-MEMBERS-NEXT: fmaxl.cpp.o
+# LIBM-MEMBERS-NEXT: fminf.cpp.o
+# LIBM-MEMBERS-NEXT: fmin.cpp.o
+# LIBM-MEMBERS-NEXT: fminl.cpp.o
+# LIBM-MEMBERS-NEXT: nanf.cpp.o
+# LIBM-MEMBERS-NEXT: nan.cpp.o
+# LIBM-MEMBERS-NEXT: nanl.cpp.o
+# LIBM-MEMBERS-NEXT: nextafterf.cpp.o
+# LIBM-MEMBERS-NEXT: nextafter.cpp.o
+# LIBM-MEMBERS-NEXT: nextafterl.cpp.o
+# LIBM-MEMBERS-NEXT: nexttowardf.cpp.o
+# LIBM-MEMBERS-NEXT: nexttoward.cpp.o
+# LIBM-MEMBERS-NEXT: nexttowardl.cpp.o
+# LIBM-MEMBERS-NEXT: frexpf.cpp.o
+# LIBM-MEMBERS-NEXT: frexp.cpp.o
+# LIBM-MEMBERS-NEXT: frexpl.cpp.o
+# LIBM-MEMBERS-NEXT: ilogbf.cpp.o
+# LIBM-MEMBERS-NEXT: ilogb.cpp.o
+# LIBM-MEMBERS-NEXT: ilogbl.cpp.o
+# LIBM-MEMBERS-NEXT: ldexpf.cpp.o
+# LIBM-MEMBERS-NEXT: ldexp.cpp.o
+# LIBM-MEMBERS-NEXT: ldexpl.cpp.o
+# LIBM-MEMBERS-NEXT: logbf.cpp.o
+# LIBM-MEMBERS-NEXT: logb.cpp.o
+# LIBM-MEMBERS-NEXT: logbl.cpp.o
+# LIBM-MEMBERS-NEXT: modff.cpp.o
+# LIBM-MEMBERS-NEXT: modf.cpp.o
+# LIBM-MEMBERS-NEXT: modfl.cpp.o
+# LIBM-MEMBERS-NEXT: scalblnf.cpp.o
+# LIBM-MEMBERS-NEXT: scalbln.cpp.o
+# LIBM-MEMBERS-NEXT: scalblnl.cpp.o
+# LIBM-MEMBERS-NEXT: scalbnf.cpp.o
+# LIBM-MEMBERS-NEXT: scalbn.cpp.o
+# LIBM-MEMBERS-NEXT: scalbnl.cpp.o
+# LIBM-MEMBERS-NEXT: fmodf.cpp.o
+# LIBM-MEMBERS-NEXT: fmod.cpp.o
+# LIBM-MEMBERS-NEXT: fmodl.cpp.o
+# LIBM-MEMBERS-NEXT: remainderf.cpp.o
+# LIBM-MEMBERS-NEXT: remainder.cpp.o
+# LIBM-MEMBERS-NEXT: remainderl.cpp.o
+# LIBM-MEMBERS-NEXT: remquof.cpp.o
+# LIBM-MEMBERS-NEXT: remquo.cpp.o
+# LIBM-MEMBERS-NEXT: remquol.cpp.o
+# LIBM-MEMBERS-NEXT: ceilf.cpp.o
+# LIBM-MEMBERS-NEXT: ceil.cpp.o
+# LIBM-MEMBERS-NEXT: ceill.cpp.o
+# LIBM-MEMBERS-NEXT: floorf.cpp.o
+# LIBM-MEMBERS-NEXT: floor.cpp.o
+# LIBM-MEMBERS-NEXT: floorl.cpp.o
+# LIBM-MEMBERS-NEXT: nearbyintf.cpp.o
+# LIBM-MEMBERS-NEXT: nearbyint.cpp.o
+# LIBM-MEMBERS-NEXT: nearbyintl.cpp.o
+# LIBM-MEMBERS-NEXT: rintf.cpp.o
+# LIBM-MEMBERS-NEXT: rint.cpp.o
+# LIBM-MEMBERS-NEXT: rintl.cpp.o
+# LIBM-MEMBERS-NEXT: lrintf.cpp.o
+# LIBM-MEMBERS-NEXT: lrint.cpp.o
+# LIBM-MEMBERS-NEXT: lrintl.cpp.o
+# LIBM-MEMBERS-NEXT: llrintf.cpp.o
+# LIBM-MEMBERS-NEXT: llrint.cpp.o
+# LIBM-MEMBERS-NEXT: llrintl.cpp.o
+# LIBM-MEMBERS-NEXT: roundf.cpp.o
+# LIBM-MEMBERS-NEXT: round.cpp.o
+# LIBM-MEMBERS-NEXT: roundl.cpp.o
+# LIBM-MEMBERS-NEXT: lroundf.cpp.o
+# LIBM-MEMBERS-NEXT: lround.cpp.o
+# LIBM-MEMBERS-NEXT: lroundl.cpp.o
+# LIBM-MEMBERS-NEXT: llroundf.cpp.o
+# LIBM-MEMBERS-NEXT: llround.cpp.o
+# LIBM-MEMBERS-NEXT: llroundl.cpp.o
+# LIBM-MEMBERS-NEXT: truncf.cpp.o
+# LIBM-MEMBERS-NEXT: trunc.cpp.o
+# LIBM-MEMBERS-NEXT: truncl.cpp.o
+# LIBM-MEMBERS-NEXT: cbrtf.cpp.o
+# LIBM-MEMBERS-NEXT: cbrt.cpp.o
+# LIBM-MEMBERS-NEXT: hypotf.cpp.o
+# LIBM-MEMBERS-NEXT: hypot.cpp.o
+# LIBM-MEMBERS-NEXT: powf.cpp.o
+# LIBM-MEMBERS-NEXT: pow.cpp.o
+# LIBM-MEMBERS-NEXT: sqrtf.cpp.o
+# LIBM-MEMBERS-NEXT: sqrt.cpp.o
+# LIBM-MEMBERS-NEXT: sqrtl.cpp.o
+# LIBM-MEMBERS-NEXT: expf.cpp.o
+# LIBM-MEMBERS-NEXT: exp.cpp.o
+# LIBM-MEMBERS-NEXT: exp2f.cpp.o
+# LIBM-MEMBERS-NEXT: exp2.cpp.o
+# LIBM-MEMBERS-NEXT: expm1f.cpp.o
+# LIBM-MEMBERS-NEXT: expm1.cpp.o
+# LIBM-MEMBERS-NEXT: logf.cpp.o
+# LIBM-MEMBERS-NEXT: log.cpp.o
+# LIBM-MEMBERS-NEXT: log10f.cpp.o
+# LIBM-MEMBERS-NEXT: log10.cpp.o
+# LIBM-MEMBERS-NEXT: log1pf.cpp.o
+# LIBM-MEMBERS-NEXT: log1p.cpp.o
+# LIBM-MEMBERS-NEXT: log2f.cpp.o
+# LIBM-MEMBERS-NEXT: log2.cpp.o
+# LIBM-MEMBERS-NEXT: erff.cpp.o
+# LIBM-MEMBERS-NEXT: acosf.cpp.o
+# LIBM-MEMBERS-NEXT: acos.cpp.o
+# LIBM-MEMBERS-NEXT: asinf.cpp.o
+# LIBM-MEMBERS-NEXT: asin.cpp.o
+# LIBM-MEMBERS-NEXT: atanf.cpp.o
+# LIBM-MEMBERS-NEXT: atan.cpp.o
+# LIBM-MEMBERS-NEXT: atan2f.cpp.o
+# LIBM-MEMBERS-NEXT: atan2.cpp.o
+# LIBM-MEMBERS-NEXT: atan2l.cpp.o
+# LIBM-MEMBERS-NEXT: cosf.cpp.o
+# LIBM-MEMBERS-NEXT: cos.cpp.o
+# LIBM-MEMBERS-NEXT: sinf.cpp.o
+# LIBM-MEMBERS-NEXT: sin.cpp.o
+# LIBM-MEMBERS-NEXT: tanf.cpp.o
+# LIBM-MEMBERS-NEXT: tan.cpp.o
+# LIBM-MEMBERS-NEXT: acoshf.cpp.o
+# LIBM-MEMBERS-NEXT: asinhf.cpp.o
+# LIBM-MEMBERS-NEXT: atanhf.cpp.o
+# LIBM-MEMBERS-NEXT: coshf.cpp.o
+# LIBM-MEMBERS-NEXT: sinhf.cpp.o
+# LIBM-MEMBERS-NEXT: tanhf.cpp.o
+# LIBM-MEMBERS-NEXT: fmaf.cpp.o
+# LIBM-MEMBERS-NEXT: fma.cpp.o
