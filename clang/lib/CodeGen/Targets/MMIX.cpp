@@ -772,9 +772,16 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
 
   if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
       !VD->hasConstantInitialization()) {
-    diagnoseUnsupportedMMIXCXXFeature(CGM, VD->getLocation(),
-                                      "dynamic initialization");
-    return;
+    // Clang can fold pointer reinterpret casts into static relocations even
+    // though C++ does not classify them as constant initialization.
+    Expr::EvalResult Result;
+    if (!VD->getType()->isPointerType() ||
+        !VD->getInit()->EvaluateAsRValue(Result, CGM.getContext()) ||
+        Result.HasSideEffects) {
+      diagnoseUnsupportedMMIXCXXFeature(CGM, VD->getLocation(),
+                                        "dynamic initialization");
+      return;
+    }
   }
 
   diagnoseUnsupportedMMIXObject(CGM, VD->getLocation(), VD->getType());
