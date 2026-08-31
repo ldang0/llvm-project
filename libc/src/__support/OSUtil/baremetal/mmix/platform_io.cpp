@@ -17,14 +17,14 @@ namespace LIBC_NAMESPACE_DECL {
 
 extern "C" {
 __llvm_libc_stdio_cookie __llvm_libc_stdin_cookie = {
-    0,     internal::mmix::PlatformFileMode::TEXT_READ,           true,  false,
-    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, false, 0};
+    0,     internal::mmix::PlatformFileMode::TEXT_READ,           true, false,
+    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, 0,    {}};
 __llvm_libc_stdio_cookie __llvm_libc_stdout_cookie = {
-    1,     internal::mmix::PlatformFileMode::TEXT_WRITE,          true,  false,
-    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, false, 0};
+    1,     internal::mmix::PlatformFileMode::TEXT_WRITE,          true, false,
+    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, 0,    {}};
 __llvm_libc_stdio_cookie __llvm_libc_stderr_cookie = {
-    2,     internal::mmix::PlatformFileMode::TEXT_WRITE,          true,  false,
-    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, false, 0};
+    2,     internal::mmix::PlatformFileMode::TEXT_WRITE,          true, false,
+    false, internal::mmix::PlatformStreamOrientation::UNORIENTED, 0,    {}};
 }
 
 namespace {
@@ -298,7 +298,7 @@ extern "C" int __llvm_libc_mmix_file_open(const char *path, unsigned mode) {
       handle, platform_mode,
       true,   false,
       false,  internal::mmix::PlatformStreamOrientation::UNORIENTED,
-      false,  0};
+      0,      {}};
   return static_cast<int>(handle);
 }
 
@@ -413,7 +413,7 @@ extern "C" int __llvm_libc_mmix_stream_seek(__llvm_libc_stdio_cookie *stream,
     return -1;
   }
   stream->eof = false;
-  stream->has_ungetc = false;
+  stream->pushback_count = 0;
   return 0;
 }
 
@@ -453,14 +453,54 @@ __llvm_libc_mmix_stream_clearerr(__llvm_libc_stdio_cookie *stream) {
 extern "C" int
 __llvm_libc_mmix_stream_ungetc(int c, __llvm_libc_stdio_cookie *stream) {
   stream = stream_for(stream);
-  if (stream == nullptr || !stream->open || !can_read(stream->mode) ||
-      c == -1 || stream->has_ungetc)
+  if (stream == nullptr || !stream->open || !can_read(stream->mode) || c == -1)
     return -1;
+  unsigned char byte = static_cast<unsigned char>(c);
   orient_byte(stream);
-  stream->has_ungetc = true;
-  stream->ungetc_value = static_cast<unsigned char>(c);
+  return __llvm_libc_mmix_stream_pushback(&byte, 1, stream) == 0
+             ? static_cast<int>(byte)
+             : -1;
+}
+
+extern "C" int
+__llvm_libc_mmix_stream_pushback(const unsigned char *bytes, unsigned count,
+                                 __llvm_libc_stdio_cookie *stream) {
+  stream = stream_for(stream);
+  if (stream == nullptr || !stream->open || !can_read(stream->mode) ||
+      bytes == nullptr || count == 0 || count > 4 ||
+      stream->pushback_count != 0)
+    return -1;
+  for (unsigned index = 0; index != count; ++index)
+    stream->pushback[index] = bytes[count - index - 1];
+  stream->pushback_count = count;
   stream->eof = false;
-  return static_cast<int>(stream->ungetc_value);
+  return 0;
+}
+
+extern "C" int __llvm_libc_mmix_stream_orient(__llvm_libc_stdio_cookie *stream,
+                                              int mode) {
+  stream = stream_for(stream);
+  if (stream == nullptr || !stream->open)
+    return 0;
+  if (stream->orientation ==
+      internal::mmix::PlatformStreamOrientation::UNORIENTED) {
+    if (mode > 0)
+      stream->orientation = internal::mmix::PlatformStreamOrientation::WIDE;
+    else if (mode < 0)
+      stream->orientation = internal::mmix::PlatformStreamOrientation::BYTE;
+  }
+  if (stream->orientation == internal::mmix::PlatformStreamOrientation::WIDE)
+    return 1;
+  if (stream->orientation == internal::mmix::PlatformStreamOrientation::BYTE)
+    return -1;
+  return 0;
+}
+
+extern "C" void
+__llvm_libc_mmix_stream_set_error(__llvm_libc_stdio_cookie *stream) {
+  stream = stream_for(stream);
+  if (stream != nullptr && stream->open)
+    stream->error = true;
 }
 
 extern "C" int __llvm_libc_mmix_stream_flush_all() {
@@ -502,13 +542,11 @@ extern "C" ssize_t __llvm_libc_stdio_read(void *cookie, char *buffer,
 
   orient_byte(stream);
   size_t prefix = 0;
-  if (size != 0 && stream->has_ungetc) {
-    buffer[0] = static_cast<char>(stream->ungetc_value);
-    stream->has_ungetc = false;
-    prefix = 1;
-    if (size == 1)
-      return 1;
-  }
+  while (prefix != size && stream->pushback_count != 0)
+    buffer[prefix++] =
+        static_cast<char>(stream->pushback[--stream->pushback_count]);
+  if (prefix == size)
+    return static_cast<ssize_t>(prefix);
 
   __INT64_TYPE__ count;
   if (stream == &__llvm_libc_stdin_cookie) {

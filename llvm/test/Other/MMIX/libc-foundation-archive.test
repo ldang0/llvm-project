@@ -29,7 +29,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 121
+# RUN:   grep 'Machine: EM_MMIX' | count 170
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -126,12 +126,61 @@
 # LIBC-MEMBERS-NEXT: vsnprintf.cpp.o
 # LIBC-MEMBERS-NEXT: vsprintf.cpp.o
 # LIBC-MEMBERS-NEXT: vsscanf.cpp.o
+# LIBC-MEMBERS-NEXT: wide_stream.cpp.o
+# LIBC-MEMBERS-NEXT: btowc.cpp.o
 # LIBC-MEMBERS-NEXT: mbrlen.cpp.o
 # LIBC-MEMBERS-NEXT: mbrtowc.cpp.o
 # LIBC-MEMBERS-NEXT: mbsinit.cpp.o
+# LIBC-MEMBERS-NEXT: mbsnrtowcs.cpp.o
 # LIBC-MEMBERS-NEXT: mbsrtowcs.cpp.o
 # LIBC-MEMBERS-NEXT: wcrtomb.cpp.o
+# LIBC-MEMBERS-NEXT: wcscat.cpp.o
+# LIBC-MEMBERS-NEXT: wcschr.cpp.o
+# LIBC-MEMBERS-NEXT: wcscmp.cpp.o
+# LIBC-MEMBERS-NEXT: wcscoll.cpp.o
+# LIBC-MEMBERS-NEXT: wcscpy.cpp.o
+# LIBC-MEMBERS-NEXT: wcscspn.cpp.o
+# LIBC-MEMBERS-NEXT: wcslen.cpp.o
+# LIBC-MEMBERS-NEXT: wcsncat.cpp.o
+# LIBC-MEMBERS-NEXT: wcsncmp.cpp.o
+# LIBC-MEMBERS-NEXT: wcsncpy.cpp.o
+# LIBC-MEMBERS-NEXT: wcsnrtombs.cpp.o
+# LIBC-MEMBERS-NEXT: wcspbrk.cpp.o
+# LIBC-MEMBERS-NEXT: wcsrchr.cpp.o
 # LIBC-MEMBERS-NEXT: wcsrtombs.cpp.o
+# LIBC-MEMBERS-NEXT: wcsspn.cpp.o
+# LIBC-MEMBERS-NEXT: wcsstr.cpp.o
+# LIBC-MEMBERS-NEXT: wcstod.cpp.o
+# LIBC-MEMBERS-NEXT: wcstof.cpp.o
+# LIBC-MEMBERS-NEXT: wcstok.cpp.o
+# LIBC-MEMBERS-NEXT: wcstol.cpp.o
+# LIBC-MEMBERS-NEXT: wcstold.cpp.o
+# LIBC-MEMBERS-NEXT: wcstoll.cpp.o
+# LIBC-MEMBERS-NEXT: wcstoul.cpp.o
+# LIBC-MEMBERS-NEXT: wcstoull.cpp.o
+# LIBC-MEMBERS-NEXT: wcsxfrm.cpp.o
+# LIBC-MEMBERS-NEXT: wctob.cpp.o
+# LIBC-MEMBERS-NEXT: wmemchr.cpp.o
+# LIBC-MEMBERS-NEXT: wmemcmp.cpp.o
+# LIBC-MEMBERS-NEXT: wmemcpy.cpp.o
+# LIBC-MEMBERS-NEXT: wmemmove.cpp.o
+# LIBC-MEMBERS-NEXT: wmemset.cpp.o
+# LIBC-MEMBERS-NEXT: iswalnum.cpp.o
+# LIBC-MEMBERS-NEXT: iswalpha.cpp.o
+# LIBC-MEMBERS-NEXT: iswblank.cpp.o
+# LIBC-MEMBERS-NEXT: iswcntrl.cpp.o
+# LIBC-MEMBERS-NEXT: iswctype.cpp.o
+# LIBC-MEMBERS-NEXT: iswdigit.cpp.o
+# LIBC-MEMBERS-NEXT: iswgraph.cpp.o
+# LIBC-MEMBERS-NEXT: iswlower.cpp.o
+# LIBC-MEMBERS-NEXT: iswprint.cpp.o
+# LIBC-MEMBERS-NEXT: iswpunct.cpp.o
+# LIBC-MEMBERS-NEXT: iswspace.cpp.o
+# LIBC-MEMBERS-NEXT: iswupper.cpp.o
+# LIBC-MEMBERS-NEXT: iswxdigit.cpp.o
+# LIBC-MEMBERS-NEXT: towlower.cpp.o
+# LIBC-MEMBERS-NEXT: towupper.cpp.o
+# LIBC-MEMBERS-NEXT: wctype.cpp.o
 # LIBC-MEMBERS-NEXT: memchr.cpp.o
 # LIBC-MEMBERS-NEXT: memcmp.cpp.o
 # LIBC-MEMBERS-NEXT: memcpy.cpp.o
@@ -195,6 +244,64 @@
 # SELECTED-SYMBOLS-DAG: T wcrtomb
 # SELECTED-SYMBOLS-DAG: T wcsrtombs
 # SELECTED-SYMBOLS-DAG: T wctomb
+# SELECTED-SYMBOLS-DAG: T btowc
+# SELECTED-SYMBOLS-DAG: T fgetwc
+# SELECTED-SYMBOLS-DAG: T fgetws
+# SELECTED-SYMBOLS-DAG: T fputwc
+# SELECTED-SYMBOLS-DAG: T fputws
+# SELECTED-SYMBOLS-DAG: T fwide
+# SELECTED-SYMBOLS-DAG: T getwc
+# SELECTED-SYMBOLS-DAG: T getwchar
+# SELECTED-SYMBOLS-DAG: T iswalnum
+# SELECTED-SYMBOLS-DAG: T iswalpha
+# SELECTED-SYMBOLS-DAG: T iswblank
+# SELECTED-SYMBOLS-DAG: T iswcntrl
+# SELECTED-SYMBOLS-DAG: T iswctype
+# SELECTED-SYMBOLS-DAG: T iswdigit
+# SELECTED-SYMBOLS-DAG: T iswgraph
+# SELECTED-SYMBOLS-DAG: T iswlower
+# SELECTED-SYMBOLS-DAG: T iswprint
+# SELECTED-SYMBOLS-DAG: T iswpunct
+# SELECTED-SYMBOLS-DAG: T iswspace
+# SELECTED-SYMBOLS-DAG: T iswupper
+# SELECTED-SYMBOLS-DAG: T iswxdigit
+# SELECTED-SYMBOLS-DAG: T mbsnrtowcs
+# SELECTED-SYMBOLS-DAG: T putwc
+# SELECTED-SYMBOLS-DAG: T putwchar
+# SELECTED-SYMBOLS-DAG: T towlower
+# SELECTED-SYMBOLS-DAG: T towupper
+# SELECTED-SYMBOLS-DAG: T ungetwc
+# SELECTED-SYMBOLS-DAG: T wcscat
+# SELECTED-SYMBOLS-DAG: T wcschr
+# SELECTED-SYMBOLS-DAG: T wcscmp
+# SELECTED-SYMBOLS-DAG: T wcscoll
+# SELECTED-SYMBOLS-DAG: T wcscpy
+# SELECTED-SYMBOLS-DAG: T wcscspn
+# SELECTED-SYMBOLS-DAG: T wcslen
+# SELECTED-SYMBOLS-DAG: T wcsncat
+# SELECTED-SYMBOLS-DAG: T wcsncmp
+# SELECTED-SYMBOLS-DAG: T wcsncpy
+# SELECTED-SYMBOLS-DAG: T wcsnrtombs
+# SELECTED-SYMBOLS-DAG: T wcspbrk
+# SELECTED-SYMBOLS-DAG: T wcsrchr
+# SELECTED-SYMBOLS-DAG: T wcsspn
+# SELECTED-SYMBOLS-DAG: T wcsstr
+# SELECTED-SYMBOLS-DAG: T wcstod
+# SELECTED-SYMBOLS-DAG: T wcstof
+# SELECTED-SYMBOLS-DAG: T wcstok
+# SELECTED-SYMBOLS-DAG: T wcstol
+# SELECTED-SYMBOLS-DAG: T wcstold
+# SELECTED-SYMBOLS-DAG: T wcstoll
+# SELECTED-SYMBOLS-DAG: T wcstoul
+# SELECTED-SYMBOLS-DAG: T wcstoull
+# SELECTED-SYMBOLS-DAG: T wcsxfrm
+# SELECTED-SYMBOLS-DAG: T wctob
+# SELECTED-SYMBOLS-DAG: T wctype
+# SELECTED-SYMBOLS-DAG: T wmemchr
+# SELECTED-SYMBOLS-DAG: T wmemcmp
+# SELECTED-SYMBOLS-DAG: T wmemcpy
+# SELECTED-SYMBOLS-DAG: T wmemmove
+# SELECTED-SYMBOLS-DAG: T wmemset
 # SELECTED-SYMBOLS-DAG: T clearerr
 # SELECTED-SYMBOLS-DAG: T fclose
 # SELECTED-SYMBOLS-DAG: T feof

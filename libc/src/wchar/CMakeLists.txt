@@ -739,3 +739,7 @@ add_entrypoint_object(
     libc.src.__support.macros.config
     libc.src.errno.errno
 )
+
+if(LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+  add_subdirectory(baremetal/mmix)
+endif()

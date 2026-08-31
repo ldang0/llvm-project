@@ -1,0 +1,20 @@
+add_entrypoint_object(
+  wide_stream
+  SRCS
+    wide_stream.cpp
+  DEPENDS
+    libc.hdr.errno_macros
+    libc.hdr.types.FILE
+    libc.hdr.types.size_t
+    libc.hdr.types.ssize_t
+    libc.hdr.types.wchar_t
+    libc.hdr.types.wint_t
+    libc.hdr.wchar_macros
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+    libc.src.__support.macros.null_check
+    libc.src.__support.wchar.mbrtowc
+    libc.src.__support.wchar.mbstate
+    libc.src.__support.wchar.wcrtomb
+)

@@ -26,6 +26,7 @@ enum class PlatformFileMode : unsigned {
 enum class PlatformStreamOrientation : unsigned {
   UNORIENTED = 0,
   BYTE = 1,
+  WIDE = 2,
 };
 
 inline constexpr __UINT64_TYPE__ PLATFORM_IO_MAX_TRANSFER = 1024 * 1024;
@@ -41,8 +42,8 @@ struct __llvm_libc_stdio_cookie {
   bool eof;
   bool error;
   internal::mmix::PlatformStreamOrientation orientation;
-  bool has_ungetc;
-  unsigned char ungetc_value;
+  unsigned pushback_count;
+  unsigned char pushback[4];
 };
 
 extern "C" __llvm_libc_stdio_cookie __llvm_libc_stdin_cookie;
@@ -65,6 +66,13 @@ extern "C" void
 __llvm_libc_mmix_stream_clearerr(__llvm_libc_stdio_cookie *stream);
 extern "C" int __llvm_libc_mmix_stream_ungetc(int c,
                                               __llvm_libc_stdio_cookie *stream);
+extern "C" int
+__llvm_libc_mmix_stream_pushback(const unsigned char *bytes, unsigned count,
+                                 __llvm_libc_stdio_cookie *stream);
+extern "C" int __llvm_libc_mmix_stream_orient(__llvm_libc_stdio_cookie *stream,
+                                              int mode);
+extern "C" void
+__llvm_libc_mmix_stream_set_error(__llvm_libc_stdio_cookie *stream);
 extern "C" int __llvm_libc_mmix_stream_flush_all();
 extern "C" void __llvm_libc_mmix_stream_teardown();
 
