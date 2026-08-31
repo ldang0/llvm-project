@@ -45,3 +45,7 @@ add_entrypoint_object(
     libc.hdr.types.struct_tm
     libc.hdr.types.time_t
 )
+
+if(LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+  add_subdirectory(mmix)
+endif()

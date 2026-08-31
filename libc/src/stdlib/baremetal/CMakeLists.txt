@@ -63,3 +63,7 @@ add_entrypoint_object(
   DEPENDS
     libc.src.__support.freelist_heap
 )
+
+if(LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+  add_subdirectory(mmix)
+endif()

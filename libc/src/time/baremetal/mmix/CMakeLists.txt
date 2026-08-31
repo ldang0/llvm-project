@@ -1,0 +1,11 @@
+add_entrypoint_object(
+  gmtime
+  SRCS
+    gmtime.cpp
+  DEPENDS
+    libc.hdr.types.struct_tm
+    libc.hdr.types.time_t
+    libc.src.__support.common
+    libc.src.__support.libc_errno
+    libc.src.time.time_utils
+)

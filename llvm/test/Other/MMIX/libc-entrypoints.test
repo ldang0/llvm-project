@@ -59,6 +59,7 @@ set(expected_libc
     libc.src.errno.errno
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
+    libc.src.stdlib.baremetal.mmix.process_utilities
     libc.src.stdlib.exit
     libc.src.__support.OSUtil.baremetal.mmix.abort
     libc.src.stdlib.aligned_alloc
@@ -144,6 +145,9 @@ set(expected_libc
     libc.src.wctype.towlower
     libc.src.wctype.towupper
     libc.src.wctype.wctype
+    libc.src.time.asctime
+    libc.src.time.difftime
+    libc.src.time.baremetal.mmix.gmtime
     libc.src.string.memchr
     libc.src.string.memcmp
     libc.src.string.memcpy
@@ -202,7 +206,7 @@ endif()
 
 foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   if(NOT entrypoint MATCHES
-      "^libc[.]src[.](ctype|inttypes|locale|stdlib|stdio|string|wchar|wctype|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
+      "^libc[.]src[.](ctype|inttypes|locale|stdlib|stdio|string|time|wchar|wctype|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
     message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
   endif()
 endforeach()
@@ -221,7 +225,8 @@ endforeach()
 set(unsupported_capability_families
     "^libc[.]src[.](spawn|unistd[.](exec|fork)|sys[.]wait)"
     "^libc[.]src[.]signal[.]"
-    "^libc[.]src[.](time|unistd[.](sleep|usleep))[.]"
+    "^libc[.]src[.]time[.](clock|ctime|localtime|mktime|strftime|time|timespec_get)$"
+    "^libc[.]src[.]unistd[.](sleep|usleep)[.]"
     "^libc[.]src[.]sys[.]random[.]"
     "^libc[.]src[.](pthread|threads)[.]"
     "^libc[.]src[.](dlfcn|link)[.]")

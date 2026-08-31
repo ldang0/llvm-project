@@ -1,0 +1,10 @@
+add_entrypoint_object(
+  process_utilities
+  SRCS
+    process_utilities.cpp
+  DEPENDS
+    libc.hdr.types.atexithandler_t
+    libc.src.__support.OSUtil.osutil
+    libc.src.__support.common
+    libc.include.stdlib
+)

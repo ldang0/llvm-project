@@ -58,6 +58,7 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.errno.errno
     libc.src.stdlib._Exit
     libc.src.__support.OSUtil.baremetal.mmix.atexit
+    libc.src.stdlib.baremetal.mmix.process_utilities
     libc.src.stdlib.exit
     libc.src.__support.OSUtil.baremetal.mmix.abort
     libc.src.stdlib.aligned_alloc
@@ -149,6 +150,15 @@ set(TARGET_LIBC_ENTRYPOINTS
     libc.src.wctype.towlower
     libc.src.wctype.towupper
     libc.src.wctype.wctype
+
+    # time.h entrypoints independent of unavailable clocks and timezones
+    libc.src.time.asctime
+    libc.src.time.difftime
+    libc.src.time.baremetal.mmix.gmtime
+    # FIXME: Select strftime once MMIX lowers the ordinary LLVM trap used by
+    # the shared implementation.
+    # FIXME: Select clock, time, and timespec_get only with a platform clock;
+    # localtime, ctime, and mktime additionally require a timezone contract.
 
     # string.h entrypoints
     libc.src.string.memchr

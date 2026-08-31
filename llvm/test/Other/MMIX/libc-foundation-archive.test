@@ -18,6 +18,9 @@
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   FileCheck %s --check-prefix=SELECTED-SYMBOLS
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
+# RUN:   not grep -E ' T (clock|ctime|localtime|mktime|strftime|time|timespec_get)$'
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   not grep -E '__(atomic|scoped_atomic)|__(div|mod|mul|udiv|umod)ti3'
@@ -29,7 +32,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 170
+# RUN:   grep 'Machine: EM_MMIX' | count 175
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -90,6 +93,7 @@
 # LIBC-MEMBERS-NEXT: exit.cpp.o
 # LIBC-MEMBERS-NEXT: _Exit.cpp.o
 # LIBC-MEMBERS-NEXT: atexit.cpp.o
+# LIBC-MEMBERS-NEXT: process_utilities.cpp.o
 # LIBC-MEMBERS-NEXT: exit.cpp.o
 # LIBC-MEMBERS-NEXT: abort.cpp.o
 # LIBC-MEMBERS-NEXT: freelist_heap.cpp.o
@@ -181,6 +185,10 @@
 # LIBC-MEMBERS-NEXT: towlower.cpp.o
 # LIBC-MEMBERS-NEXT: towupper.cpp.o
 # LIBC-MEMBERS-NEXT: wctype.cpp.o
+# LIBC-MEMBERS-NEXT: time_utils.cpp.o
+# LIBC-MEMBERS-NEXT: asctime.cpp.o
+# LIBC-MEMBERS-NEXT: difftime.cpp.o
+# LIBC-MEMBERS-NEXT: gmtime.cpp.o
 # LIBC-MEMBERS-NEXT: memchr.cpp.o
 # LIBC-MEMBERS-NEXT: memcmp.cpp.o
 # LIBC-MEMBERS-NEXT: memcpy.cpp.o
@@ -302,6 +310,13 @@
 # SELECTED-SYMBOLS-DAG: T wmemcpy
 # SELECTED-SYMBOLS-DAG: T wmemmove
 # SELECTED-SYMBOLS-DAG: T wmemset
+# SELECTED-SYMBOLS-DAG: T at_quick_exit
+# SELECTED-SYMBOLS-DAG: T getenv
+# SELECTED-SYMBOLS-DAG: T quick_exit
+# SELECTED-SYMBOLS-DAG: T system
+# SELECTED-SYMBOLS-DAG: T asctime
+# SELECTED-SYMBOLS-DAG: T difftime
+# SELECTED-SYMBOLS-DAG: T gmtime
 # SELECTED-SYMBOLS-DAG: T clearerr
 # SELECTED-SYMBOLS-DAG: T fclose
 # SELECTED-SYMBOLS-DAG: T feof
