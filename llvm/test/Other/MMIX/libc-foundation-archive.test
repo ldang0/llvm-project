@@ -29,7 +29,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 110
+# RUN:   grep 'Machine: EM_MMIX' | count 121
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -115,6 +115,17 @@
 # LIBC-MEMBERS-NEXT: file_stream.cpp.o
 # LIBC-MEMBERS-NEXT: buffering.cpp.o
 # LIBC-MEMBERS-NEXT: unavailable_file_operations.cpp.o
+# LIBC-MEMBERS-NEXT: asprintf.cpp.o
+# LIBC-MEMBERS-NEXT: formatted_output.cpp.o
+# LIBC-MEMBERS-NEXT: formatted_input.cpp.o
+# LIBC-MEMBERS-NEXT: float_impl.cpp.o
+# LIBC-MEMBERS-NEXT: snprintf.cpp.o
+# LIBC-MEMBERS-NEXT: sprintf.cpp.o
+# LIBC-MEMBERS-NEXT: sscanf.cpp.o
+# LIBC-MEMBERS-NEXT: vasprintf.cpp.o
+# LIBC-MEMBERS-NEXT: vsnprintf.cpp.o
+# LIBC-MEMBERS-NEXT: vsprintf.cpp.o
+# LIBC-MEMBERS-NEXT: vsscanf.cpp.o
 # LIBC-MEMBERS-NEXT: mbrlen.cpp.o
 # LIBC-MEMBERS-NEXT: mbrtowc.cpp.o
 # LIBC-MEMBERS-NEXT: mbsinit.cpp.o
@@ -212,6 +223,22 @@
 # SELECTED-SYMBOLS-DAG: D stdin
 # SELECTED-SYMBOLS-DAG: D stdout
 # SELECTED-SYMBOLS-DAG: T ungetc
+# SELECTED-SYMBOLS-DAG: T asprintf
+# SELECTED-SYMBOLS-DAG: T fprintf
+# SELECTED-SYMBOLS-DAG: T fscanf
+# SELECTED-SYMBOLS-DAG: T printf
+# SELECTED-SYMBOLS-DAG: T scanf
+# SELECTED-SYMBOLS-DAG: T snprintf
+# SELECTED-SYMBOLS-DAG: T sprintf
+# SELECTED-SYMBOLS-DAG: T sscanf
+# SELECTED-SYMBOLS-DAG: T vasprintf
+# SELECTED-SYMBOLS-DAG: T vfprintf
+# SELECTED-SYMBOLS-DAG: T vfscanf
+# SELECTED-SYMBOLS-DAG: T vprintf
+# SELECTED-SYMBOLS-DAG: T vscanf
+# SELECTED-SYMBOLS-DAG: T vsnprintf
+# SELECTED-SYMBOLS-DAG: T vsprintf
+# SELECTED-SYMBOLS-DAG: T vsscanf
 
 # LIBM-MEMBERS: copysign.cpp.o
 # LIBM-MEMBERS-NEXT: copysignf.cpp.o

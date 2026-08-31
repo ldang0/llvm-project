@@ -3,5 +3,10 @@
     "LIBC_CONF_PRINTF_DISABLE_FLOAT": {
       "value": false
     }
+  },
+  "scanf": {
+    "LIBC_CONF_SCANF_DISABLE_FLOAT": {
+      "value": false
+    }
   }
 }

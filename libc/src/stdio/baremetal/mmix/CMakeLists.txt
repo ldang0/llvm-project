@@ -86,3 +86,30 @@ add_entrypoint_object(
     libc.src.__support.common
     libc.src.__support.libc_errno
 )
+
+add_entrypoint_object(
+  formatted_output
+  SRCS
+    formatted_output.cpp
+  DEPENDS
+    libc.hdr.stdio_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.arg_list
+    libc.src.__support.common
+    libc.src.stdio.baremetal.vfprintf_internal
+)
+
+add_entrypoint_object(
+  formatted_input
+  SRCS
+    formatted_input.cpp
+  DEPENDS
+    libc.hdr.stdio_macros
+    libc.hdr.types.FILE
+    libc.src.__support.OSUtil.baremetal.mmix.platform_io
+    libc.src.__support.arg_list
+    libc.src.__support.common
+    libc.src.stdio.scanf_core.reader
+    libc.src.stdio.scanf_core.scanf_main
+)

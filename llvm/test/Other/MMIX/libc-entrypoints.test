@@ -79,6 +79,16 @@ set(expected_libc
     libc.src.stdio.baremetal.mmix.file_stream
     libc.src.stdio.baremetal.mmix.buffering
     libc.src.stdio.baremetal.mmix.unavailable_file_operations
+    libc.src.stdio.asprintf
+    libc.src.stdio.baremetal.mmix.formatted_output
+    libc.src.stdio.baremetal.mmix.formatted_input
+    libc.src.stdio.snprintf
+    libc.src.stdio.sprintf
+    libc.src.stdio.sscanf
+    libc.src.stdio.vasprintf
+    libc.src.stdio.vsnprintf
+    libc.src.stdio.vsprintf
+    libc.src.stdio.vsscanf
     libc.src.wchar.mbrlen
     libc.src.wchar.mbrtowc
     libc.src.wchar.mbsinit

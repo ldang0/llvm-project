@@ -152,6 +152,22 @@
 # LIBC-SYMBOLS-DAG: D stdin
 # LIBC-SYMBOLS-DAG: D stdout
 # LIBC-SYMBOLS-DAG: T ungetc
+# LIBC-SYMBOLS-DAG: T asprintf
+# LIBC-SYMBOLS-DAG: T fprintf
+# LIBC-SYMBOLS-DAG: T fscanf
+# LIBC-SYMBOLS-DAG: T printf
+# LIBC-SYMBOLS-DAG: T scanf
+# LIBC-SYMBOLS-DAG: T snprintf
+# LIBC-SYMBOLS-DAG: T sprintf
+# LIBC-SYMBOLS-DAG: T sscanf
+# LIBC-SYMBOLS-DAG: T vasprintf
+# LIBC-SYMBOLS-DAG: T vfprintf
+# LIBC-SYMBOLS-DAG: T vfscanf
+# LIBC-SYMBOLS-DAG: T vprintf
+# LIBC-SYMBOLS-DAG: T vscanf
+# LIBC-SYMBOLS-DAG: T vsnprintf
+# LIBC-SYMBOLS-DAG: T vsprintf
+# LIBC-SYMBOLS-DAG: T vsscanf
 
 # PLATFORM-MEMBERS: platform_io.cpp.o
 # PLATFORM-MEMBERS-NEXT: termination.cpp.o
