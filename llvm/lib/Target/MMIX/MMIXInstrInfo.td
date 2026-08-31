@@ -2308,6 +2308,20 @@ def TRAP_STATE
   let hasSideEffects = true;
 }
 
+// Keep generic non-returning traps distinct from the returning, operand-bearing
+// llvm.mmix.trap interface even though both encode architectural TRAPs.
+def GENERIC_TRAP : MMIXInstruction<(outs), (ins), "TRAP 255, 0, 0"> {
+  let MMIXOpcode = 0x00;
+  let MMIXX = 255;
+  let MMIXY = 0;
+  let MMIXZ = 0;
+  let isCodeGenOnly = true;
+  let Pattern = [(trap)];
+  let isTerminator = true;
+  let isBarrier = true;
+  let hasSideEffects = true;
+}
+
 // Mode 3 orders every load or store before the fence with respect to every
 // load or store after it, which implements LLVM's system-scope fences.
 def : Pat<(atomic_fence timm, timm), (SYNC 3)>;

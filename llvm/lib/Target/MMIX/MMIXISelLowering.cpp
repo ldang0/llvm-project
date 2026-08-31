@@ -808,7 +808,7 @@ MMIXTargetLowering::MMIXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   RejectOperation(ISD::BRIND, MVT::Other);
-  RejectOperation(ISD::TRAP, MVT::Other);
+  setOperationAction(ISD::TRAP, MVT::Other, Legal);
   setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i64, Legal);
   setOperationAction(ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, MVT::i64, Expand);
   setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Custom);
@@ -1056,9 +1056,6 @@ SDValue MMIXTargetLowering::LowerOperation(SDValue Op,
     reportFatalUsageError(
         Twine("MMIX does not support indirect branches in ordinary function '") +
         F.getName() + "'");
-  if (Op.getOpcode() == ISD::TRAP)
-    report_fatal_error(
-        "MMIX does not define an LLVM trap convention for this environment");
   if (Op->isStrictFPOpcode())
     report_fatal_error(
         "MMIX constrained floating-point lowering is not implemented");
