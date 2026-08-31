@@ -283,8 +283,11 @@
 # TERMINATION:       TRAP 0x0, 0x0, 0x0
 
 # ABORT-LABEL: <abort>:
-# ABORT:       SETL {{.*}}, 0x86
-# ABORT:       TRAP 0x0, 0x0, 0x0
+# ABORT:       SETL {{.*}}, 0x6
+# ABORT:       R_MMIX_PUSHJ_STUBBABLE {{.*}}dispatch_signalEi
+# ABORT:       SETL {{.*}}, 0x0
+# ABORT:       R_MMIX_PUSHJ_STUBBABLE {{.*}}set_signal_handler
+# ABORT:       R_MMIX_PUSHJ_STUBBABLE {{.*}}dispatch_signalEi
 
 # IMAGE:      Format: elf64-mmix
 # IMAGE:      Type: Executable

@@ -32,7 +32,7 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 177
+# RUN:   grep 'Machine: EM_MMIX' | count 180
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 4
@@ -55,6 +55,9 @@
 # LIBC-MEMBERS-NEXT: setlocale.cpp.o
 # LIBC-MEMBERS-NEXT: longjmp.cpp.o
 # LIBC-MEMBERS-NEXT: setjmp.cpp.o
+# LIBC-MEMBERS-NEXT: signal_state.cpp.o
+# LIBC-MEMBERS-NEXT: raise.cpp.o
+# LIBC-MEMBERS-NEXT: signal.cpp.o
 # LIBC-MEMBERS-NEXT: imaxabs.cpp.o
 # LIBC-MEMBERS-NEXT: imaxdiv.cpp.o
 # LIBC-MEMBERS-NEXT: strtoimax.cpp.o
@@ -238,8 +241,10 @@
 # SELECTED-SYMBOLS-DAG: T mbtowc
 # SELECTED-SYMBOLS-DAG: T qsort
 # SELECTED-SYMBOLS-DAG: T rand
+# SELECTED-SYMBOLS-DAG: T raise
 # SELECTED-SYMBOLS-DAG: T srand
 # SELECTED-SYMBOLS-DAG: T setjmp
+# SELECTED-SYMBOLS-DAG: T signal
 # SELECTED-SYMBOLS-DAG: T strfromd
 # SELECTED-SYMBOLS-DAG: T strfromf
 # SELECTED-SYMBOLS-DAG: T strfroml

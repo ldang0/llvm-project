@@ -43,6 +43,41 @@ add_entrypoint_object(
     abort.cpp
   DEPENDS
     .semihosting
+    .signal_state
+    libc.hdr.signal_macros
+)
+
+add_object_library(
+  signal_state
+  SRCS
+    signal_state.cpp
+  HDRS
+    signal_state.h
+  DEPENDS
+    .semihosting
+    libc.hdr.signal_macros
+    libc.src.__support.common
+)
+
+add_entrypoint_object(
+  signal
+  SRCS
+    signal.cpp
+  DEPENDS
+    .signal_state
+    libc.hdr.signal_macros
+    libc.src.__support.common
+    libc.src.errno.errno
+)
+
+add_entrypoint_object(
+  raise
+  SRCS
+    raise.cpp
+  DEPENDS
+    .signal_state
+    libc.src.__support.common
+    libc.src.errno.errno
 )
 
 add_entrypoint_library(

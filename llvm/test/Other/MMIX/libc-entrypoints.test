@@ -25,6 +25,8 @@ set(expected_libc
     libc.src.locale.setlocale
     libc.src.setjmp.longjmp
     libc.src.setjmp.setjmp
+    libc.src.__support.OSUtil.baremetal.mmix.raise
+    libc.src.__support.OSUtil.baremetal.mmix.signal
     libc.src.inttypes.imaxabs
     libc.src.inttypes.imaxdiv
     libc.src.inttypes.strtoimax
