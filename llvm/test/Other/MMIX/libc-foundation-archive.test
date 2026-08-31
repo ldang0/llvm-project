@@ -41,7 +41,7 @@
 # RUN:   grep 'Machine: EM_MMIX' | count 183
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 131
+# RUN:   grep 'Machine: EM_MMIX' | count 147
 
 # LIBC-MEMBERS: isalnum.cpp.o
 # LIBC-MEMBERS-NEXT: isalpha.cpp.o
@@ -512,3 +512,19 @@
 # LIBM-MEMBERS-NEXT: tanhf.cpp.o
 # LIBM-MEMBERS-NEXT: fmaf.cpp.o
 # LIBM-MEMBERS-NEXT: fma.cpp.o
+# LIBM-MEMBERS-NEXT: cabsf.cpp.o
+# LIBM-MEMBERS-NEXT: cabs.cpp.o
+# LIBM-MEMBERS-NEXT: cargf.cpp.o
+# LIBM-MEMBERS-NEXT: carg.cpp.o
+# LIBM-MEMBERS-NEXT: cimagf.cpp.o
+# LIBM-MEMBERS-NEXT: cimag.cpp.o
+# LIBM-MEMBERS-NEXT: cimagl.cpp.o
+# LIBM-MEMBERS-NEXT: conjf.cpp.o
+# LIBM-MEMBERS-NEXT: conj.cpp.o
+# LIBM-MEMBERS-NEXT: conjl.cpp.o
+# LIBM-MEMBERS-NEXT: cprojf.cpp.o
+# LIBM-MEMBERS-NEXT: cproj.cpp.o
+# LIBM-MEMBERS-NEXT: cprojl.cpp.o
+# LIBM-MEMBERS-NEXT: crealf.cpp.o
+# LIBM-MEMBERS-NEXT: creal.cpp.o
+# LIBM-MEMBERS-NEXT: creall.cpp.o

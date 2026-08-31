@@ -330,6 +330,24 @@ set(expected_libm
     libc.src.math.fmaf
     libc.src.math.fma
 
+    # Complex components.
+    libc.src.complex.cabsf
+    libc.src.complex.cabs
+    libc.src.complex.cargf
+    libc.src.complex.carg
+    libc.src.complex.cimagf
+    libc.src.complex.cimag
+    libc.src.complex.cimagl
+    libc.src.complex.conjf
+    libc.src.complex.conj
+    libc.src.complex.conjl
+    libc.src.complex.cprojf
+    libc.src.complex.cproj
+    libc.src.complex.cprojl
+    libc.src.complex.crealf
+    libc.src.complex.creal
+    libc.src.complex.creall
+
 )
 set(expected_platform
     libc.src.__support.OSUtil.baremetal.mmix.platform_io
@@ -367,7 +385,7 @@ foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   endif()
 endforeach()
 foreach(entrypoint IN LISTS TARGET_LIBM_ENTRYPOINTS)
-  if(NOT entrypoint MATCHES "^libc[.]src[.]math[.]")
+  if(NOT entrypoint MATCHES "^libc[.]src[.](math|complex)[.]")
     message(FATAL_ERROR "unreviewed MMIX libm family: ${entrypoint}")
   endif()
 endforeach()
