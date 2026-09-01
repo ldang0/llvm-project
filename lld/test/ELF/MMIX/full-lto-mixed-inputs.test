@@ -1,0 +1,196 @@
+# REQUIRES: mmix
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/main.s -o %t/main.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/main-cycle.s -o %t/main-cycle.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/native-direct.s -o %t/native-direct.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/native-archive.s -o %t/native-archive.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/native-cycle-entry.s -o %t/native-cycle-entry.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/native-cycle-leaf.s -o %t/native-cycle-leaf.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/native-unused.s -o %t/native-unused.o
+# RUN: llvm-as %t/direct.ll -o %t/direct.bc
+# RUN: llvm-as %t/bitcode-archive.ll -o %t/bitcode-archive.bc
+# RUN: llvm-as %t/bitcode-cycle.ll -o %t/bitcode-cycle.bc
+# RUN: llvm-as %t/bitcode-unused.ll -o %t/bitcode-unused.bc
+# RUN: llvm-ar rcs %t/libnative.a %t/native-unused.o %t/native-archive.o \
+# RUN:   %t/native-cycle-entry.o %t/native-cycle-leaf.o
+# RUN: llvm-ar rcs %t/libbitcode.a %t/bitcode-unused.bc \
+# RUN:   %t/bitcode-archive.bc %t/bitcode-cycle.bc
+
+## A native entry calls a direct bitcode definition, which calls a direct
+## native definition. The same entry pulls a native archive member that then
+## pulls a bitcode archive member. Ordinary left-to-right archive order is
+## sufficient for this acyclic chain.
+# RUN: ld.lld -m elf64mmix -e _start --trace %t/main.o %t/native-direct.o \
+# RUN:   %t/direct.bc %t/libnative.a %t/libbitcode.a -o %t/ordinary 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=ORDINARY-TRACE \
+# RUN:     --implicit-check-not=unused --implicit-check-not=cycle
+# RUN: llvm-readobj --file-headers --symbols --relocations %t/ordinary \
+# RUN:   | FileCheck %s --check-prefix=ORDINARY \
+# RUN:     --implicit-check-not=unused --implicit-check-not=cycle
+# RUN: llvm-objdump --no-print-imm-hex -d %t/ordinary \
+# RUN:   | FileCheck %s --check-prefix=DISASSEMBLY
+
+## lld retains lazy archive symbols, so its default extraction is intentionally
+## order-independent. --warn-backrefs with fatal warnings audits GNU-style
+## order: reversing the archives fails, as does omitting the bitcode archive.
+# RUN: not ld.lld -m elf64mmix -e _start --warn-backrefs --fatal-warnings \
+# RUN:   %t/main.o %t/native-direct.o %t/direct.bc %t/libbitcode.a \
+# RUN:   %t/libnative.a -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=BACKREFERENCE-BITCODE
+# RUN: not ld.lld -m elf64mmix -e _start %t/main.o %t/native-direct.o \
+# RUN:   %t/direct.bc %t/libnative.a -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=MISSING-BITCODE
+
+## The cycle requires rescanning both archives. Only the three live members
+## are extracted; neither unused member enters the final executable.
+# RUN: ld.lld -m elf64mmix -e _start --trace %t/main-cycle.o --start-group \
+# RUN:   %t/libbitcode.a %t/libnative.a --end-group -o %t/group 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=GROUP-TRACE --implicit-check-not=unused
+# RUN: llvm-readobj --symbols --relocations %t/group \
+# RUN:   | FileCheck %s --check-prefix=GROUP --implicit-check-not=unused
+# RUN: not ld.lld -m elf64mmix -e _start --warn-backrefs --fatal-warnings \
+# RUN:   %t/main-cycle.o %t/libnative.a %t/libbitcode.a -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=BACKREFERENCE-NATIVE
+
+# ORDINARY-TRACE:      {{.*}}main.o
+# ORDINARY-TRACE-NEXT: {{.*}}native-direct.o
+# ORDINARY-TRACE-NEXT: {{.*}}direct.bc
+# ORDINARY-TRACE-NEXT: {{.*}}libnative.a({{.*}}native-archive.o)
+# ORDINARY-TRACE-NEXT: {{.*}}libbitcode.a({{.*}}bitcode-archive.bc)
+
+# ORDINARY:      Format: elf64-mmix
+# ORDINARY:      Type: Executable
+# ORDINARY:      Machine: EM_MMIX
+# ORDINARY:      Relocations [
+# ORDINARY-NEXT: ]
+# ORDINARY-DAG:  Name: _start
+# ORDINARY-DAG:  Name: bitcode_direct
+# ORDINARY-DAG:  Name: native_direct
+# ORDINARY-DAG:  Name: native_archive_entry
+# ORDINARY-DAG:  Name: bitcode_archive_entry
+
+# DISASSEMBLY-LABEL: <_start>:
+# DISASSEMBLY:       PUSHJ
+# DISASSEMBLY:       PUSHJ
+# DISASSEMBLY-LABEL: <native_direct>:
+# DISASSEMBLY-LABEL: <native_archive_entry>:
+# DISASSEMBLY:       PUSHJ
+# DISASSEMBLY-LABEL: <bitcode_direct>:
+# DISASSEMBLY:       PUSHJ
+# DISASSEMBLY-LABEL: <bitcode_archive_entry>:
+
+# GROUP-TRACE:      {{.*}}main-cycle.o
+# GROUP-TRACE-NEXT: {{.*}}libnative.a({{.*}}native-cycle-entry.o)
+# GROUP-TRACE-NEXT: {{.*}}libbitcode.a({{.*}}bitcode-cycle.bc)
+# GROUP-TRACE-NEXT: {{.*}}libnative.a({{.*}}native-cycle-leaf.o)
+
+# GROUP:      Relocations [
+# GROUP-NEXT: ]
+# GROUP-DAG:  Name: _start
+# GROUP-DAG:  Name: native_cycle_entry
+# GROUP-DAG:  Name: bitcode_cycle_entry
+# GROUP-DAG:  Name: native_cycle_leaf
+
+# MISSING-BITCODE: error: undefined symbol: bitcode_archive_entry
+# MISSING-BITCODE: referenced by native-archive.o
+# BACKREFERENCE-BITCODE: backward reference detected: bitcode_archive_entry
+# BACKREFERENCE-BITCODE-SAME: native-archive.o
+# BACKREFERENCE-BITCODE-SAME: libbitcode.a
+# BACKREFERENCE-NATIVE: backward reference detected: native_cycle_leaf
+# BACKREFERENCE-NATIVE-SAME: bitcode-cycle.bc
+# BACKREFERENCE-NATIVE-SAME: libnative.a
+
+#--- main.s
+.text
+.global _start
+.type _start,@function
+_start:
+  PUSHJ r1, bitcode_direct
+  PUSHJ r1, native_archive_entry
+  JMP 0
+
+#--- main-cycle.s
+.text
+.global _start
+.type _start,@function
+_start:
+  PUSHJ r1, native_cycle_entry
+  JMP 0
+
+#--- native-direct.s
+.text
+.global native_direct
+.type native_direct,@function
+native_direct:
+  SETL r0, 7
+  POP 1, 0
+
+#--- native-archive.s
+.text
+.global native_archive_entry
+.type native_archive_entry,@function
+native_archive_entry:
+  PUSHJ r1, bitcode_archive_entry
+  POP 0, 0
+
+#--- native-cycle-entry.s
+.text
+.global native_cycle_entry
+.type native_cycle_entry,@function
+native_cycle_entry:
+  PUSHJ r1, bitcode_cycle_entry
+  POP 0, 0
+
+#--- native-cycle-leaf.s
+.text
+.global native_cycle_leaf
+.type native_cycle_leaf,@function
+native_cycle_leaf:
+  POP 0, 0
+
+#--- native-unused.s
+.text
+.global native_unused
+.type native_unused,@function
+native_unused:
+  POP 0, 0
+
+#--- direct.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+declare i64 @native_direct()
+
+define i64 @bitcode_direct() noinline nounwind {
+  %value = call i64 @native_direct()
+  %result = add i64 %value, 1
+  ret i64 %result
+}
+
+#--- bitcode-archive.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+define void @bitcode_archive_entry() noinline nounwind {
+  ret void
+}
+
+#--- bitcode-cycle.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+declare void @native_cycle_leaf()
+
+define void @bitcode_cycle_entry() noinline nounwind {
+  call void @native_cycle_leaf()
+  ret void
+}
+
+#--- bitcode-unused.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+define void @bitcode_unused() noinline nounwind {
+  ret void
+}

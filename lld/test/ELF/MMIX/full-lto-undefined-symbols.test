@@ -1,0 +1,105 @@
+# REQUIRES: mmix
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llvm-as %t/direct-strong.ll -o %t/direct-strong.bc
+# RUN: llvm-as %t/direct-weak.ll -o %t/direct-weak.bc
+# RUN: llvm-as %t/archive-strong.ll -o %t/archive-strong.bc
+# RUN: llvm-as %t/archive-weak.ll -o %t/archive-weak.bc
+# RUN: llvm-as %t/weak-definition.ll -o %t/weak-definition.bc
+# RUN: llvm-ar rcs %t/libstrong.a %t/archive-strong.bc
+# RUN: llvm-ar rcs %t/libweak.a %t/weak-definition.bc
+# RUN: llvm-ar rcs %t/libarchive-weak.a %t/archive-weak.bc
+
+## Ordinary undefined references retain lld's direct-bitcode diagnostic.
+# RUN: not ld.lld -m elf64mmix -e _start %t/direct-strong.bc \
+# RUN:   -o /dev/null 2>&1 | FileCheck %s --check-prefix=DIRECT-STRONG
+
+## A weak reference does not extract a definition from a bitcode archive and
+## remains valid in a final static executable.
+# RUN: ld.lld -m elf64mmix -e _start --trace %t/direct-weak.bc \
+# RUN:   %t/libweak.a -o %t/direct-weak 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=WEAK-TRACE \
+# RUN:     --implicit-check-not=weak-definition.bc
+# RUN: llvm-readobj --file-headers --relocations %t/direct-weak \
+# RUN:   | FileCheck %s --check-prefix=WEAK
+
+## A strongly selected archive member retains an ordinary undefined-symbol
+## diagnostic, while an unresolved weak reference inside a selected member is
+## accepted without pulling an unrelated weak definition.
+# RUN: not ld.lld -m elf64mmix -e archive_entry -u archive_entry \
+# RUN:   %t/libstrong.a -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=ARCHIVE-STRONG
+# RUN: ld.lld -m elf64mmix -e archive_weak_entry -u archive_weak_entry \
+# RUN:   --trace %t/libarchive-weak.a %t/libweak.a -o %t/archive-weak 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=ARCHIVE-WEAK-TRACE \
+# RUN:     --implicit-check-not=weak-definition.bc
+# RUN: llvm-readobj --file-headers --relocations %t/archive-weak \
+# RUN:   | FileCheck %s --check-prefix=WEAK
+
+## Full LTO support does not widen MMIX lld to relocatable output.
+# RUN: not ld.lld -m elf64mmix -r %t/direct-weak.bc -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=RELOCATABLE
+
+# DIRECT-STRONG: error: undefined symbol: direct_missing
+# DIRECT-STRONG: referenced by ld-temp.o
+# ARCHIVE-STRONG: error: undefined symbol: archive_missing
+# ARCHIVE-STRONG: referenced by ld-temp.o
+# WEAK-TRACE: {{.*}}direct-weak.bc
+# ARCHIVE-WEAK-TRACE: {{.*}}libarchive-weak.a({{.*}}archive-weak.bc)
+# WEAK:      Format: elf64-mmix
+# WEAK:      Type: Executable
+# WEAK:      Relocations [
+# WEAK-NEXT: ]
+# RELOCATABLE: error: MMIX lld supports only static executable output
+
+#--- direct-strong.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+declare void @direct_missing()
+
+define void @_start() nounwind {
+  call void @direct_missing()
+  ret void
+}
+
+#--- direct-weak.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+declare extern_weak void @weak_missing()
+
+define void @_start() nounwind {
+  call void @weak_missing()
+  ret void
+}
+
+#--- archive-strong.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+declare void @archive_missing()
+
+define void @archive_entry() nounwind {
+  call void @archive_missing()
+  ret void
+}
+
+#--- archive-weak.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+declare extern_weak void @weak_missing()
+
+define void @archive_weak_entry() nounwind {
+  call void @weak_missing()
+  ret void
+}
+
+#--- weak-definition.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+define void @weak_missing() nounwind {
+  ret void
+}
