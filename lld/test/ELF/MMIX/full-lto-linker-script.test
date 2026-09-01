@@ -1,0 +1,174 @@
+# REQUIRES: mmix
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llvm-as %t/producer.ll -o %t/producer.bc
+# RUN: llc -mtriple=mmix-unknown-unknown -filetype=obj %t/producer.ll \
+# RUN:   -o %t/producer.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/startup.s -o %t/startup.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/direct-symbol.s \
+# RUN:   -o %t/direct-symbol.o
+# RUN: yaml2obj %t/feature.yaml -o %t/feature.o
+# RUN: yaml2obj %t/register.yaml -o %t/register.o
+
+## Direct and scripted links accept the same LTO-generated object alongside
+## ordinary startup and MMIX metadata objects.
+# RUN: ld.lld -m elf64mmix -e _start -u feature_entry %t/startup.o \
+# RUN:   %t/direct-symbol.o %t/producer.bc %t/feature.o %t/register.o \
+# RUN:   -o %t/lto-direct
+# RUN: ld.lld -m elf64mmix --gc-sections -T %t/layout.lds -u feature_entry \
+# RUN:   %t/startup.o %t/producer.bc %t/feature.o %t/register.o \
+# RUN:   -o %t/lto-scripted
+# RUN: ld.lld -m elf64mmix --gc-sections -T %t/layout.lds -u feature_entry \
+# RUN:   %t/startup.o %t/producer.o %t/feature.o %t/register.o \
+# RUN:   -o %t/native-scripted
+
+# RUN: llvm-readobj --file-headers --sections --symbols --relocations \
+# RUN:   %t/lto-direct | FileCheck %s --check-prefix=DIRECT
+# RUN: llvm-readobj --file-headers --sections --program-headers --symbols \
+# RUN:   --relocations %t/lto-scripted | FileCheck %s --check-prefix=SCRIPTED \
+# RUN:   --implicit-check-not=discarded_lto
+# RUN: llvm-readobj --file-headers --sections --program-headers --symbols \
+# RUN:   --relocations %t/native-scripted | FileCheck %s --check-prefix=SCRIPTED \
+# RUN:   --implicit-check-not=discarded_lto
+# RUN: llvm-objdump -s --section=.MMIX.reg_contents %t/lto-scripted \
+# RUN:   | FileCheck %s --check-prefix=REGISTERS
+# RUN: llvm-objdump -s --section=.MMIX.reg_contents %t/native-scripted \
+# RUN:   | FileCheck %s --check-prefix=REGISTERS
+# RUN: llvm-objdump --no-print-imm-hex -d %t/lto-scripted \
+# RUN:   | FileCheck %s --check-prefix=DISASSEMBLY
+# RUN: llvm-objdump --no-print-imm-hex -d %t/native-scripted \
+# RUN:   | FileCheck %s --check-prefix=DISASSEMBLY
+
+# DIRECT:      Format: elf64-mmix
+# DIRECT:      Type: Executable
+# DIRECT:      Name: .MMIX.reg_contents
+# DIRECT:      Relocations [
+# DIRECT-NEXT: ]
+# DIRECT-DAG:  Name: _start
+# DIRECT-DAG:  Name: lto_entry
+# DIRECT-DAG:  Name: fixed_register
+# DIRECT-DAG:  Name: __MMIX_call_stub_0
+
+# SCRIPTED:      Format: elf64-mmix
+# SCRIPTED:      Type: Executable
+# SCRIPTED:      Entry: 0x1000
+# SCRIPTED:      Name: .text
+# SCRIPTED-NEXT: Type: SHT_PROGBITS
+# SCRIPTED:      Address: 0x1000
+# SCRIPTED:      Name: .MMIX.reg_contents
+# SCRIPTED:      Name: .data
+# SCRIPTED:      Address: 0x210000
+# SCRIPTED:      Relocations [
+# SCRIPTED-NEXT: ]
+# SCRIPTED-DAG:  Name: _start
+# SCRIPTED-DAG:  Name: lto_entry
+# SCRIPTED-DAG:  Name: kept_lto
+# SCRIPTED-DAG:  Name: layout_anchor
+# SCRIPTED-DAG:  Name: script_data_start
+# SCRIPTED-DAG:  Name: fixed_register
+# SCRIPTED-DAG:  Name: __MMIX_call_stub_0
+
+# REGISTERS:      Contents of section .MMIX.reg_contents:
+# REGISTERS-NEXT: {{[0-9a-f]+}} 00000000 00000100 11223344 55667788
+
+# DISASSEMBLY-LABEL: <_start>:
+# DISASSEMBLY:       PUSHJ
+# DISASSEMBLY:       JMP 0
+# DISASSEMBLY-LABEL: <lto_entry>:
+# DISASSEMBLY:       SETL r231, 42
+# DISASSEMBLY:       POP
+# DISASSEMBLY-LABEL: <feature_entry>:
+# DISASSEMBLY:       PUSHJ
+# DISASSEMBLY-LABEL: <__MMIX_call_stub_0>:
+# DISASSEMBLY:       GO r255, r255, 0
+# DISASSEMBLY-LABEL: <kept_lto>:
+
+#--- producer.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+@script_data_start = external global i8
+@layout_anchor = global ptr @script_data_start, section ".data.layout", align 8
+@llvm.used = appending global [3 x ptr] [ptr @layout_anchor, ptr @kept_lto, ptr @discarded_lto], section "llvm.metadata"
+
+define i64 @lto_entry() noinline nounwind section ".text.lto" {
+  ret i64 42
+}
+
+define void @kept_lto() noinline nounwind section ".text.keep" {
+  ret void
+}
+
+define void @discarded_lto() noinline nounwind section ".text.discard" {
+  ret void
+}
+
+#--- startup.s
+.section .text.start,"ax",@progbits
+.global _start
+.type _start,@function
+_start:
+  PUSHJ r1, lto_entry
+  JMP 0
+
+#--- direct-symbol.s
+.global script_data_start
+.set script_data_start, 0x210000
+
+#--- layout.lds
+ENTRY(_start)
+PHDRS {
+  text PT_LOAD FLAGS(5);
+  data PT_LOAD FLAGS(6);
+}
+SECTIONS {
+  .text 0x1000 : {
+    *(.text.start)
+    *(.text.lto)
+    *(.text.feature)
+    KEEP(*(.text.keep))
+  } :text
+  /DISCARD/ : { *(.text.discard) }
+  .MMIX.reg_contents 0x200000 : {
+    *(.MMIX.reg_contents.linker_allocated)
+    *(.MMIX.reg_contents)
+  }
+  .data 0x210000 : {
+    script_data_start = .;
+    *(.data*)
+  } :data
+}
+
+#--- feature.yaml
+--- !ELF
+FileHeader: { Class: ELFCLASS64, Data: ELFDATA2MSB, Type: ET_REL, Machine: EM_MMIX }
+Sections:
+  - Name: .text.feature
+    Type: SHT_PROGBITS
+    Flags: [ SHF_ALLOC, SHF_EXECINSTR ]
+    AddressAlign: 4
+    Content: F200000023AA000000000000
+  - Name: .rela.text.feature
+    Type: SHT_RELA
+    Link: .symtab
+    Info: .text.feature
+    Relocations:
+      - { Offset: 0, Type: R_MMIX_PUSHJ_STUBBABLE, Symbol: far_target }
+      - { Offset: 6, Type: R_MMIX_BASE_PLUS_OFFSET, Symbol: base_value }
+      - { Offset: 8, Type: R_MMIX_REG, Symbol: fixed_register }
+Symbols:
+  - { Name: feature_entry, Section: .text.feature, Binding: STB_GLOBAL, Type: STT_FUNC }
+  - { Name: far_target, Index: SHN_ABS, Value: 0x1122334455667788, Binding: STB_GLOBAL }
+  - { Name: base_value, Index: SHN_ABS, Value: 256, Binding: STB_GLOBAL }
+  - { Name: fixed_register, Binding: STB_GLOBAL }
+
+#--- register.yaml
+--- !ELF
+FileHeader: { Class: ELFCLASS64, Data: ELFDATA2MSB, Type: ET_REL, Machine: EM_MMIX }
+Sections:
+  - Name: .MMIX.reg_contents
+    Type: SHT_PROGBITS
+    AddressAlign: 8
+    Content: 1122334455667788
+Symbols:
+  - { Name: fixed_register, Section: .MMIX.reg_contents, Binding: STB_GLOBAL }

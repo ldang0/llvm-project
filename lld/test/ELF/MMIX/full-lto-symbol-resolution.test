@@ -1,0 +1,192 @@
+# REQUIRES: mmix
+
+# RUN: rm -rf %t && split-file %s %t
+# RUN: llvm-as %t/weak.ll -o %t/weak.bc
+# RUN: llvm-as %t/strong.ll -o %t/strong.bc
+# RUN: llvm-as %t/properties.ll -o %t/properties.bc
+# RUN: llvm-as %t/comdat-a.ll -o %t/comdat-a.bc
+# RUN: llvm-as %t/comdat-b.ll -o %t/comdat-b.bc
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/native-strong.s \
+# RUN:   -o %t/native-strong.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/comdat-entry.s \
+# RUN:   -o %t/comdat-entry.o
+
+## A strong bitcode definition prevails over a weak bitcode definition in
+## either input order. The selected data initializer makes the result directly
+## observable rather than relying only on symbol binding.
+# RUN: ld.lld -m elf64mmix -e choice -u selected %t/weak.bc %t/strong.bc \
+# RUN:   -o %t/pure-ws
+# RUN: ld.lld -m elf64mmix -e choice -u selected %t/strong.bc %t/weak.bc \
+# RUN:   -o %t/pure-sw
+# RUN: llvm-readobj --symbols --relocations %t/pure-ws \
+# RUN:   | FileCheck %s --check-prefix=STRONG --implicit-check-not=weak_marker
+# RUN: llvm-readobj --symbols --relocations %t/pure-sw \
+# RUN:   | FileCheck %s --check-prefix=STRONG --implicit-check-not=weak_marker
+# RUN: llvm-objdump -s --section=.data %t/pure-ws \
+# RUN:   | FileCheck %s --check-prefix=PURE-DATA
+# RUN: llvm-objdump -s --section=.data %t/pure-sw \
+# RUN:   | FileCheck %s --check-prefix=PURE-DATA
+
+## A native strong definition prevails over the same bitcode weak definition.
+# RUN: ld.lld -m elf64mmix -e choice -u selected %t/weak.bc \
+# RUN:   %t/native-strong.o -o %t/mixed
+# RUN: llvm-readobj --symbols --relocations %t/mixed \
+# RUN:   | FileCheck %s --check-prefix=STRONG --implicit-check-not=weak_marker
+# RUN: llvm-objdump -s --section=.data %t/mixed \
+# RUN:   | FileCheck %s --check-prefix=MIXED-DATA
+# RUN: llvm-objdump --no-print-imm-hex -d %t/mixed \
+# RUN:   | FileCheck %s --check-prefix=MIXED-DIS
+
+## Duplicate strong definitions retain the ordinary lld diagnostic.
+# RUN: not ld.lld -m elf64mmix -e choice %t/strong.bc \
+# RUN:   %t/native-strong.o -o /dev/null 2>&1 \
+# RUN:   | FileCheck %s --check-prefix=DUPLICATE
+
+## Linker-retained and exported symbols survive internalization with their
+## visibility, while IR-local and unreferenced definitions do not escape.
+# RUN: ld.lld -m elf64mmix -e visible -u exported_value -u hidden_value \
+# RUN:   %t/properties.bc -o %t/properties
+# RUN: llvm-readobj --sections --symbols --relocations %t/properties \
+# RUN:   | FileCheck %s --check-prefix=PROPERTIES \
+# RUN:     --implicit-check-not=internal_value \
+# RUN:     --implicit-check-not=discarded_value
+
+## COMDAT selection follows input order. A native reference keeps the chosen
+## bitcode definition externally usable after LTO internalization.
+# RUN: ld.lld -m elf64mmix -e _start %t/comdat-entry.o %t/comdat-a.bc \
+# RUN:   %t/comdat-b.bc -o %t/comdat-ab
+# RUN: ld.lld -m elf64mmix -e _start %t/comdat-entry.o %t/comdat-b.bc \
+# RUN:   %t/comdat-a.bc -o %t/comdat-ba
+# RUN: llvm-objdump -s --section=.data %t/comdat-ab \
+# RUN:   | FileCheck %s --check-prefix=COMDAT-A
+# RUN: llvm-objdump -s --section=.data %t/comdat-ba \
+# RUN:   | FileCheck %s --check-prefix=COMDAT-B
+# RUN: llvm-readobj --symbols --relocations %t/comdat-ab \
+# RUN:   | FileCheck %s --check-prefix=COMDAT
+# RUN: llvm-readobj --symbols --relocations %t/comdat-ba \
+# RUN:   | FileCheck %s --check-prefix=COMDAT
+
+# STRONG:      Relocations [
+# STRONG-NEXT: ]
+# STRONG:      Name: selected
+# STRONG-NEXT: Value:
+# STRONG-NEXT: Size: 8
+# STRONG-NEXT: Binding: Global
+# STRONG:      Name: choice
+# PURE-DATA:      Contents of section .data:
+# PURE-DATA-NEXT: {{[0-9a-f]+}} 00000000 0000002a
+# MIXED-DATA:      Contents of section .data:
+# MIXED-DATA-NEXT: {{[0-9a-f]+}} 00000000 0000002b
+# MIXED-DIS-LABEL: <choice>:
+# MIXED-DIS:       SETL r0, 43
+# DUPLICATE: error: duplicate symbol: selected
+# DUPLICATE: defined in {{.*}}strong.bc
+# DUPLICATE: defined in {{.*}}native-strong.o
+
+# PROPERTIES:      Name: .data
+# PROPERTIES:      SHF_GNU_RETAIN
+# PROPERTIES:      Relocations [
+# PROPERTIES-NEXT: ]
+# PROPERTIES:      Name: hidden_value
+# PROPERTIES-NEXT: Value:
+# PROPERTIES-NEXT: Size: 8
+# PROPERTIES-NEXT: Binding: Local
+# PROPERTIES-NEXT: Type: Object
+# PROPERTIES-NEXT: Other [ (0x2)
+# PROPERTIES-NEXT:   STV_HIDDEN
+# PROPERTIES:      Name: exported_value
+# PROPERTIES:      Name: visible
+# PROPERTIES:      Name: retained_value
+
+# COMDAT-A:      Contents of section .data:
+# COMDAT-A-NEXT: {{[0-9a-f]+}} 00000000 0000000b
+# COMDAT-B:      Contents of section .data:
+# COMDAT-B-NEXT: {{[0-9a-f]+}} 00000000 00000016
+# COMDAT:      Relocations [
+# COMDAT-NEXT: ]
+# COMDAT:      Name: comdat_choice
+# COMDAT:      Name: comdat_data
+
+#--- weak.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+@selected = weak global i64 1, section ".data.selected", align 8
+@weak_marker = weak global i64 2
+
+define weak i64 @choice() noinline nounwind {
+  ret i64 1
+}
+
+#--- strong.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+@selected = global i64 42, section ".data.selected", align 8
+
+define i64 @choice() noinline nounwind {
+  ret i64 42
+}
+
+#--- native-strong.s
+.section .data.selected,"aw",@progbits
+.global selected
+.type selected,@object
+.size selected,8
+selected:
+  .quad 43
+.text
+.global choice
+.type choice,@function
+choice:
+  SETL r0, 43
+  POP 1, 0
+
+#--- properties.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+@exported_value = global i64 5, align 8
+@hidden_value = hidden global i64 6, align 8
+@internal_value = internal global i64 7, align 8
+@discarded_value = global i64 8, align 8
+@retained_value = global i64 9, section ".data.retained", align 8
+@llvm.used = appending global [1 x ptr] [ptr @retained_value], section "llvm.metadata"
+
+define i64 @visible() nounwind {
+  %value = load i64, ptr @exported_value, align 8
+  ret i64 %value
+}
+
+#--- comdat-a.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+$choice = comdat any
+
+@comdat_data = linkonce_odr global i64 11, section ".data.comdat", comdat($choice), align 8
+
+define linkonce_odr i64 @comdat_choice() noinline nounwind comdat($choice) {
+  ret i64 11
+}
+
+#--- comdat-b.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
+$choice = comdat any
+
+@comdat_data = linkonce_odr global i64 22, section ".data.comdat", comdat($choice), align 8
+
+define linkonce_odr i64 @comdat_choice() noinline nounwind comdat($choice) {
+  ret i64 22
+}
+
+#--- comdat-entry.s
+.text
+.global _start
+.type _start,@function
+_start:
+  PUSHJ r1, comdat_choice
+  GETA r2, %geta(comdat_data)
+  POP 0, 0
