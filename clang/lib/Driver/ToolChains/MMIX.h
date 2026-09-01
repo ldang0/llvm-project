@@ -26,6 +26,8 @@ public:
   }
   bool isPICDefaultForced() const override { return false; }
   bool SupportsProfiling() const override { return false; }
+  bool HasNativeLLVMSupport() const override { return true; }
+  const char *getDefaultLinker() const override { return "ld.lld"; }
   RuntimeLibType GetDefaultRuntimeLibType() const override {
     return ToolChain::RLT_CompilerRT;
   }

@@ -22,6 +22,11 @@
 // RUN:   %t.dir/explicit/first.o -lcustom %t.dir/explicit/second.o \
 // RUN:   -o %t.dir/output 2>&1 | FileCheck %s --check-prefix=EXPLICIT \
 // RUN:     --implicit-check-not=mmix-qemu.ld
+// RUN: %clang -### --target=mmix-unknown-unknown -O2 -flto \
+// RUN:   --cstdlib=llvm-libc --sysroot=%t.dir/sysroot \
+// RUN:   -resource-dir=%t.dir/resource %s -o %t.dir/full-lto 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=FULL-LTO \
+// RUN:       --implicit-check-not='"-plugin"'
 
 // RUN: rm %t.dir/sysroot/lib/mmix-unknown-unknown/crt1.o
 // RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
@@ -78,10 +83,6 @@
 // RUN:   | FileCheck %s --check-prefix=PIE --implicit-check-not=ld.lld
 // RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
-// RUN:   -flto %t.dir/explicit/first.o -o %t.dir/output 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=LTO --implicit-check-not=ld.lld
-// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
-// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -fuse-ld=bfd %t.dir/explicit/first.o -o %t.dir/output 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=LINKER --implicit-check-not=ld.lld
 // RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
@@ -105,6 +106,16 @@
 // EXPLICIT-SAME: "-T" "[[EXPLICIT_DIR]]{{/|\\}}custom.ld"
 // EXPLICIT-SAME: "[[EXPLICIT_DIR]]{{/|\\}}first.o" "-lcustom"
 // EXPLICIT-SAME: "[[EXPLICIT_DIR]]{{/|\\}}second.o" "--start-group"
+// FULL-LTO: "{{.*}}ld.lld" "-m" "elf64mmix" "-static"
+// FULL-LTO-SAME: "-T" "[[LTO_LIBDIR:[^\"]+]]{{/|\\}}mmix-qemu.ld"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}crt1.o"
+// FULL-LTO-SAME: "-plugin-opt=O2" "{{[^\"]+}}.o" "--start-group"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}libc.a"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}libmmixplatform.a"
+// FULL-LTO-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.builtins.a"
+// FULL-LTO-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.atomic.a"
+// FULL-LTO-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.stack_protector.a"
+// FULL-LTO-SAME: "--end-group" "-o"
 // NO-START: "{{.*}}ld.lld"
 // NO-START-SAME: "{{[^"]+}}{{/|\\}}first.o" "--start-group"
 // NO-LIBS: "{{.*}}ld.lld"
@@ -121,7 +132,6 @@
 // SHARED: error: the clang compiler does not support 'shared linking for MMIX'
 // DYNAMIC: error: the clang compiler does not support 'dynamic linking for MMIX'
 // PIE: error: the clang compiler does not support 'PIE linking for MMIX'
-// LTO: error: the clang compiler does not support 'LTO linking for MMIX'
 // LINKER: error: the clang compiler does not support 'non-lld linker selection for MMIX'
 // RUNTIME: error: the clang compiler does not support 'non-compiler-rt runtime selection for MMIX'
 // UNWIND: error: the clang compiler does not support 'unwind library selection for MMIX'

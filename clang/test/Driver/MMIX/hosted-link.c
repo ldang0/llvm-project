@@ -41,6 +41,11 @@
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/freestanding-hosted 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=HOSTED
+// RUN: %clang -### --target=mmix-unknown-unknown -O2 -flto \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   %s -o %t.dir/full-lto 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=FULL-LTO \
+// RUN:       --implicit-check-not='"-plugin"'
 
 // RUN: %clang -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
@@ -159,6 +164,19 @@
 // HOSTED-SAME: "--end-group"
 // HOSTED-SAME: "[[LIBDIR]]{{/|\\}}crtn.o"
 // HOSTED-SAME: "-o"
+
+// FULL-LTO: "{{.*}}ld.lld" "-m" "elf64mmix" "-static"
+// FULL-LTO-SAME: "-T" "[[LTO_LIBDIR:[^\"]+]]{{/|\\}}mmix-qemu.ld"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}crt0.o"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}trip-vectors.o"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}crti.o"
+// FULL-LTO-SAME: "-plugin-opt=O2" "{{[^\"]+}}.o" "--start-group"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}libc.a"
+// FULL-LTO-SAME: "[[LTO_LIBDIR]]{{/|\\}}libgloss.a"
+// FULL-LTO-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.builtins.a"
+// FULL-LTO-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.atomic.a"
+// FULL-LTO-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.stack_protector.a"
+// FULL-LTO-SAME: "--end-group" "[[LTO_LIBDIR]]{{/|\\}}crtn.o" "-o"
 
 // MATH: "{{.*}}ld.lld"
 // MATH-SAME: "-lm" "{{[^"]+}}.o" "--start-group"

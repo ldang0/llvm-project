@@ -49,16 +49,36 @@
 // RUN:   %S/Inputs/freestanding.c -o %t.o 2>&1 \
 // RUN:   | FileCheck --check-prefix=AS %s \
 // RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
-// RUN: not %clang -### --target=mmix-unknown-unknown -flto \
+// RUN: %clang -### --target=mmix-unknown-unknown -O2 -flto \
 // RUN:   -ffreestanding -nostdlib -nostartfiles -nodefaultlibs \
 // RUN:   %S/Inputs/freestanding.c -o %t-lto 2>&1 \
-// RUN:   | FileCheck --check-prefix=LTO %s \
+// RUN:   | FileCheck --check-prefix=FULL-LTO %s \
+// RUN:       --implicit-check-not='"-plugin"' \
 // RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
+// RUN: %clang -### --target=mmix-unknown-elf -O2 -flto=full \
+// RUN:   -ffreestanding -nostdlib -nostartfiles -nodefaultlibs \
+// RUN:   %S/Inputs/freestanding.c -o %t-full-lto 2>&1 \
+// RUN:   | FileCheck --check-prefix=FULL-LTO %s \
+// RUN:       --implicit-check-not='"-plugin"'
+// RUN: env PATH=/usr/bin:/bin %clang --target=mmix-unknown-unknown -O2 -flto \
+// RUN:   -ffreestanding -nostdlib -nostartfiles -nodefaultlibs \
+// RUN:   %S/Inputs/freestanding.c -Wl,-e,mmix_driver_fixture -o %t-lto-executable
+// RUN: llvm-readobj --file-headers %t-lto-executable \
+// RUN:   | FileCheck --check-prefix=ELF %s
 // RUN: not %clang -### --target=mmix-unknown-unknown -flto=thin \
 // RUN:   -ffreestanding -nostdlib -nostartfiles -nodefaultlibs \
 // RUN:   %S/Inputs/freestanding.c -o %t-thinlto 2>&1 \
-// RUN:   | FileCheck --check-prefix=LTO %s \
+// RUN:   | FileCheck --check-prefix=THIN-LTO %s \
 // RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
+// RUN: not %clang -### --target=mmix-unknown-unknown -flto \
+// RUN:   -ffreestanding -nostdlib -nostartfiles -nodefaultlibs \
+// RUN:   -Wl,-plugin,/not/allowed %S/Inputs/freestanding.c -o %t-plugin 2>&1 \
+// RUN:   | FileCheck --check-prefix=PLUGIN %s --implicit-check-not=ld.lld
+// RUN: not %clang -### --target=mmix-unknown-unknown -flto \
+// RUN:   -ffreestanding -nostdlib -nostartfiles -nodefaultlibs \
+// RUN:   -Xlinker --plugin=/not/allowed %S/Inputs/freestanding.c \
+// RUN:   -o %t-plugin-eq 2>&1 \
+// RUN:   | FileCheck --check-prefix=PLUGIN %s --implicit-check-not=ld.lld
 // RUN: not %clang -### --target=mmix-unknown-unknown -ffreestanding \
 // RUN:   -nostdlib -nostartfiles -nodefaultlibs -fuse-ld=bfd \
 // RUN:   %t-input.o -o %t 2>&1 | FileCheck --check-prefix=LINKER %s \
@@ -83,7 +103,13 @@
 // PIE: error: the clang compiler does not support 'PIE linking for MMIX'
 // PIC: error: the clang compiler does not support 'position-independent linking for MMIX'
 // RUNTIME-LIB: error: the clang compiler does not support 'runtime library selection for MMIX freestanding linking'
-// LTO: error: the clang compiler does not support 'LTO linking for MMIX'
+// FULL-LTO: "-cc1"
+// FULL-LTO-SAME: "-flto=full"
+// FULL-LTO: "{{.*}}ld.lld" "-m" "elf64mmix" "-static"
+// FULL-LTO-SAME: "-plugin-opt=O{{[02]}}"
+// FULL-LTO-SAME: "{{[^\"]+}}.o" "-o"
+// THIN-LTO: error: the clang compiler does not support 'ThinLTO linking for MMIX'
+// PLUGIN: error: the clang compiler does not support 'linker plugin loading for MMIX'
 // LINKER: error: the clang compiler does not support 'non-lld linker selection for MMIX'
 
 // AS: error: the clang compiler does not support 'external assembly for MMIX'

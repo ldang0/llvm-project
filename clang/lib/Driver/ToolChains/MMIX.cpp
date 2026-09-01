@@ -44,7 +44,13 @@ public:
   }
 };
 
-static bool diagnoseUnsupportedLinkMode(Compilation &C, const ArgList &Args) {
+static bool isLinkerPluginOption(StringRef Value) {
+  return Value == "-plugin" || Value == "--plugin" ||
+         Value.starts_with("-plugin=") || Value.starts_with("--plugin=");
+}
+
+static bool diagnoseUnsupportedLinkMode(Compilation &C, const ToolChain &TC,
+                                        const ArgList &Args) {
   const Driver &D = C.getDriver();
   const bool IsHosted = !D.SysRoot.empty();
   auto Diagnose = [&](StringRef Mode) {
@@ -70,8 +76,15 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ArgList &Args) {
         A->getOption().matches(options::OPT_fpie))
       return Diagnose("position-independent linking for MMIX");
   }
-  if (Args.hasArg(options::OPT_flto, options::OPT_flto_EQ))
-    return Diagnose("LTO linking for MMIX");
+  if (TC.getLTOMode(Args) == LTOK_Thin)
+    return Diagnose("ThinLTO linking for MMIX");
+  for (const Arg *A : Args.filtered(options::OPT_Wl_COMMA))
+    for (StringRef Value : A->getValues())
+      if (isLinkerPluginOption(Value))
+        return Diagnose("linker plugin loading for MMIX");
+  for (StringRef Value : Args.getAllArgValues(options::OPT_Xlinker))
+    if (isLinkerPluginOption(Value))
+      return Diagnose("linker plugin loading for MMIX");
   if (Args.hasArg(options::OPT_ld_path_EQ))
     return Diagnose("custom linker selection for MMIX");
   if (const Arg *A = Args.getLastArg(options::OPT_fuse_ld_EQ)) {
@@ -130,10 +143,10 @@ public:
   void ConstructJob(Compilation &C, const JobAction &JA,
                     const InputInfo &Output, const InputInfoList &Inputs,
                     const ArgList &Args, const char *) const override {
-    if (diagnoseUnsupportedLinkMode(C, Args))
+    const ToolChain &TC = getToolChain();
+    if (diagnoseUnsupportedLinkMode(C, TC, Args))
       return;
 
-    const ToolChain &TC = getToolChain();
     const Driver &D = TC.getDriver();
     const bool IsHosted = !D.SysRoot.empty();
     const bool AddDefaultLibraries =
@@ -236,6 +249,9 @@ public:
     }
     for (const std::string &StartFile : StartFiles)
       CmdArgs.push_back(Args.MakeArgString(StartFile));
+    if (auto LTO = TC.getLTOMode(Args); LTO != LTOK_None)
+      tools::addLTOOptions(TC, Args, CmdArgs, Output, Inputs,
+                           LTO == LTOK_Thin);
     tools::AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
     if (AddDefaultLibraries) {
       CmdArgs.push_back("--start-group");
@@ -252,7 +268,7 @@ public:
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
 
-    const char *Exec = Args.MakeArgString(TC.GetProgramPath("ld.lld"));
+    const char *Exec = Args.MakeArgString(TC.GetLinkerPath());
     C.addCommand(std::make_unique<Command>(
         JA, *this, ResponseFileSupport::AtFileCurCP(), Exec, CmdArgs, Inputs,
         Output));
