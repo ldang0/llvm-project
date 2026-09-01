@@ -5,8 +5,6 @@
 # RUN:   | FileCheck %s --check-prefix=SHARED
 # RUN: not ld.lld -pie %t.o -o /dev/null 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=PIE
-# RUN: not ld.lld -r %t.o -o /dev/null 2>&1 \
-# RUN:   | FileCheck %s --check-prefix=RELOCATABLE
 # RUN: not ld.lld --dynamic-linker=/lib/ld.so %t.o -o /dev/null 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=INTERP
 # RUN: not ld.lld --oformat=binary %t.o -o /dev/null 2>&1 \
@@ -23,7 +21,6 @@
 
 # SHARED: error: MMIX does not support shared object output
 # PIE: error: MMIX does not support PIE output
-# RELOCATABLE: error: MMIX lld supports only static executable output
 # INTERP: error: MMIX does not support a dynamic linker
 # BINARY: error: MMIX lld supports only ELF output
 # OSABI-ERR: error: MMIX supports only the System V ELF OSABI

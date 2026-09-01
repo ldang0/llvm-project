@@ -346,8 +346,9 @@ MMIX::MMIX(Ctx &ctx) : TargetInfo(ctx) {
     ErrAlways(ctx) << "MMIX does not support shared object output";
   else if (ctx.arg.pie)
     ErrAlways(ctx) << "MMIX does not support PIE output";
-  else if (ctx.arg.relocatable)
-    ErrAlways(ctx) << "MMIX lld supports only static executable output";
+  else if (ctx.arg.relocatable && !ctx.bitcodeFiles.empty())
+    ErrAlways(ctx) << "MMIX does not support relocatable links with bitcode "
+                      "input";
 
   if (!ctx.arg.dynamicLinker.empty())
     ErrAlways(ctx) << "MMIX does not support a dynamic linker";
