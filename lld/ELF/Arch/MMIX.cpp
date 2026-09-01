@@ -325,6 +325,7 @@ private:
                                                 const uint8_t *loc) const;
   bool isRegisterContentReference(const Symbol &sym) const;
   bool isRegisterContentSymbol(const Symbol &sym) const;
+  void validateRelocatableSection(InputSectionBase &sec) const;
   std::optional<uint16_t>
   getRegisterContentValue(const Symbol &sym, int64_t addend,
                           const uint8_t *loc = nullptr) const;
@@ -373,6 +374,33 @@ void MMIX::initTargetSpecificSections() {
   linkerAllocatedRegisterContents =
       std::make_unique<MMIXLinkerAllocatedRegisterSection>(ctx, name);
   ctx.inputSections.push_back(linkerAllocatedRegisterContents.get());
+
+  if (ctx.arg.relocatable)
+    for (ELFFileBase *file : ctx.objectFiles)
+      for (InputSectionBase *section : file->getSections())
+        if (section && section != &InputSection::discarded &&
+            section->kind() == SectionBase::Regular)
+          validateRelocatableSection(*section);
+}
+
+void MMIX::validateRelocatableSection(InputSectionBase &sec) const {
+  RelsOrRelas<ELF64BE> relocs = sec.relsOrRelas<ELF64BE>();
+  if (relocs.areRelocsRel() || relocs.areRelocsCrel()) {
+    Err(ctx) << &sec << ": MMIX supports only RELA relocations";
+    return;
+  }
+
+  ArrayRef<uint8_t> contents = sec.content();
+  for (const ELF64BE::Rela &rela : relocs.relas) {
+    RelType type = rela.getType(false);
+    if (type == R_MMIX_NONE)
+      continue;
+    Symbol &sym = sec.getFile<ELF64BE>()->getSymbol(rela.getSymbol(false));
+    const uint8_t *loc = contents.data();
+    if (rela.r_offset < contents.size())
+      loc += rela.r_offset;
+    (void)getRelExpr(type, sym, loc);
+  }
 }
 
 bool MMIX::orderLinkerAllocatedRegisterContents() const {
@@ -497,6 +525,8 @@ MMIX::getTargetSymbolTableEntry(const Symbol &sym) const {
   auto direct = registerSymbols.find(&sym);
   if (direct != registerSymbols.end())
     return TargetSymbolTableEntry{shnMMIXRegister, direct->second};
+  if (ctx.arg.relocatable)
+    return std::nullopt;
   if (!isRegisterContentSymbol(sym))
     return std::nullopt;
   std::optional<uint16_t> reg = getRegisterContentValue(sym, 0);
