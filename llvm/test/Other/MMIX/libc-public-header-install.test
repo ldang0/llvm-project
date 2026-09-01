@@ -14,7 +14,7 @@
 # RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/install -DCMAKE_BUILD_TYPE=Release
 # RUN: ninja -C %t.dir/build -j 4 install-libc-headers
 # RUN: find %t.dir/install/include/mmix-unknown-unknown -maxdepth 1 \
-# RUN:   -type f -printf '%f\n' | sort | count 20
+# RUN:   -type f -printf '%f\n' | sort | count 21
 # RUN: find %t.dir/install/include/mmix-unknown-unknown -maxdepth 1 \
 # RUN:   -type f -printf '%f\n' | sort | FileCheck %s --check-prefix=HEADERS
 # RUN: not test -e %t.dir/install/include/mmix-unknown-unknown/threads.h
@@ -31,6 +31,7 @@
 
 # HEADERS:      __llvm-libc-common.h
 # HEADERS-NEXT: assert.h
+# HEADERS-NEXT: complex.h
 # HEADERS-NEXT: ctype.h
 # HEADERS-NEXT: errno.h
 # HEADERS-NEXT: float.h
@@ -52,6 +53,7 @@
 
 #--- installed.c
 #include <assert.h>
+#include <complex.h>
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>

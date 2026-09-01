@@ -8,6 +8,12 @@
 # RUN:   -o %t/include/assert.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/assert.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/complex.h --write-if-changed \
+# RUN:   -e cabsf -e cabs -e cargf -e carg \
+# RUN:   -e cimagf -e cimag -e cimagl -e conjf -e conj -e conjl \
+# RUN:   -e cprojf -e cproj -e cprojl -e crealf -e creal -e creall \
+# RUN:   %S/../../../../libc/include/complex.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/ctype.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/ctype.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
@@ -70,6 +76,7 @@
 include(${MMIX_HEADERS})
 set(expected_headers
     libc.include.assert
+    libc.include.complex
     libc.include.ctype
     libc.include.errno
     libc.include.float
@@ -95,6 +102,7 @@ endif()
 
 #--- properties.c
 #include <assert.h>
+#include <complex.h>
 #include <ctype.h>
 #include <errno.h>
 #include <float.h>
@@ -112,11 +120,14 @@ endif()
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <tgmath.h>
 #include <uchar.h>
 #include <wchar.h>
 #include <wctype.h>
 
 #define SAME_TYPE(T, U) __builtin_types_compatible_p(T, U)
+
+const volatile _Complex double qualified_complex;
 
 _Static_assert(CHAR_BIT == 8 && CHAR_MIN < 0, "plain char model");
 _Static_assert(SAME_TYPE(__typeof__(errno), int), "process errno type");
@@ -142,6 +153,33 @@ _Static_assert(!SAME_TYPE(double, long double), "distinct long double");
 _Static_assert(sizeof(_Complex float) == 8, "float complex");
 _Static_assert(sizeof(_Complex double) == 16, "double complex");
 _Static_assert(sizeof(_Complex long double) == 16, "long double complex");
+_Static_assert(SAME_TYPE(__typeof__(creal((_Complex float)0)), float),
+               "type-generic creal float");
+_Static_assert(SAME_TYPE(__typeof__(creal((_Complex double)0)), double),
+               "type-generic creal double");
+_Static_assert(SAME_TYPE(__typeof__(creal((_Complex long double)0)),
+                         long double), "type-generic creal long double");
+_Static_assert(SAME_TYPE(__typeof__(conj((_Complex float)0)),
+                         _Complex float), "type-generic conj float");
+_Static_assert(SAME_TYPE(__typeof__(conj((_Complex double)0)),
+                         _Complex double), "type-generic conj double");
+_Static_assert(SAME_TYPE(__typeof__(conj((_Complex long double)0)),
+                         _Complex long double),
+               "type-generic conj long double");
+_Static_assert(SAME_TYPE(__typeof__(carg((_Complex float)0)), float),
+               "type-generic carg float");
+_Static_assert(SAME_TYPE(__typeof__(carg((_Complex double)0)), double),
+               "type-generic carg double");
+_Static_assert(SAME_TYPE(__typeof__(fabs(1)), double),
+               "type-generic integer promotes to double");
+_Static_assert(SAME_TYPE(__typeof__(fabs(1.0f)), float),
+               "type-generic float remains float");
+_Static_assert(SAME_TYPE(__typeof__(fabs(1.0L)), long double),
+               "type-generic long double remains long double");
+_Static_assert(SAME_TYPE(__typeof__(pow(1.0f, 2.0)), double),
+               "type-generic mixed real promotes to double");
+_Static_assert(SAME_TYPE(__typeof__(creal(qualified_complex)), double),
+               "type-generic qualified complex selects double");
 
 _Static_assert(SAME_TYPE(size_t, unsigned long), "size_t");
 _Static_assert(SAME_TYPE(ptrdiff_t, long), "ptrdiff_t");
