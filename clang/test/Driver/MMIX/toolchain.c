@@ -20,10 +20,6 @@
 // RUN:   %S/Inputs/freestanding.c -o %t 2>&1 \
 // RUN:   | FileCheck --check-prefix=RUNTIME %s \
 // RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
-// RUN: not %clang -### --target=mmix-unknown-unknown -r \
-// RUN:   %S/Inputs/freestanding.c -o %t.o 2>&1 \
-// RUN:   | FileCheck --check-prefix=RELOCATABLE %s \
-// RUN:       --implicit-check-not='{{[/\\](gcc|ld|as)[^/\\"]*"}}'
 // RUN: not %clang -### --target=mmix-unknown-unknown -shared \
 // RUN:   %S/Inputs/freestanding.c -o %t.so 2>&1 \
 // RUN:   | FileCheck --check-prefix=SHARED %s \
@@ -97,7 +93,6 @@
 
 // LINK: error: the clang compiler does not support 'implicit hosted linking for MMIX'
 // RUNTIME: error: the clang compiler does not support 'implicit runtime files for MMIX freestanding linking'
-// RELOCATABLE: error: the clang compiler does not support 'relocatable linking for MMIX'
 // SHARED: error: the clang compiler does not support 'shared linking for MMIX'
 // DYNAMIC: error: the clang compiler does not support 'dynamic linking for MMIX'
 // PIE: error: the clang compiler does not support 'PIE linking for MMIX'

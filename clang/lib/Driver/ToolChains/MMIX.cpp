@@ -53,13 +53,12 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ToolChain &TC,
                                         const ArgList &Args) {
   const Driver &D = C.getDriver();
   const bool IsHosted = !D.SysRoot.empty();
+  const bool IsRelocatable = Args.hasArg(options::OPT_r);
   auto Diagnose = [&](StringRef Mode) {
     D.Diag(diag::err_drv_clang_unsupported) << Mode;
     return true;
   };
 
-  if (Args.hasArg(options::OPT_r))
-    return Diagnose("relocatable linking for MMIX");
   if (Args.hasArg(options::OPT_shared))
     return Diagnose("shared linking for MMIX");
   if (Args.hasArg(options::OPT_dynamic, options::OPT_rdynamic))
@@ -78,6 +77,8 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ToolChain &TC,
   }
   if (TC.getLTOMode(Args) == LTOK_Thin)
     return Diagnose("ThinLTO linking for MMIX");
+  if (IsRelocatable && TC.getLTOMode(Args) != LTOK_None)
+    return Diagnose("LTO relocatable linking for MMIX");
   for (const Arg *A : Args.filtered(options::OPT_Wl_COMMA))
     for (StringRef Value : A->getValues())
       if (isLinkerPluginOption(Value))
@@ -90,6 +91,11 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ToolChain &TC,
   if (const Arg *A = Args.getLastArg(options::OPT_fuse_ld_EQ)) {
     if (StringRef(A->getValue()) != "lld")
       return Diagnose("non-lld linker selection for MMIX");
+  }
+  if (IsRelocatable) {
+    if (Args.hasArg(options::OPT_rtlib_EQ, options::OPT_unwindlib_EQ))
+      return Diagnose("runtime library selection for MMIX relocatable linking");
+    return false;
   }
   if (IsHosted) {
     if (const Arg *A = Args.getLastArg(options::OPT_rtlib_EQ)) {
@@ -148,7 +154,8 @@ public:
       return;
 
     const Driver &D = TC.getDriver();
-    const bool IsHosted = !D.SysRoot.empty();
+    const bool IsRelocatable = Args.hasArg(options::OPT_r);
+    const bool IsHosted = !IsRelocatable && !D.SysRoot.empty();
     const bool AddDefaultLibraries =
         IsHosted &&
         !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
@@ -236,7 +243,12 @@ public:
     ArgStringList CmdArgs;
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf64mmix");
-    CmdArgs.push_back("-static");
+    if (IsRelocatable) {
+      Args.claimAllArgs(options::OPT_r);
+      CmdArgs.push_back("-r");
+    } else {
+      CmdArgs.push_back("-static");
+    }
     Args.addAllArgs(CmdArgs, {options::OPT_L, options::OPT_s, options::OPT_t,
                               options::OPT_u_Group});
     if (IsHosted)
