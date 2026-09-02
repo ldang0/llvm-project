@@ -3,10 +3,17 @@
 // RUN:   -gdwarf-5 -g -ffile-prefix-map=%S=/src \
 // RUN:   -fdebug-compilation-dir=/build -c %s -o %t.o
 // RUN: llvm-readobj --sections %t.o | FileCheck %s --check-prefix=OBJECT
-// RUN: ld.lld -m elf64mmix -e debug_entry %t.o -o %t
+// RUN: ld.lld -m elf64mmix --image-base=0 -Ttext=0x1000 \
+// RUN:   -e debug_entry %t.o -o %t
 // RUN: llvm-dwarfdump --verify %t
 // RUN: llvm-dwarfdump --debug-info %t \
 // RUN:   | FileCheck %s --check-prefix=INFO
+// RUN: llvm-symbolizer --inlines --obj=%t 0x1000 0x1004 0x100c 0x104c \
+// RUN:   0xffffffffffffffff \
+// RUN:   | FileCheck %s --check-prefix=SYMBOLIZE
+// RUN: llvm-addr2line -f -i -e %t 0x1000 0x1004 0x100c 0x104c \
+// RUN:   0xffffffffffffffff \
+// RUN:   | FileCheck %s --check-prefix=ADDR2LINE
 
 // OBJECT: Name: .debug_loclists
 
@@ -37,6 +44,32 @@
 // INFO: DW_TAG_call_site
 // INFO-NEXT: DW_AT_call_target_clobbered
 // INFO-NEXT: DW_AT_call_return_pc ([[CALL_RETURN]])
+
+// SYMBOLIZE: debug_helper
+// SYMBOLIZE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}:0
+// SYMBOLIZE: debug_helper
+// SYMBOLIZE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}:0
+// SYMBOLIZE: adjust
+// SYMBOLIZE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}:
+// SYMBOLIZE-NEXT: debug_helper
+// SYMBOLIZE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}:
+// SYMBOLIZE: debug_entry
+// SYMBOLIZE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}:0
+// SYMBOLIZE: ??
+// SYMBOLIZE-NEXT: ??:0:0
+
+// ADDR2LINE: debug_helper
+// ADDR2LINE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}
+// ADDR2LINE: debug_helper
+// ADDR2LINE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}
+// ADDR2LINE: adjust
+// ADDR2LINE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}
+// ADDR2LINE-NEXT: debug_helper
+// ADDR2LINE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}
+// ADDR2LINE: debug_entry
+// ADDR2LINE-NEXT: /src/optimized-debug-locations.c:{{[0-9]+}}
+// ADDR2LINE: ??
+// ADDR2LINE-NEXT: ??:0
 
 int debug_global = 9;
 

@@ -155,6 +155,19 @@ static uint64_t resolveMips64(uint64_t Type, uint64_t Offset, uint64_t S,
   }
 }
 
+static bool supportsMMIX(uint64_t Type) {
+  return Type == ELF::R_MMIX_32 || Type == ELF::R_MMIX_64;
+}
+
+static uint64_t resolveMMIX(uint64_t Type, uint64_t Offset, uint64_t S,
+                            uint64_t /*LocData*/, int64_t Addend) {
+  if (Type == ELF::R_MMIX_32)
+    return (S + Addend) & 0xFFFFFFFF;
+  if (Type == ELF::R_MMIX_64)
+    return S + Addend;
+  llvm_unreachable("Invalid relocation type");
+}
+
 static bool supportsMSP430(uint64_t Type) {
   switch (Type) {
   case ELF::R_MSP430_32:
@@ -829,6 +842,8 @@ getRelocationResolver(const ObjectFile &Obj) {
       case Triple::mips64el:
       case Triple::mips64:
         return {supportsMips64, resolveMips64};
+      case Triple::mmix:
+        return {supportsMMIX, resolveMMIX};
       case Triple::ppc64le:
       case Triple::ppc64:
         return {supportsPPC64, resolvePPC64};

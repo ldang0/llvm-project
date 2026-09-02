@@ -430,6 +430,12 @@ void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
           options::OPT_fasynchronous_unwind_tables, options::OPT_fexceptions,
           options::OPT_fcxx_exceptions))
     DiagnoseUnsupported(A);
+
+  if (const Arg *A = DriverArgs.getLastArg(
+          options::OPT_gsplit_dwarf, options::OPT_gsplit_dwarf_EQ,
+          options::OPT_gno_split_dwarf);
+      A && !A->getOption().matches(options::OPT_gno_split_dwarf))
+    DiagnoseUnsupported(A);
 }
 
 Tool *MMIXToolChain::buildAssembler() const {
