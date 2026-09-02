@@ -18,6 +18,7 @@
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCObjectWriter.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Endian.h"
@@ -314,6 +315,17 @@ public:
   std::optional<bool> evaluateFixup(const MCFragment &F, MCFixup &Fixup,
                                     MCValue &Target,
                                     uint64_t &Value) override {
+    const MCSymbol *Add = Target.getAddSym();
+    const MCSymbol *Sub = Target.getSubSym();
+    if (Add && Sub && Add->isDefined() && Sub->isDefined() &&
+        &Add->getSection() == &Sub->getSection()) {
+      // MMIX linker relaxation rewrites a fixed 16-byte GETA reservation, so
+      // it cannot change same-section symbol differences.
+      Value = Target.getConstant() + Asm->getSymbolOffset(*Add) -
+              Asm->getSymbolOffset(*Sub);
+      return true;
+    }
+
     if (Fixup.getKind() != MMIX::fixup_mmix_geta || !Target.isAbsolute())
       return {};
     Value = Target.getConstant();

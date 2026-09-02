@@ -28,6 +28,9 @@ MMIXMCAsmInfo::MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   AllowDigitAtStartOfIdentifier = true;
   UsesELFSectionDirectiveForBSS = true;
   IsLittleEndian = false;
+  SupportsDebugInformation =
+      Options.OutputAsmVariant.value_or(MMIXII::CanonicalAsmVariant) !=
+      MMIXII::MMIXALAsmVariant;
 }
 
 void MMIXMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
