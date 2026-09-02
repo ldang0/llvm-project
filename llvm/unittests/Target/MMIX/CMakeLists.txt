@@ -24,6 +24,7 @@ add_llvm_target_unittest(MMIXTests
   MMIXALModuleValidatorTest.cpp
   MMIXALSymbolMapperTest.cpp
   MMIXCallEmissionTest.cpp
+  MMIXDwarfRegMappingTest.cpp
   MMIXELFObjectWriterTest.cpp
   MMIXTailCallTest.cpp
   )

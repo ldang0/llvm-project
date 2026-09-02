@@ -14,6 +14,8 @@
 class MMIXReg<bits<8> Encoding, string Name> : Register<Name> {
   let Namespace = "MMIX";
   let HWEncoding{7-0} = Encoding;
+  let DwarfNumbers =
+      [!if(!ge(Encoding, 224), !sub(Encoding, 224), !add(Encoding, 48))];
 }
 
 foreach I = 0-255 in
@@ -41,31 +43,33 @@ def F32BitsCodeGen : RegisterClass<"MMIX", [f32], 64,
     (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
 
 // MMIX special-register encodings are the values accepted by GET and PUT.
-class MMIXSpecialReg<bits<5> Encoding, string Name> : Register<Name> {
+class MMIXSpecialReg<bits<5> Encoding, string Name,
+                     list<int> DwarfNums = []> : Register<Name> {
   let Namespace = "MMIX";
   let PositionOrder = 1;
   let HWEncoding{4-0} = Encoding;
+  let DwarfNumbers = DwarfNums;
 }
 
 def RA  : MMIXSpecialReg<21, "rA">;
 def RB  : MMIXSpecialReg<0,  "rB">;
 def RC  : MMIXSpecialReg<8,  "rC">;
-def RD  : MMIXSpecialReg<1,  "rD">;
-def RE  : MMIXSpecialReg<2,  "rE">;
+def RD  : MMIXSpecialReg<1,  "rD", [32]>;
+def RE  : MMIXSpecialReg<2,  "rE", [33]>;
 def RF  : MMIXSpecialReg<22, "rF">;
-def RG  : MMIXSpecialReg<19, "rG">;
-def RH  : MMIXSpecialReg<3,  "rH">;
+def RG  : MMIXSpecialReg<19, "rG", [291]>;
+def RH  : MMIXSpecialReg<3,  "rH", [34]>;
 def RI  : MMIXSpecialReg<12, "rI">;
-def RJ  : MMIXSpecialReg<4,  "rJ">;
+def RJ  : MMIXSpecialReg<4,  "rJ", [35]>;
 def RK  : MMIXSpecialReg<15, "rK">;
-def RL  : MMIXSpecialReg<20, "rL">;
+def RL  : MMIXSpecialReg<20, "rL", [292]>;
 def RM  : MMIXSpecialReg<5,  "rM">;
 def RN  : MMIXSpecialReg<9,  "rN">;
-def RO  : MMIXSpecialReg<10, "rO">;
+def RO  : MMIXSpecialReg<10, "rO", [38]>;
 def RP  : MMIXSpecialReg<23, "rP">;
 def RQ  : MMIXSpecialReg<16, "rQ">;
-def RR  : MMIXSpecialReg<6,  "rR">;
-def RS  : MMIXSpecialReg<11, "rS">;
+def RR  : MMIXSpecialReg<6,  "rR", [36]>;
+def RS  : MMIXSpecialReg<11, "rS", [283]>;
 def RT  : MMIXSpecialReg<13, "rT">;
 def RU  : MMIXSpecialReg<17, "rU">;
 def RV  : MMIXSpecialReg<18, "rV">;
