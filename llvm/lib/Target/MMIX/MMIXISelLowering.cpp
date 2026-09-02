@@ -1758,20 +1758,21 @@ static SDValue addTokenForMMIXTailCallArgument(
   int64_t LastByte =
       FirstByte + int64_t(MFI.getObjectSize(ClobberedFrameIndex)) - 1;
 
-  // LOAD_STACK_ARG represents an incoming fixed-stack load until instruction
-  // selection. Order every overlapping load before the outgoing tail store so
-  // arbitrary stack-argument permutations have memmove-equivalent behavior.
+  // Order every overlapping incoming fixed-stack load before the outgoing tail
+  // store so arbitrary stack-argument permutations have memmove-equivalent
+  // behavior.
   for (SDNode *User : DAG.getEntryNode()->users()) {
-    if (User->getOpcode() != MMIXISD::LOAD_STACK_ARG)
+    auto *Load = dyn_cast<LoadSDNode>(User);
+    if (!Load)
       continue;
-    const auto *FI = dyn_cast<FrameIndexSDNode>(User->getOperand(1));
+    const auto *FI = dyn_cast<FrameIndexSDNode>(Load->getBasePtr());
     if (!FI || FI->getIndex() >= 0)
       continue;
     int64_t InFirstByte = MFI.getObjectOffset(FI->getIndex());
     int64_t InLastByte =
         InFirstByte + int64_t(MFI.getObjectSize(FI->getIndex())) - 1;
     if (InFirstByte <= LastByte && FirstByte <= InLastByte)
-      ArgChains.push_back(SDValue(User, 1));
+      ArgChains.push_back(SDValue(Load, 1));
   }
 
   return DAG.getNode(ISD::TokenFactor, SDLoc(Chain), MVT::Other, ArgChains);
@@ -2492,11 +2493,9 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
       Arg = DAG.getCopyFromReg(Chain, DL, VReg, VA.getLocVT());
     } else {
       int FI = MFI.CreateFixedObject(8, VA.getLocMemOffset(), true);
-      SDValue FrameIndex = DAG.getTargetFrameIndex(FI, MVT::i64);
-      SDValue StackArg = DAG.getNode(MMIXISD::LOAD_STACK_ARG, DL,
-                                     DAG.getVTList(VA.getLocVT(), MVT::Other),
-                                     Chain, FrameIndex);
-      Arg = StackArg;
+      SDValue FrameIndex = DAG.getFrameIndex(FI, MVT::i64);
+      Arg = DAG.getLoad(VA.getLocVT(), DL, Chain, FrameIndex,
+                        MachinePointerInfo::getFixedStack(MF, FI), Align(8));
     }
 
     const MMIXFormalArgMapping &Mapping = ArgMappings[I];

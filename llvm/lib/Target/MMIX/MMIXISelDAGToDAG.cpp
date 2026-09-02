@@ -294,19 +294,6 @@ private:
       report_fatal_error(
           "MMIX requires naturally aligned octabyte compare-and-swap");
 
-    if (Node->getOpcode() == MMIXISD::LOAD_STACK_ARG) {
-      SDLoc DL(Node);
-      auto *FIN = cast<FrameIndexSDNode>(Node->getOperand(1));
-      SDValue FrameIndex =
-          CurDAG->getTargetFrameIndex(FIN->getIndex(), MVT::i64);
-      SDValue Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
-      SDValue Chain = Node->getOperand(0);
-      SDValue Ops[] = {FrameIndex, Offset, Chain};
-      CurDAG->SelectNodeTo(Node, MMIX::LDOUI, Node->getValueType(0), MVT::Other,
-                           Ops);
-      return;
-    }
-
     if (Node->getOpcode() == ISD::FrameIndex) {
       SDLoc DL(Node);
       SDValue FrameIndex = CurDAG->getTargetFrameIndex(

@@ -151,7 +151,7 @@ define i8 @aggregate_in_last_register_slot(
 ; ISEL-LABEL: name: aggregate_in_first_stack_slot
 ; ISEL:       fixedStack:
 ; ISEL:       offset: 0, size: 8, alignment: 8
-; ISEL:       LDOUI %fixed-stack.0, 0
+; ISEL:       LDTUI {{.*}} :: (load (s32) from %fixed-stack.0 + 4, basealign 8)
 define i32 @aggregate_in_first_stack_slot(
     i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4, i64 %a5,
     i64 %a6, i64 %a7, i64 %a8, i64 %a9, i64 %a10, i64 %a11,

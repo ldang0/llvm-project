@@ -29,11 +29,6 @@ def MMIXindirect_tail
 def MMIXdirect_tail
     : SDNode<"MMIXISD::DIRECT_TAIL", SDT_MMIXCall,
              [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue, SDNPVariadic]>;
-def SDT_MMIXLoadStackArg
-    : SDTypeProfile<1, 1, [SDTCisVT<1, i64>]>;
-def MMIXload_stack_arg
-    : SDNode<"MMIXISD::LOAD_STACK_ARG", SDT_MMIXLoadStackArg,
-             [SDNPHasChain, SDNPMayLoad]>;
 def MMIXret
     : SDNode<"MMIXISD::RET_GLUE", SDTNone, [SDNPHasChain]>;
 def MMIXret_value
