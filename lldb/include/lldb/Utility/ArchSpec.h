@@ -231,6 +231,8 @@ public:
     eCore_loongarch32,
     eCore_loongarch64,
 
+    eCore_mmix,
+
     eCore_uknownMach32,
     eCore_uknownMach64,
 

@@ -261,6 +261,8 @@ static constexpr const CoreDefinition g_core_definitions[] = {
     {eByteOrderLittle, 8, 4, 4, llvm::Triple::loongarch64,
      ArchSpec::eCore_loongarch64, "loongarch64"},
 
+    {eByteOrderBig, 8, 4, 4, llvm::Triple::mmix, ArchSpec::eCore_mmix, "mmix"},
+
     {eByteOrderLittle, 4, 4, 4, llvm::Triple::UnknownArch,
      ArchSpec::eCore_uknownMach32, "unknown-mach-32"},
     {eByteOrderLittle, 8, 4, 4, llvm::Triple::UnknownArch,
@@ -523,6 +525,7 @@ static const ArchDefinitionEntry g_elf_arch_entries[] = {
     {ArchSpec::eCore_riscv64,         llvm::ELF::EM_RISCV,      ArchSpec::eRISCVSubType_riscv64}, // riscv64
     {ArchSpec::eCore_loongarch32,     llvm::ELF::EM_LOONGARCH,  ArchSpec::eLoongArchSubType_loongarch32}, // loongarch32
     {ArchSpec::eCore_loongarch64,     llvm::ELF::EM_LOONGARCH,  ArchSpec::eLoongArchSubType_loongarch64}, // loongarch64
+    {ArchSpec::eCore_mmix,            llvm::ELF::EM_MMIX        }, // MMIX
     AMD_GPU_ARCH_DEF_R600(R600),
     AMD_GPU_ARCH_DEF_R600(R630),
     AMD_GPU_ARCH_DEF_R600(RS880),

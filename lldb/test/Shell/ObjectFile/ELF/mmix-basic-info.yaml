@@ -1,0 +1,75 @@
+# RUN: yaml2obj --docnum=1 %s -o %t.exec
+# RUN: lldb-test object-file %t.exec | FileCheck %s --check-prefix=EXEC
+# RUN: %lldb -b %t.exec -o 'image dump objfile' | FileCheck %s --check-prefix=EXEC-HEADER
+# RUN: yaml2obj --docnum=2 %s -o %t.rel
+# RUN: lldb-test object-file %t.rel | FileCheck %s --check-prefix=REL
+# RUN: %lldb -b %t.rel -o 'image lookup -n function' | FileCheck %s --check-prefix=REL-SYMBOL
+# RUN: %python -c "from pathlib import Path; p=Path(r'%t.exec'); Path(r'%t.bad').write_bytes(p.read_bytes()[:32])"
+# RUN: not lldb-test object-file %t.bad 2>&1 | FileCheck %s --check-prefix=BAD
+
+# EXEC: Plugin name: elf
+# EXEC: Architecture: mmix--
+# EXEC: Executable: true
+# EXEC: Type: executable
+# EXEC:   Name: .text
+# EXEC-NEXT:   Type: code
+# EXEC-NEXT:   Permissions: r-x
+# EXEC-NEXT:   Thread specific: no
+# EXEC-NEXT:   VM address: 0x1000
+# EXEC-NEXT:   VM size: 4
+# EXEC-NEXT:   File size: 4
+# EXEC-HEADER: arch = mmix
+# EXEC-HEADER: ELFDATA2MSB - Big Endian
+# EXEC-HEADER: e_type      = 0x0002 ET_EXEC
+# EXEC-HEADER: e_machine   = 0x0050
+# EXEC-HEADER: e_entry     = 0x00001000
+
+# REL: Plugin name: elf
+# REL: Architecture: mmix--
+# REL: Executable: false
+# REL: Type: object file
+# REL:   Name: .text
+# REL-NEXT:   Type: code
+# REL-NEXT:   Permissions: r-x
+# REL-NEXT:   Thread specific: no
+# REL-NEXT:   VM address: 0x0
+# REL-NEXT:   VM size: 4
+# REL-NEXT:   File size: 4
+# REL-SYMBOL: 1 match found
+# REL-SYMBOL: Address: {{.*}}[0x0000000000000000]
+# REL-SYMBOL: Summary: {{.*}}`function
+
+# BAD: not recognised as an object file
+
+--- !ELF
+FileHeader:
+  Class: ELFCLASS64
+  Data: ELFDATA2MSB
+  Type: ET_EXEC
+  Machine: EM_MMIX
+  Entry: 0x1000
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Flags: [SHF_ALLOC, SHF_EXECINSTR]
+    Address: 0x1000
+    AddressAlign: 4
+    Content: 'FD000000'
+...
+--- !ELF
+FileHeader:
+  Class: ELFCLASS64
+  Data: ELFDATA2MSB
+  Type: ET_REL
+  Machine: EM_MMIX
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Flags: [SHF_ALLOC, SHF_EXECINSTR]
+    AddressAlign: 4
+    Content: 'FD000000'
+Symbols:
+  - Name: function
+    Type: STT_FUNC
+    Section: .text
+...

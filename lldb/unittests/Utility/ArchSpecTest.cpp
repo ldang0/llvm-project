@@ -155,6 +155,36 @@ TEST(ArchSpecTest, TestSetTriple) {
   EXPECT_FALSE(AS.SetTriple(""));
 }
 
+TEST(ArchSpecTest, MMIXTriples) {
+  for (const char *Triple : {"mmix-unknown-unknown", "mmix-unknown-elf"}) {
+    SCOPED_TRACE(Triple);
+    ArchSpec AS(Triple);
+    EXPECT_TRUE(AS.IsValid());
+    EXPECT_EQ(llvm::Triple::mmix, AS.GetTriple().getArch());
+    EXPECT_STREQ("mmix", AS.GetArchitectureName());
+    EXPECT_EQ(ArchSpec::eCore_mmix, AS.GetCore());
+    EXPECT_EQ(eByteOrderBig, AS.GetByteOrder());
+    EXPECT_EQ(8u, AS.GetAddressByteSize());
+    EXPECT_EQ(4u, AS.GetMinimumOpcodeByteSize());
+    EXPECT_EQ(4u, AS.GetMaximumOpcodeByteSize());
+  }
+}
+
+TEST(ArchSpecTest, SetMMIXArchitectureFromELF) {
+  ArchSpec AS;
+  EXPECT_TRUE(AS.SetArchitecture(eArchTypeELF, llvm::ELF::EM_MMIX,
+                                 LLDB_INVALID_CPUTYPE,
+                                 llvm::ELF::ELFOSABI_NONE));
+  EXPECT_TRUE(AS.IsValid());
+  EXPECT_EQ(llvm::Triple::mmix, AS.GetTriple().getArch());
+  EXPECT_EQ(ArchSpec::eCore_mmix, AS.GetCore());
+  EXPECT_STREQ("mmix", AS.GetArchitectureName());
+  EXPECT_EQ(eByteOrderBig, AS.GetByteOrder());
+  EXPECT_EQ(8u, AS.GetAddressByteSize());
+  EXPECT_EQ(4u, AS.GetMinimumOpcodeByteSize());
+  EXPECT_EQ(4u, AS.GetMaximumOpcodeByteSize());
+}
+
 namespace {
 struct AMDGPUModel {
   uint32_t mach;    // EF_AMDGPU_MACH value.
