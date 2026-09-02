@@ -334,6 +334,12 @@ public:
     return true;
   }
 
+  std::pair<bool, bool> relaxLEB128(MCFragment &F,
+                                    int64_t &Value) const override {
+    // Fixed-size relaxation reservations keep layout-known differences stable.
+    return {F.getLEBValue().evaluateKnownAbsolute(Value, *Asm), false};
+  }
+
   bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,
                          const MCSubtargetInfo &) const override {
     return isUnrelaxedGETARelocation(Opcode, Operands);
