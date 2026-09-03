@@ -40,6 +40,13 @@ void MMIXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
 
 void MMIXInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
                                    unsigned OpNo, raw_ostream &O) {
-  (void)Address;
+  const MCOperand &Op = MI->getOperand(OpNo);
+  if (Address != 0 && PrintBranchImmAsAddress && Op.isImm()) {
+    constexpr uint64_t InstructionSize = 4;
+    const uint64_t Target =
+        Address + static_cast<uint64_t>(Op.getImm()) * InstructionSize;
+    markup(O, Markup::Target) << formatHex(Target);
+    return;
+  }
   printOperand(MI, OpNo, O);
 }

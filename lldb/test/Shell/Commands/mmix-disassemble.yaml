@@ -1,0 +1,43 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: yaml2obj %s -o %t
+# RUN: %lldb -b %t -o 'settings set target.use-hex-immediates false' \
+# RUN:   -o 'disassemble --start-address 0x1000 --end-address 0x101a --bytes' \
+# RUN:   | FileCheck %s
+
+# CHECK:      mmix-disassemble.yaml.tmp`entry:
+# CHECK-NEXT: {{.*}}[0x1000] <+0>:  0xe3011234 SETL r1, 4660
+# CHECK-NEXT: {{.*}}[0x1004] <+4>:  0x40010002 BN r1, 0x100c
+# CHECK-NEXT: {{.*}}[0x1008] <+8>:  0x08010503 .long 0x08010503 ; unknown opcode
+# CHECK-NEXT: {{.*}}[0x100c] <+12>: 0xf2010002 PUSHJ r1, 0x1014
+# CHECK-NEXT: {{.*}}[0x1010] <+16>: 0xfd000000 SWYM 0, 0, 0
+# CHECK:      mmix-disassemble.yaml.tmp`callee:
+# CHECK-NEXT: {{.*}}[0x1014] <+0>: 0xe3020001 SETL r2, 1
+# CHECK-NOT:  [0x1018]
+
+--- !ELF
+FileHeader:
+  Class: ELFCLASS64
+  Data: ELFDATA2MSB
+  Type: ET_EXEC
+  Machine: EM_MMIX
+  Entry: 0x1000
+Sections:
+  - Name: .text
+    Type: SHT_PROGBITS
+    Flags: [SHF_ALLOC, SHF_EXECINSTR]
+    Address: 0x1000
+    AddressAlign: 4
+    Content: 'E30112344001000208010503F2010002FD000000E3020001AABB'
+Symbols:
+  - Name: entry
+    Type: STT_FUNC
+    Section: .text
+    Value: 0x1000
+    Size: 20
+  - Name: callee
+    Type: STT_FUNC
+    Section: .text
+    Value: 0x1014
+    Size: 4
+...
