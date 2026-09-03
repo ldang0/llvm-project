@@ -11,6 +11,7 @@
 #include "MMIXCallingConv.h"
 #include "MMIXFrameLowering.h"
 #include "MMIXInstrInfo.h"
+#include "MMIXMachineFunctionInfo.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -104,19 +105,23 @@ bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     report_fatal_error("MMIX frame index must have an immediate displacement");
   Offset += StackOffset::getFixed(MI.getOperand(FIOperandNum + 1).getImm());
 
-  bool SavesFramePointer = false;
+  bool IsPreFramePointerStore = false;
   if (MI.mayStore() && TFI->hasFP(MF)) {
     for (const CalleeSavedInfo &CSI : MF.getFrameInfo().getCalleeSavedInfo()) {
       if (CSI.getReg() == MMIX::R253 && CSI.getFrameIdx() == FrameIndex) {
-        SavesFramePointer = true;
+        IsPreFramePointerStore = true;
         break;
       }
     }
+    const auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
+    IsPreFramePointerStore |=
+        MMFI->hasDebugReturnAddressFrameIndex() &&
+        MMFI->getDebugReturnAddressFrameIndex() == FrameIndex;
   }
 
-  // The old frame pointer is spilled before the new frame pointer is
-  // established, so that prologue access must use the adjusted SP.
-  if (SavesFramePointer) {
+  // Prologue spills emitted before the new frame pointer is established must
+  // use the adjusted SP.
+  if (IsPreFramePointerStore) {
     FrameReg = MMIX::R254;
     Offset =
         StackOffset::getFixed(MF.getFrameInfo().getObjectOffset(FrameIndex) +

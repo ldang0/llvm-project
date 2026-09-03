@@ -31,6 +31,7 @@ MMIXMCAsmInfo::MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   SupportsDebugInformation =
       Options.OutputAsmVariant.value_or(MMIXII::CanonicalAsmVariant) !=
       MMIXII::MMIXALAsmVariant;
+  UsesCFIWithoutEH = SupportsDebugInformation;
 }
 
 void MMIXMCAsmInfo::printSpecifierExpr(raw_ostream &OS,

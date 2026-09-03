@@ -22,6 +22,7 @@ class MMIXMachineFunctionInfo final : public MachineFunctionInfo {
   unsigned FirstVarArgRegisterIndex = 0;
   unsigned VarArgsSaveSize = 0;
   int VarArgsFrameIndex = std::numeric_limits<int>::max();
+  int DebugReturnAddressFrameIndex = std::numeric_limits<int>::max();
 
 public:
   MMIXMachineFunctionInfo(const Function &, const TargetSubtargetInfo *) {}
@@ -62,6 +63,20 @@ public:
   }
   bool hasVarArgsFrameIndex() const {
     return VarArgsFrameIndex != std::numeric_limits<int>::max();
+  }
+
+  void setDebugReturnAddressFrameIndex(int FrameIndex) {
+    assert(!hasDebugReturnAddressFrameIndex() &&
+           "MMIX debug return-address frame index is already set");
+    DebugReturnAddressFrameIndex = FrameIndex;
+  }
+  int getDebugReturnAddressFrameIndex() const {
+    assert(hasDebugReturnAddressFrameIndex() &&
+           "MMIX debug return-address frame index is not set");
+    return DebugReturnAddressFrameIndex;
+  }
+  bool hasDebugReturnAddressFrameIndex() const {
+    return DebugReturnAddressFrameIndex != std::numeric_limits<int>::max();
   }
 };
 

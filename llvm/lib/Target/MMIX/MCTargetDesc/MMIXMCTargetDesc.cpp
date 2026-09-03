@@ -49,7 +49,7 @@ MCInstrInfo *llvm::createMMIXMCInstrInfo() {
 
 MCRegisterInfo *llvm::createMMIXMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitMMIXMCRegisterInfo(X, 0);
+  InitMMIXMCRegisterInfo(X, MMIX::RJ);
   return X;
 }
 

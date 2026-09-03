@@ -25,6 +25,10 @@ void MMIXInstPrinter::printInst(const MCInst *MI, uint64_t Address,
   printAnnotation(O, Annot);
 }
 
+void MMIXInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
+  O << getRegisterName(Reg);
+}
+
 void MMIXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
                                    raw_ostream &O) {
   const MCOperand &Op = MI->getOperand(OpNo);

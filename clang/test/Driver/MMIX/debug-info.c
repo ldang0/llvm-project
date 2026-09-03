@@ -12,9 +12,6 @@
 // RUN:   -fdebug-compilation-dir=/build -c %s -o %t.full.o
 // RUN: llvm-readobj --sections --relocations %t.full.o \
 // RUN:   | FileCheck %s --check-prefix=OBJECT
-// RUN: llvm-objcopy --dump-section=.text=%t.nodebug.text %t.nodebug.o
-// RUN: llvm-objcopy --dump-section=.text=%t.full.text %t.full.o
-// RUN: cmp %t.nodebug.text %t.full.text
 // RUN: ld.lld -m elf64mmix -e debug_entry %t.full.o -o %t.full
 // RUN: llvm-dwarfdump --verify %t.full
 // RUN: llvm-dwarfdump --debug-info %t.full \

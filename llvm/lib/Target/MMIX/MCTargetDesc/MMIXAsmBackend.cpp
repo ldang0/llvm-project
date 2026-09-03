@@ -14,6 +14,7 @@
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
@@ -338,6 +339,20 @@ public:
                                     int64_t &Value) const override {
     // Fixed-size relaxation reservations keep layout-known differences stable.
     return {F.getLEBValue().evaluateKnownAbsolute(Value, *Asm), false};
+  }
+
+  bool relaxDwarfCFA(MCFragment &F) const override {
+    int64_t Value;
+    if (F.getDwarfAddrDelta().evaluateAsAbsolute(Value, *Asm))
+      return false;
+    if (!F.getDwarfAddrDelta().evaluateKnownAbsolute(Value, *Asm))
+      return false;
+
+    SmallVector<char, 8> Data;
+    MCDwarfFrameEmitter::encodeAdvanceLoc(getContext(), Value, Data);
+    F.setVarContents(Data);
+    F.clearVarFixups();
+    return true;
   }
 
   bool mayNeedRelaxation(unsigned Opcode, ArrayRef<MCOperand> Operands,

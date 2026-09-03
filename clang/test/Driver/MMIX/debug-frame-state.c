@@ -5,9 +5,14 @@
 // RUN: ld.lld -m elf64mmix -e frame_state %t.o -o %t
 // RUN: llvm-dwarfdump --verify %t
 // RUN: llvm-dwarfdump --debug-info %t | FileCheck %s --check-prefix=INFO
+// RUN: llvm-dwarfdump --debug-frame %t | FileCheck %s --check-prefix=FRAME
 // RUN: llvm-readobj --sections %t \
-// RUN:   | FileCheck %s --check-prefix=SECTIONS --implicit-check-not=.eh_frame \
-// RUN:     --implicit-check-not=.debug_frame
+// RUN:   | FileCheck %s --check-prefix=SECTIONS --implicit-check-not=.eh_frame
+// RUN: %clang --target=mmix -O0 -ffreestanding -fno-stack-protector \
+// RUN:   -c %s -o %t.nodebug.o
+// RUN: llvm-readobj --sections %t.nodebug.o | FileCheck %s \
+// RUN:   --check-prefix=NODEBUG --implicit-check-not=.debug_frame \
+// RUN:   --implicit-check-not=.eh_frame
 
 // INFO: DW_TAG_subprogram
 // INFO: DW_AT_frame_base (DW_OP_reg29 R253)
@@ -24,9 +29,21 @@
 
 // SECTIONS-DAG: Name: .debug_info
 // SECTIONS-DAG: Name: .debug_loclists
+// SECTIONS-DAG: Name: .debug_frame
+
+// FRAME: Return address column: 35
+// FRAME: CFA=R254
+// FRAME: CFA=R253: R253=[CFA-{{[0-9]+}}], RJ=[CFA-{{[0-9]+}}]
+// FRAME: CFA=R254: R253=[CFA-{{[0-9]+}}], RJ=[CFA-{{[0-9]+}}]
+
+// NODEBUG: Format: elf64-mmix
+
+__attribute__((noinline)) static long frame_callee(long value) {
+  return value + 3;
+}
 
 __attribute__((noinline)) long frame_state(long count) {
-  long fixed = count + 1;
+  long fixed = frame_callee(count) + 1;
   volatile long dynamic[count];
   dynamic[0] = fixed;
   return dynamic[0];

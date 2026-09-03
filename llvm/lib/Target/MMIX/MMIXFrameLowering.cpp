@@ -7,10 +7,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXFrameLowering.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "MMIXInstrInfo.h"
+#include "MMIXMachineFunctionInfo.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
@@ -18,6 +22,23 @@
 #include <iterator>
 
 using namespace llvm;
+
+static bool needsDebugCFI(const MachineFunction &MF) {
+  return MF.getFunction().getSubprogram() != nullptr &&
+         MF.getTarget().getMCAsmInfo().getOutputAssemblerDialect() ==
+             MMIXII::CanonicalAsmVariant;
+}
+
+static void emitCFI(MachineFunction &MF, MachineBasicBlock &MBB,
+                    MachineBasicBlock::iterator MBBI,
+                    const MCCFIInstruction &Instruction,
+                    MachineInstr::MIFlag Flag) {
+  unsigned Index = MF.addFrameInst(Instruction);
+  BuildMI(MBB, MBBI, DebugLoc(),
+          MF.getSubtarget().getInstrInfo()->get(TargetOpcode::CFI_INSTRUCTION))
+      .addCFIIndex(Index)
+      .setMIFlag(Flag);
+}
 
 MMIXFrameLowering::MMIXFrameLowering()
     : TargetFrameLowering(StackGrowsDown, Align(8), /*LocalAreaOffset=*/0,
@@ -55,6 +76,13 @@ void MMIXFrameLowering::determineCalleeSaves(MachineFunction &MF,
 
   if (hasFP(MF))
     SavedRegs.set(MMIX::R253);
+
+  if (MF.getFrameInfo().hasCalls() && needsDebugCFI(MF)) {
+    auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
+    if (!MMFI->hasDebugReturnAddressFrameIndex())
+      MMFI->setDebugReturnAddressFrameIndex(
+          MF.getFrameInfo().CreateStackObject(8, Align(8), false));
+  }
 }
 
 void MMIXFrameLowering::processFunctionBeforeFrameFinalized(
@@ -79,6 +107,10 @@ static void validateFrame(const MachineFunction &MF,
   if (MF.getFunction().hasFnAttribute("probe-stack"))
     reportFatalUsageError(
         Twine("MMIX does not support stack probing in function '") +
+        MF.getName() + "'");
+  if (MF.getFunction().hasUWTable())
+    reportFatalUsageError(
+        Twine("MMIX does not support runtime unwind tables in function '") +
         MF.getName() + "'");
 }
 
@@ -109,6 +141,14 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
   const auto &MMIXII = *static_cast<const MMIXInstrInfo *>(TII);
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc DL;
+  const auto *TRI = MF.getSubtarget().getRegisterInfo();
+  const bool NeedsCFI = needsDebugCFI(MF);
+
+  if (NeedsCFI)
+    emitCFI(MF, MBB, MBBI,
+            MCCFIInstruction::cfiDefCfa(
+                nullptr, TRI->getDwarfRegNum(MMIX::R254, true), 0),
+            MachineInstr::FrameSetup);
 
   if (MFI.hasCalls())
     BuildMI(MBB, MBBI, DL, TII->get(MMIX::GET), MMIX::R30)
@@ -118,12 +158,43 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
   MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254, -int64_t(StackSize),
                    MachineInstr::FrameSetup);
 
+  if (NeedsCFI) {
+    emitCFI(MF, MBB, MBBI,
+            MCCFIInstruction::cfiDefCfaOffset(nullptr, StackSize),
+            MachineInstr::FrameSetup);
+
+    auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
+    if (MMFI->hasDebugReturnAddressFrameIndex()) {
+      int FrameIndex = MMFI->getDebugReturnAddressFrameIndex();
+      TII->storeRegToStackSlot(MBB, MBBI, MMIX::R30, false, FrameIndex,
+                               &MMIX::GPR64RegClass, Register(),
+                               MachineInstr::FrameSetup);
+      emitCFI(MF, MBB, MBBI,
+              MCCFIInstruction::createOffset(
+                  nullptr, TRI->getDwarfRegNum(MMIX::RJ, true),
+                  MFI.getObjectOffset(FrameIndex)),
+              MachineInstr::FrameSetup);
+    }
+  }
+
   if (hasFP(MF)) {
     // The generic callee-save spill of the old frame pointer is at the entry
     // of the block. Establish the new frame pointer after that store.
     std::advance(MBBI, MFI.getCalleeSavedInfo().size());
+    if (NeedsCFI)
+      for (const CalleeSavedInfo &CSI : MFI.getCalleeSavedInfo())
+        emitCFI(MF, MBB, MBBI,
+                MCCFIInstruction::createOffset(
+                    nullptr, TRI->getDwarfRegNum(CSI.getReg(), true),
+                    MFI.getObjectOffset(CSI.getFrameIdx())),
+                MachineInstr::FrameSetup);
     MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R253, MMIX::R254, int64_t(StackSize),
                      MachineInstr::FrameSetup);
+    if (NeedsCFI)
+      emitCFI(MF, MBB, MBBI,
+              MCCFIInstruction::cfiDefCfa(
+                  nullptr, TRI->getDwarfRegNum(MMIX::R253, true), 0),
+              MachineInstr::FrameSetup);
   }
 }
 
@@ -136,6 +207,8 @@ void MMIXFrameLowering::emitCallerStateRestore(
 
   const auto &MMIXII =
       *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const auto *TRI = MF.getSubtarget().getRegisterInfo();
+  const bool NeedsCFI = needsDebugCFI(MF);
   if (MF.getFrameInfo().hasVarSizedObjects()) {
     MachineBasicBlock::iterator FirstRestore = MBBI;
     ArrayRef<CalleeSavedInfo> CSI = MF.getFrameInfo().getCalleeSavedInfo();
@@ -143,14 +216,38 @@ void MMIXFrameLowering::emitCallerStateRestore(
       FirstRestore = std::prev(MBBI, CSI.size());
     MMIXII.adjustReg(MBB, FirstRestore, DL, MMIX::R254, MMIX::R253, 0,
                      MachineInstr::FrameDestroy);
+    if (NeedsCFI)
+      emitCFI(MF, MBB, FirstRestore,
+              MCCFIInstruction::cfiDefCfa(
+                  nullptr, TRI->getDwarfRegNum(MMIX::R254, true), 0),
+              MachineInstr::FrameDestroy);
   } else {
+    if (NeedsCFI && hasFP(MF))
+      emitCFI(MF, MBB, MBBI,
+              MCCFIInstruction::cfiDefCfa(
+                  nullptr, TRI->getDwarfRegNum(MMIX::R254, true), StackSize),
+              MachineInstr::FrameDestroy);
     MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R254, MMIX::R254,
                      int64_t(StackSize), MachineInstr::FrameDestroy);
+    if (NeedsCFI)
+      emitCFI(MF, MBB, MBBI, MCCFIInstruction::cfiDefCfaOffset(nullptr, 0),
+              MachineInstr::FrameDestroy);
   }
+  if (NeedsCFI)
+    for (const CalleeSavedInfo &CSI : MF.getFrameInfo().getCalleeSavedInfo())
+      emitCFI(MF, MBB, MBBI,
+              MCCFIInstruction::createRestore(
+                  nullptr, TRI->getDwarfRegNum(CSI.getReg(), true)),
+              MachineInstr::FrameDestroy);
   if (MF.getFrameInfo().hasCalls())
     BuildMI(MBB, MBBI, DL, MMIXII.get(MMIX::PUT), MMIX::RJ)
         .addReg(MMIX::R30)
         .setMIFlag(MachineInstr::FrameDestroy);
+  if (NeedsCFI && MF.getFrameInfo().hasCalls())
+    emitCFI(MF, MBB, MBBI,
+            MCCFIInstruction::createRestore(
+                nullptr, TRI->getDwarfRegNum(MMIX::RJ, true)),
+            MachineInstr::FrameDestroy);
 }
 
 static bool isTailTransfer(const MachineInstr &MI) {

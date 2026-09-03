@@ -103,6 +103,13 @@ class MMIXResponder(MockGDBServerResponder):
         return "OK"
 
 
+class MMIXTruncatedRegisterResponder(MMIXResponder):
+    def readRegister(self, register):
+        if register == 231:
+            return "0011"
+        return super().readRegister(register)
+
+
 class TestMMIXRegisterMemory(GDBRemoteTestBase):
     def connect_mmix(self, responder):
         self.server.responder = responder
@@ -200,3 +207,13 @@ class TestMMIXRegisterMemory(GDBRemoteTestBase):
                             for packet in packets))
         self.assertTrue(any(packet.startswith("P120=0102030405060708")
                             for packet in packets))
+
+    @skipIfXmlSupportMissing
+    @skipIfRemote
+    @skipIfLLVMTargetMissing("MMIX")
+    def test_truncated_register_value_is_unavailable(self):
+        _, frame = self.connect_mmix(MMIXTruncatedRegisterResponder())
+        value = frame.FindRegister("$231")
+        self.assertTrue(value.IsValid())
+        self.assertFailure(value.GetError())
+        self.assertIsNone(value.GetValue())
