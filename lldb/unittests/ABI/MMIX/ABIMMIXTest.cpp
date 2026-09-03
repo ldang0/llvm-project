@@ -98,10 +98,49 @@ TEST_F(ABIMMIXTest, AugmentsCompleteRemoteRegisterSet) {
             static_cast<uint32_t>(LLDB_REGNUM_GENERIC_SP));
   EXPECT_EQ(regs[260].regnum_generic,
             static_cast<uint32_t>(LLDB_REGNUM_GENERIC_RA));
+  for (unsigned index = 0; index != 8; ++index)
+    EXPECT_EQ(regs[231 + index].regnum_generic,
+              static_cast<uint32_t>(LLDB_REGNUM_GENERIC_ARG1 + index));
+  EXPECT_EQ(regs[239].regnum_generic, LLDB_INVALID_REGNUM);
   EXPECT_EQ(regs[288].regnum_dwarf, 304U);
   EXPECT_EQ(regs[288].regnum_generic,
             static_cast<uint32_t>(LLDB_REGNUM_GENERIC_PC));
   EXPECT_EQ(regs[288].regnum_remote, 288U);
+}
+
+TEST_F(ABIMMIXTest, ImplementsBoundedGNUABIRoles) {
+  ABISP abi = createABI();
+  ASSERT_TRUE(abi);
+
+  auto is_volatile = [&](const char *name) {
+    RegisterInfo info{};
+    info.name = name;
+    return abi->RegisterIsVolatile(&info);
+  };
+  for (const char *name : {"$0", "$30", "$253", "$254", "rG", "rO"})
+    EXPECT_FALSE(is_volatile(name)) << name;
+  for (const char *name :
+       {"$31", "$32", "$230", "$231", "$252", "$255", "rJ", "rL", "rS", "rQ"})
+    EXPECT_TRUE(is_volatile(name)) << name;
+
+  EXPECT_EQ(abi->GetRedZoneSize(), 0U);
+  EXPECT_TRUE(abi->CallFrameAddressIsValid(8));
+  EXPECT_FALSE(abi->CallFrameAddressIsValid(0));
+  EXPECT_FALSE(abi->CallFrameAddressIsValid(4));
+  EXPECT_TRUE(abi->CodeAddressIsValid(0x100));
+  EXPECT_FALSE(abi->CodeAddressIsValid(0x102));
+
+  UnwindPlanSP plan = abi->CreateFunctionEntryUnwindPlan();
+  ASSERT_TRUE(plan);
+  EXPECT_EQ(plan->GetRegisterKind(), eRegisterKindDWARF);
+  const UnwindPlan::Row *row = plan->GetRowAtIndex(0);
+  ASSERT_NE(row, nullptr);
+  EXPECT_EQ(row->GetCFAValue().GetRegisterNumber(), 30U);
+  UnwindPlan::Row::AbstractRegisterLocation pc;
+  ASSERT_TRUE(row->GetRegisterInfo(304, pc));
+  EXPECT_TRUE(pc.IsInOtherRegister());
+  EXPECT_EQ(pc.GetRegisterNumber(), 35U);
+  EXPECT_FALSE(abi->CreateDefaultUnwindPlan());
 }
 
 TEST_F(ABIMMIXTest, DoesNotInventOrAliasRegisters) {
