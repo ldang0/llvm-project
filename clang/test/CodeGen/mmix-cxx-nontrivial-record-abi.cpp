@@ -48,7 +48,8 @@ Managed transform(Managed Input, long Delta) {
 
 // PRODUCER-LABEL: define dso_local void @_Z9transform7Managedl(
 // PRODUCER-SAME: ptr dead_on_unwind noalias writable sret(%struct.Managed) align 8 %agg.result,
-// PRODUCER-SAME: ptr noundef align 8 %Input, i64 noundef %Delta)
+// PRODUCER-SAME: ptr nofreeobj noundef align 8
+// PRODUCER-SAME: dereferenceable(8) %Input, i64 noundef %Delta)
 // PRODUCER: call void @_ZN7ManagedC1EOS_(
 // PRODUCER-SAME: ptr noundef nonnull align 8 dereferenceable(8) %agg.result,
 // PRODUCER-SAME: ptr noundef nonnull align 8 dereferenceable(8) %Input)
@@ -79,7 +80,8 @@ long consume_move(long Value) {
 // CONSUMER: call void @_ZN7ManagedC1ERKS_(ptr {{.*}}%agg.tmp, ptr {{.*}}%Source)
 // CONSUMER: call void @_Z9transform7Managedl(
 // CONSUMER-SAME: ptr {{.*}}sret(%struct.Managed) align 8 %Result,
-// CONSUMER-SAME: ptr noundef align 8 %agg.tmp, i64 noundef 2)
+// CONSUMER-SAME: ptr nofreeobj noundef align 8
+// CONSUMER-SAME: dereferenceable(8) %agg.tmp, i64 noundef 2)
 // CONSUMER: call void @_ZN7ManagedD1Ev(ptr {{.*}}%agg.tmp)
 // CONSUMER: call void @_ZN7ManagedD1Ev(ptr {{.*}}%Result)
 // CONSUMER: call void @_ZN7ManagedD1Ev(ptr {{.*}}%Source)
@@ -87,7 +89,8 @@ long consume_move(long Value) {
 // CONSUMER: call void @_ZN7ManagedC1EOS_(ptr {{.*}}%agg.tmp, ptr {{.*}}%Source)
 // CONSUMER: call void @_Z9transform7Managedl(
 // CONSUMER-SAME: ptr {{.*}}sret(%struct.Managed) align 8 %Result,
-// CONSUMER-SAME: ptr noundef align 8 %agg.tmp, i64 noundef 3)
+// CONSUMER-SAME: ptr nofreeobj noundef align 8
+// CONSUMER-SAME: dereferenceable(8) %agg.tmp, i64 noundef 3)
 // CONSUMER: call void @_ZN7ManagedD1Ev(ptr {{.*}}%agg.tmp)
 // CONSUMER: call void @_ZN7ManagedD1Ev(ptr {{.*}}%Result)
 // CONSUMER: call void @_ZN7ManagedD1Ev(ptr {{.*}}%Source)
@@ -95,8 +98,10 @@ long consume_move(long Value) {
 // OPT-CONSUMER-LABEL: define dso_local noundef i64 @_Z12consume_copyl(
 // OPT-CONSUMER: call void @_Z9transform7Managedl(
 // OPT-CONSUMER-SAME: ptr {{[^,]*}}sret(%struct.Managed) align 8 %Result,
-// OPT-CONSUMER-SAME: ptr noundef nonnull align 8 %agg.tmp, i64 noundef 2)
+// OPT-CONSUMER-SAME: ptr nofreeobj noundef nonnull align 8
+// OPT-CONSUMER-SAME: dereferenceable(8) %agg.tmp, i64 noundef 2)
 // OPT-CONSUMER-LABEL: define dso_local noundef i64 @_Z12consume_movel(
 // OPT-CONSUMER: call void @_Z9transform7Managedl(
 // OPT-CONSUMER-SAME: ptr {{[^,]*}}sret(%struct.Managed) align 8 %Result,
-// OPT-CONSUMER-SAME: ptr noundef nonnull align 8 %agg.tmp, i64 noundef 3)
+// OPT-CONSUMER-SAME: ptr nofreeobj noundef nonnull align 8
+// OPT-CONSUMER-SAME: dereferenceable(8) %agg.tmp, i64 noundef 3)

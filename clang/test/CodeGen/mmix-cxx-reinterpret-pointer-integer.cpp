@@ -44,7 +44,8 @@ uintptr_t unsupported_address_space(AS1Int *value) {
 int object;
 constexpr uintptr_t invalid_constant = reinterpret_cast<uintptr_t>(&object);
 // CONSTANT: error: constexpr variable 'invalid_constant' must be initialized by a constant expression
-// CONSTANT: note: reinterpret_cast is not allowed in a constant expression
+// CONSTANT: note: cast that performs the conversions of a reinterpret_cast is not
+// CONSTANT-SAME: allowed in a constant expression
 #else
 uintptr_t pointer_to_integer(void *value) {
   return reinterpret_cast<uintptr_t>(value);
