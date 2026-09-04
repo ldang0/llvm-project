@@ -7,9 +7,9 @@
 
 # CHECK:      mmix-disassemble.yaml.tmp`entry:
 # CHECK-NEXT: {{.*}}[0x1000] <+0>:  0xe3011234 SETL r1, 4660
-# CHECK-NEXT: {{.*}}[0x1004] <+4>:  0x40010002 BN r1, 0x100c
+# CHECK-NEXT: {{.*}}[0x1004] <+4>:  0x40010002 BN r1, 2
 # CHECK-NEXT: {{.*}}[0x1008] <+8>:  0x08010503 .long 0x08010503 ; unknown opcode
-# CHECK-NEXT: {{.*}}[0x100c] <+12>: 0xf2010002 PUSHJ r1, 0x1014
+# CHECK-NEXT: {{.*}}[0x100c] <+12>: 0xf2010002 PUSHJ r1, 2
 # CHECK-NEXT: {{.*}}[0x1010] <+16>: 0xfd000000 SWYM 0, 0, 0
 # CHECK:      mmix-disassemble.yaml.tmp`callee:
 # CHECK-NEXT: {{.*}}[0x1014] <+0>: 0xe3020001 SETL r2, 1

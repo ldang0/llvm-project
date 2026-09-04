@@ -42,15 +42,9 @@ void MMIXInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   }
 }
 
-void MMIXInstPrinter::printOperand(const MCInst *MI, uint64_t Address,
+void MMIXInstPrinter::printOperand(const MCInst *MI, uint64_t /*Address*/,
                                    unsigned OpNo, raw_ostream &O) {
-  const MCOperand &Op = MI->getOperand(OpNo);
-  if (Address != 0 && PrintBranchImmAsAddress && Op.isImm()) {
-    constexpr uint64_t InstructionSize = 4;
-    const uint64_t Target =
-        Address + static_cast<uint64_t>(Op.getImm()) * InstructionSize;
-    markup(O, Markup::Target) << formatHex(Target);
-    return;
-  }
+  // Canonical MMIX syntax spells PC-relative targets as word displacements.
+  // Printing a resolved address would change the meaning when reassembled.
   printOperand(MI, OpNo, O);
 }
