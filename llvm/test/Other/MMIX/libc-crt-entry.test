@@ -30,7 +30,8 @@
 # RUN: llvm-readobj --symbols %t.dir/crt1.o | \
 # RUN:   FileCheck %s --check-prefix=SYMBOLS
 # RUN: llvm-readobj --relocations %t.dir/crt1.o | \
-# RUN:   FileCheck %s --check-prefix=RELOCS
+# RUN:   FileCheck %s --check-prefix=RELOCS \
+# RUN:   --implicit-check-not=__llvm_libc_argument_
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/install/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   FileCheck %s --check-prefix=LIBC-SYMBOLS

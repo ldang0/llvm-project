@@ -13,8 +13,6 @@
 
 extern "C" int main(int argc, char **argv, char **envp);
 extern "C" {
-extern char __llvm_libc_argument_start[];
-extern char __llvm_libc_argument_limit[];
 extern char __data_source[];
 extern char __data_start[];
 extern char __data_size[];
@@ -39,26 +37,25 @@ bool valid_arguments(__UINT64_TYPE__ argc, char **argv) {
   if (argc > 0x7fffffff || argv == nullptr)
     return false;
 
-  __UINT64_TYPE__ address =
+  constexpr __UINT64_TYPE__ pointer_size = sizeof(char *);
+  __UINT64_TYPE__ argv_address =
       static_cast<__UINT64_TYPE__>(reinterpret_cast<__UINTPTR_TYPE__>(argv));
-  if ((address & (alignof(char *) - 1)) != 0)
+  if ((argv_address & (alignof(char *) - 1)) != 0 ||
+      argv_address < pointer_size)
     return false;
 
-  __UINT64_TYPE__ pool_begin = static_cast<__UINT64_TYPE__>(
-      reinterpret_cast<__UINTPTR_TYPE__>(__llvm_libc_argument_start));
-  __UINT64_TYPE__ pool_end = static_cast<__UINT64_TYPE__>(
-      reinterpret_cast<__UINTPTR_TYPE__>(__llvm_libc_argument_limit));
-  if (address != pool_begin + sizeof(char *) || address >= pool_end)
+  __UINT64_TYPE__ argument_end = *reinterpret_cast<const __UINT64_TYPE__ *>(
+      static_cast<__UINTPTR_TYPE__>(argv_address - pointer_size));
+  if ((argument_end & (alignof(char *) - 1)) != 0 ||
+      argument_end < argv_address)
     return false;
 
   __UINT64_TYPE__ entries = argc + 1;
-  if (entries > (pool_end - address) / sizeof(char *))
+  if (entries > (argument_end - argv_address) / pointer_size)
     return false;
-  __UINT64_TYPE__ strings_begin = address + entries * sizeof(char *);
-  __UINT64_TYPE__ argument_end = *reinterpret_cast<__UINT64_TYPE__ *>(
-      static_cast<__UINTPTR_TYPE__>(pool_begin));
-  if ((argument_end & (alignof(char *) - 1)) != 0 ||
-      argument_end < strings_begin || argument_end > pool_end)
+
+  __UINT64_TYPE__ strings_begin = argv_address + entries * pointer_size;
+  if (argv[argc] != nullptr)
     return false;
 
   for (__UINT64_TYPE__ index = 0; index < argc; ++index) {
@@ -74,7 +71,7 @@ bool valid_arguments(__UINT64_TYPE__ argc, char **argv) {
     if (cursor == end)
       return false;
   }
-  return argv[argc] == nullptr;
+  return true;
 }
 
 void initialize_memory() {
