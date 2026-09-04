@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXCallEmission.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXFixupKinds.h"
 #include "MCTargetDesc/MMIXMCAsmInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
@@ -61,6 +62,7 @@ TEST_F(MMIXCallEmissionTest, ELFObjectUsesStubbableDirectCall) {
 
   ASSERT_TRUE(Call);
   EXPECT_EQ(Call->getOpcode(), MMIX::PUSHJ);
+  EXPECT_EQ(Call->getFlags(), MMIXII::DirectionNeutralCall);
   ASSERT_EQ(Call->getNumOperands(), 2u);
   EXPECT_EQ(Call->getOperand(0).getReg(), MMIX::R31);
   EXPECT_EQ(Call->getOperand(1).getExpr(), Callee);
@@ -77,7 +79,7 @@ TEST_F(MMIXCallEmissionTest, ELFObjectUsesStubbableDirectCall) {
     EXPECT_EQ(static_cast<unsigned char>(Bytes[I]), ExpectedBytes[I]);
 
   ASSERT_EQ(Fixups.size(), 1u);
-  EXPECT_EQ(Fixups.front().getKind(), MMIX::fixup_mmix_call);
+  EXPECT_EQ(Fixups.front().getKind(), MMIX::fixup_mmix_direction_neutral_call);
   EXPECT_TRUE(Fixups.front().isPCRel());
   MCValue Value;
   ASSERT_TRUE(Fixups.front().getValue()->evaluateAsRelocatable(Value, nullptr));

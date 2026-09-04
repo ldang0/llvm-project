@@ -92,11 +92,13 @@ class MMIXMCCodeEmitter : public MCCodeEmitter {
                                 const MCSubtargetInfo &STI) const;
 
   static MCFixupKind getPCRelativeFixup(const MCInst &MI, uint64_t TSFlags) {
-    if (MI.getOpcode() == MMIX::PUSHJ || MI.getOpcode() == MMIX::PUSHJB)
+    if (MI.getOpcode() == MMIX::PUSHJ || MI.getOpcode() == MMIX::PUSHJB) {
+      if (MI.getFlags() & MMIXII::DirectionNeutralCall)
+        return MMIX::fixup_mmix_direction_neutral_call;
       return MMIX::fixup_mmix_call;
-    return MMIXII::getPCRelativeWidth(TSFlags) == 16
-               ? MMIX::fixup_mmix_addr19
-               : MMIX::fixup_mmix_addr27;
+    }
+    return MMIXII::getPCRelativeWidth(TSFlags) == 16 ? MMIX::fixup_mmix_addr19
+                                                     : MMIX::fixup_mmix_addr27;
   }
 
 public:

@@ -57,6 +57,10 @@ enum MachineOperandFlags {
   MO_ABS_HI,
 };
 
+enum MCInstFlags {
+  DirectionNeutralCall = 1 << 0,
+};
+
 enum Specifier : uint16_t {
   S_None,
   S_GETA,

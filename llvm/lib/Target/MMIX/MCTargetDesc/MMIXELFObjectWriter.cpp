@@ -89,6 +89,7 @@ protected:
                  : ELF::R_MMIX_ADDR27;
     }
     case MMIX::fixup_mmix_call:
+    case MMIX::fixup_mmix_direction_neutral_call:
       if (!IsPCRel)
         return rejectRelocation(
             Fixup, "MMIX stubbable call relocation must be PC-relative");

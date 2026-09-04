@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MMIXCallEmission.h"
+#include "MCTargetDesc/MMIXBaseInfo.h"
 #include "MCTargetDesc/MMIXMCTargetDesc.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
@@ -23,6 +24,7 @@ std::optional<MCInst> llvm::createMMIXUnresolvedDirectCall(
   case MMIXEmissionMode::ELFObject:
     MCInst Inst;
     Inst.setOpcode(MMIX::PUSHJ);
+    Inst.setFlags(MMIXII::DirectionNeutralCall);
     Inst.addOperand(MCOperand::createReg(CallOperand));
     Inst.addOperand(MCOperand::createExpr(Callee));
     return Inst;
