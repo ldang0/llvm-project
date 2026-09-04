@@ -8,6 +8,9 @@
 # RUN:   -o %t.dir/overflow.o
 # RUN: ld.lld -static -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
 # RUN:   %t.dir/image.o -o %t.dir/image
+# RUN: ld.lld -static --defsym=__llvm_libc_heap_size=0x20000 \
+# RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/image.o -o %t.dir/custom-heap
 # RUN: llvm-readobj --file-headers --sections --program-headers --symbols \
 # RUN:   --relocations %t.dir/image | FileCheck %s --check-prefix=IMAGE \
 # RUN:   --implicit-check-not=R_MMIX_
@@ -20,6 +23,14 @@
 # RUN:   FileCheck %s --check-prefix=SYMBOLS
 # RUN: llvm-readobj --program-headers %t.dir/image | \
 # RUN:   FileCheck %s --check-prefix=PHDR
+# RUN: llvm-nm --format=posix %t.dir/custom-heap | \
+# RUN:   FileCheck %s --check-prefix=CUSTOM-SYMBOLS
+# RUN: llvm-readobj --program-headers %t.dir/custom-heap | \
+# RUN:   FileCheck %s --check-prefix=CUSTOM-PHDR
+# RUN: not ld.lld -static --defsym=__llvm_libc_heap_size=1 \
+# RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
+# RUN:   %t.dir/image.o -o /dev/null 2>&1 | \
+# RUN:   FileCheck %s --check-prefix=INVALID-HEAP
 # RUN: not ld.lld -static \
 # RUN:   -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld \
 # RUN:   %t.dir/forbidden.o -o /dev/null 2>&1 | \
@@ -54,8 +65,9 @@
 # IMAGE:      Name: .fini_array
 # IMAGE:      Name: .data
 # IMAGE:      Name: .bss
+# IMAGE:      Name: .heap
 # IMAGE:      Name: .MMIX.reg_contents
-# IMAGE-COUNT-3: Type: PT_LOAD
+# IMAGE-COUNT-4: Type: PT_LOAD
 # IMAGE:      Relocations [
 # IMAGE-NEXT: ]
 
@@ -67,12 +79,11 @@
 # SYMBOLS-DAG: __data_size A 8 0
 # SYMBOLS-DAG: __data_source A 104000 0
 # SYMBOLS-DAG: __data_start D 104000 0
-# SYMBOLS-DAG: __llvm_libc_argument_limit A 4000000000010000 0
-# SYMBOLS-DAG: __llvm_libc_argument_start A 4000000000000000 0
-# SYMBOLS-DAG: __llvm_libc_heap_limit A 4000000000800000 0
+# SYMBOLS-DAG: __llvm_libc_heap_limit B 908000 0
+# SYMBOLS-DAG: __llvm_libc_heap_size A 800000 0
 # SYMBOLS-DAG: __llvm_libc_image_end B 108000 0
 # SYMBOLS-DAG: __llvm_libc_image_start T 100000 0
-# SYMBOLS-DAG: _end A 4000000000010000 0
+# SYMBOLS-DAG: _end B 108000 0
 # SYMBOLS-DAG: _start T 100000 4
 # PHDR:      Type: PT_LOAD
 # PHDR:      Flags [ (0x5)
@@ -85,8 +96,24 @@
 # PHDR:      Flags [ (0x6)
 # PHDR-NEXT: PF_R
 # PHDR-NEXT: PF_W
+# PHDR:      Type: PT_LOAD
+# PHDR:      VirtualAddress: 0x108000
+# PHDR-NEXT: PhysicalAddress: 0x108000
+# PHDR-NEXT: FileSize: 0
+# PHDR-NEXT: MemSize: 8388608
+# PHDR:      Flags [ (0x6)
+# PHDR-NEXT: PF_R
+# PHDR-NEXT: PF_W
+# CUSTOM-SYMBOLS-DAG: __llvm_libc_heap_limit B 128000 0
+# CUSTOM-SYMBOLS-DAG: __llvm_libc_heap_size A 20000 0
+# CUSTOM-SYMBOLS-DAG: _end B 108000 0
+# CUSTOM-PHDR:      VirtualAddress: 0x108000
+# CUSTOM-PHDR-NEXT: PhysicalAddress: 0x108000
+# CUSTOM-PHDR-NEXT: FileSize: 0
+# CUSTOM-PHDR-NEXT: MemSize: 131072
+# INVALID-HEAP: MMIX LLVM libc heap size must be a positive multiple of 8 KiB
 # REJECT: MMIX LLVM libc process image contains unsupported sections
-# OVERFLOW: MMIX LLVM libc image exceeds QEMU Low RAM
+# OVERFLOW: MMIX LLVM libc process image exceeds the legacy QEMU ELF window
 
 #--- image.s
 .section .text.init.enter,"ax",@progbits

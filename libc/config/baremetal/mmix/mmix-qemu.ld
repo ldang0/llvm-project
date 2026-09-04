@@ -4,6 +4,7 @@ PHDRS {
   text PT_LOAD FLAGS(5);
   rodata PT_LOAD FLAGS(4);
   data PT_LOAD FLAGS(6);
+  heap PT_LOAD FLAGS(6);
 }
 
 SECTIONS {
@@ -59,6 +60,16 @@ SECTIONS {
   . = ALIGN(0x2000);
   __llvm_libc_image_end = .;
 
+  /* The heap is a fixed ELF reservation: QEMU reserves and clears the whole
+     range at startup even when malloc never uses it. Override this link-time
+     default when a smaller or larger bounded heap is appropriate. */
+  PROVIDE(__llvm_libc_heap_size = 0x00800000);
+  .heap (NOLOAD) : ALIGN(0x2000) {
+    _end = .;
+    . += __llvm_libc_heap_size;
+    __llvm_libc_heap_limit = .;
+  } :heap
+
   .MMIX.reg_contents : {
     KEEP(*(.MMIX.reg_contents.linker_allocated))
     KEEP(*(.MMIX.reg_contents))
@@ -78,17 +89,13 @@ SECTIONS {
     *(.gcc_except_table .gcc_except_table.*)
   } :NONE
 
-  __llvm_libc_argument_start = 0x4000000000000000;
-  __llvm_libc_argument_limit = 0x4000000000010000;
-  _end = __llvm_libc_argument_limit;
-  __llvm_libc_heap_limit = 0x4000000000800000;
-
   ASSERT(_start == 0x00100000,
          "MMIX LLVM libc process entry moved")
-  ASSERT(__llvm_libc_image_end <= 0x06000000,
-         "MMIX LLVM libc image exceeds QEMU Low RAM")
-  ASSERT(_end < __llvm_libc_heap_limit,
-         "MMIX LLVM libc argument reserve consumes the Pool heap")
+  ASSERT(__llvm_libc_heap_size >= 0x2000 &&
+             (__llvm_libc_heap_size & 0x1fff) == 0,
+         "MMIX LLVM libc heap size must be a positive multiple of 8 KiB")
+  ASSERT(__llvm_libc_heap_limit <= 0x06000000,
+         "MMIX LLVM libc process image exceeds the legacy QEMU ELF window")
   ASSERT(SIZEOF(.dynamic) + SIZEOF(.dynsym) + SIZEOF(.dynstr) +
              SIZEOF(.interp) + SIZEOF(.got) + SIZEOF(.plt) +
              SIZEOF(.tdata) + SIZEOF(.tbss) + SIZEOF(.eh_frame) +
