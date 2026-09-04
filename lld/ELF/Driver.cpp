@@ -522,8 +522,8 @@ static uint8_t getZStartStopVisibility(Ctx &ctx, opt::InputArgList &args) {
       else if (kv.second == "protected")
         ret = STV_PROTECTED;
       else
-        ErrAlways(ctx) << "unknown -z start-stop-visibility= value: "
-                       << StringRef(kv.second);
+        Err(ctx) << "unknown -z start-stop-visibility= value '"
+                 << StringRef(kv.second) << "'";
     }
   }
   return ret;
@@ -542,7 +542,7 @@ static GcsPolicy getZGcs(Ctx &ctx, opt::InputArgList &args) {
       else if (kv.second == "always")
         ret = GcsPolicy::Always;
       else
-        ErrAlways(ctx) << "unknown -z gcs= value: " << kv.second;
+        Err(ctx) << "unknown -z gcs= value '" << kv.second << "'";
     }
   }
   return ret;
@@ -563,7 +563,7 @@ static ZicfilpPolicy getZZicfilp(Ctx &ctx, opt::InputArgList &args) {
       else if (kv.second == "implicit")
         ret = ZicfilpPolicy::Implicit;
       else
-        ErrAlways(ctx) << "unknown -z zicfilp= value: " << kv.second;
+        Err(ctx) << "unknown -z zicfilp= value '" << kv.second << "'";
     }
   }
   return ret;
@@ -582,7 +582,7 @@ static ZicfissPolicy getZZicfiss(Ctx &ctx, opt::InputArgList &args) {
       else if (kv.second == "implicit")
         ret = ZicfissPolicy::Implicit;
       else
-        ErrAlways(ctx) << "unknown -z zicfiss= value: " << kv.second;
+        Err(ctx) << "unknown -z zicfiss= value '" << kv.second << "'";
     }
   }
   return ret;
@@ -601,7 +601,7 @@ static int getZMemtagMode(Ctx &ctx, opt::InputArgList &args) {
       else if (kv.second == "async")
         ret = ELF::NT_MEMTAG_LEVEL_ASYNC;
       else
-        ErrAlways(ctx) << "unknown -z memtag-mode= value: " << kv.second;
+        Err(ctx) << "unknown -z memtag-mode= value '" << kv.second << "'";
     }
   }
   return ret;
@@ -617,7 +617,7 @@ static void checkZOptions(Ctx &ctx, opt::InputArgList &args) {
   getZFlag(args, "dynamic-undefined-weak", "nodynamic-undefined-weak", false);
   for (auto *arg : args.filtered(OPT_z))
     if (!arg->isClaimed())
-      Warn(ctx) << "unknown -z value: " << StringRef(arg->getValue());
+      Warn(ctx) << "unknown -z value '" << StringRef(arg->getValue()) << "'";
 }
 
 constexpr const char *saveTempsValues[] = {
@@ -641,6 +641,7 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       args.hasFlag(OPT_fatal_warnings, OPT_no_fatal_warnings, false) &&
       !args.hasArg(OPT_no_warnings);
   ctx.e.suppressWarnings = args.hasArg(OPT_no_warnings);
+  ctx.arg.noinhibitExec = args.hasArg(OPT_noinhibit_exec);
 
   // Handle -help
   if (args.hasArg(OPT_help)) {
@@ -1512,7 +1513,6 @@ static void readConfigs(Ctx &ctx, opt::InputArgList &args) {
   ctx.arg.mmapOutputFile =
       args.hasFlag(OPT_mmap_output_file, OPT_no_mmap_output_file, false);
   ctx.arg.nmagic = args.hasFlag(OPT_nmagic, OPT_no_nmagic, false);
-  ctx.arg.noinhibitExec = args.hasArg(OPT_noinhibit_exec);
   ctx.arg.nostdlib = args.hasArg(OPT_nostdlib);
   ctx.arg.oFormatBinary = isOutputFormatBinary(ctx, args);
   ctx.arg.omagic = args.hasFlag(OPT_omagic, OPT_no_omagic, false);
@@ -1767,8 +1767,8 @@ static void readConfigs(Ctx &ctx, opt::InputArgList &args) {
       else if (option.second == "error")
         *reportArg.second = ReportPolicy::Error;
       else {
-        ErrAlways(ctx) << "unknown -z " << reportArg.first
-                       << "= value: " << option.second;
+        Err(ctx) << "unknown -z " << reportArg.first << "= value '"
+                 << option.second << "'";
         continue;
       }
       hasGcsReportDynamic |= option.first == "gcs-report-dynamic";

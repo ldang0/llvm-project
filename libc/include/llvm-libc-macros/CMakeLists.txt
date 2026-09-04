@@ -7,7 +7,7 @@ function(add_macro_header name)
     "DEPENDS" # Multi-value arguments
     ${ARGN}
   )
-  if (MACRO_HEADER_DEST_HDR)
+  if(MACRO_HEADER_DEST_HDR)
     set(dest_header_arg DEST_HDR ${MACRO_HEADER_DEST_HDR})
   endif()
   if(TARGET libc.include.llvm-libc-macros.${LIBC_TARGET_OS}.${name})
@@ -30,7 +30,7 @@ function(add_macro_header name)
         ${MACRO_HEADER_DEPENDS}
     )
   endif()
-endfunction(add_macro_header)
+endfunction()
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/${LIBC_TARGET_OS})
@@ -77,6 +77,12 @@ add_macro_header(
 )
 
 add_macro_header(
+  dirent_macros
+  HDR
+    dirent-macros.h
+)
+
+add_macro_header(
   fcntl_macros
   HDR
     fcntl-macros.h
@@ -113,6 +119,12 @@ add_macro_header(
   fenv_macros
   HDR
     fenv-macros.h
+)
+
+add_macro_header(
+  fnmatch_macros
+  HDR
+    fnmatch-macros.h
 )
 
 add_macro_header(
@@ -171,6 +183,7 @@ add_macro_header(
     math-function-macros.h
   DEPENDS
     .math_macros
+    .float16_macros
 )
 
 add_macro_header(
@@ -203,6 +216,12 @@ set(signal_macro_deps)
 if(TARGET libc.include.llvm-libc-macros.mmix.signal_macros)
   list(APPEND signal_macro_deps .mmix.signal_macros)
 endif()
+add_macro_header(
+  semaphore_macros
+  HDR
+    semaphore-macros.h
+)
+
 add_macro_header(
   signal_macros
   HDR
@@ -245,6 +264,8 @@ add_macro_header(
   sys_epoll_macros
   HDR
     sys-epoll-macros.h
+  DEPENDS
+    .fcntl_macros
 )
 
 add_macro_header(
@@ -272,9 +293,21 @@ add_macro_header(
 )
 
 add_macro_header(
+  sys_statfs_macros
+  HDR
+    sys-statfs-macros.h
+)
+
+add_macro_header(
   sys_mman_macros
   HDR
     sys-mman-macros.h
+)
+
+add_macro_header(
+  sys_mount_macros
+  HDR
+    sys-mount-macros.h
 )
 
 add_macro_header(
@@ -331,6 +364,12 @@ add_macro_header(
 )
 
 add_macro_header(
+  netdb_macros
+  HDR
+    netdb-macros.h
+)
+
+add_macro_header(
   sys_time_macros
   HDR
     sys-time-macros.h
@@ -340,6 +379,12 @@ add_macro_header(
   sys_wait_macros
   HDR
     sys-wait-macros.h
+)
+
+add_macro_header(
+  sys_sysmacros_macros
+  HDR
+    sys-sysmacros-macros.h
 )
 
 add_macro_header(
@@ -462,7 +507,7 @@ add_macro_header(
     sysexits-macros.h
 )
 
-if (LIBC_CONF_PRINTF_MODULAR)
+if(LIBC_CONF_PRINTF_MODULAR)
   add_macro_header(
     _LIBC_MODULAR_FORMAT_PRINTF
     HDR
@@ -473,7 +518,7 @@ else()
     _LIBC_MODULAR_FORMAT_PRINTF
     HDR
       _LIBC_MODULAR_FORMAT_PRINTF-disable.h
-      DEST_HDR
+    DEST_HDR
       _LIBC_MODULAR_FORMAT_PRINTF.h
   )
 endif()
@@ -482,4 +527,10 @@ add_macro_header(
   alloca_macros
   HDR
     alloca-macros.h
+)
+
+add_macro_header(
+  syslog_macros
+  HDR
+    syslog-macros.h
 )
