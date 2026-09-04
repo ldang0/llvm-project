@@ -198,9 +198,9 @@
 # LIBC-MEMBERS-NEXT: towlower.cpp.o
 # LIBC-MEMBERS-NEXT: towupper.cpp.o
 # LIBC-MEMBERS-NEXT: wctype.cpp.o
-# LIBC-MEMBERS-NEXT: time_utils.cpp.o
 # LIBC-MEMBERS-NEXT: asctime.cpp.o
 # LIBC-MEMBERS-NEXT: difftime.cpp.o
+# LIBC-MEMBERS-NEXT: time_utils.cpp.o
 # LIBC-MEMBERS-NEXT: gmtime.cpp.o
 # LIBC-MEMBERS-NEXT: strftime.cpp.o
 # LIBC-MEMBERS-NEXT: memchr.cpp.o
