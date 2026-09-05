@@ -53,6 +53,9 @@
 # RUN:   -o %t/include/string.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/string.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
+# RUN:   -o %t/include/strings.h --write-if-changed -e __mmix_header_probe__ \
+# RUN:   %S/../../../../libc/include/strings.yaml
+# RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
 # RUN:   -o %t/include/time.h --write-if-changed -e __mmix_header_probe__ \
 # RUN:   %S/../../../../libc/include/time.yaml
 # RUN: python3 %S/../../../../libc/utils/hdrgen/main.py \
