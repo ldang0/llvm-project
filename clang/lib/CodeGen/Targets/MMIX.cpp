@@ -97,9 +97,7 @@ enum class MMIXCXXFeature {
   Exceptions,
   GeneralAllocation,
   GeneralDeallocation,
-  PolymorphicRecordBoundary,
   RTTI,
-  VirtualBaseObjectLifetime,
   Coroutines,
 };
 
@@ -115,12 +113,8 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "general allocation";
   case MMIXCXXFeature::GeneralDeallocation:
     return "general deallocation";
-  case MMIXCXXFeature::PolymorphicRecordBoundary:
-    return "polymorphic record call boundaries";
   case MMIXCXXFeature::RTTI:
     return "RTTI";
-  case MMIXCXXFeature::VirtualBaseObjectLifetime:
-    return "virtual-base construction and destruction";
   case MMIXCXXFeature::Coroutines:
     return "coroutines";
   }
@@ -135,30 +129,6 @@ static bool diagnoseUnsupportedMMIXCXXFeature(CodeGenModule &CGM,
       "MMIX C++ producer profile does not support %0");
   CGM.getDiags().Report(Loc, DiagID) << getMMIXCXXFeatureName(Feature);
   return true;
-}
-
-static bool diagnoseUnsupportedMMIXCXXObjectLifetime(CodeGenModule &CGM,
-                                                      SourceLocation Loc,
-                                                      const CXXRecordDecl *RD) {
-  if (RD->getNumVBases() != 0)
-    return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, MMIXCXXFeature::VirtualBaseObjectLifetime);
-  return false;
-}
-
-static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
-                                               SourceLocation Loc,
-                                               QualType Ty) {
-  const auto *RT = Ty->getAs<RecordType>();
-  const auto *RD = RT ? dyn_cast<CXXRecordDecl>(RT->getDecl()) : nullptr;
-  if (!RD)
-    return false;
-  if (diagnoseUnsupportedMMIXCXXObjectLifetime(CGM, Loc, RD))
-    return true;
-  if (RD->isPolymorphic())
-    return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, MMIXCXXFeature::PolymorphicRecordBoundary);
-  return false;
 }
 
 static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
@@ -391,11 +361,6 @@ public:
           CGM, VD->getLocation(), MMIXCXXFeature::DynamicLocalInitialization);
     return diagnoseAutomaticObjectAlignment(VD) &&
            diagnoseObjectType(VD->getLocation(), VD->getType());
-  }
-
-  bool VisitCXXConstructExpr(CXXConstructExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXObjectLifetime(
-        CGM, E->getExprLoc(), E->getConstructor()->getParent());
   }
 
   bool VisitCXXDynamicCastExpr(CXXDynamicCastExpr *E) {
@@ -1021,24 +986,6 @@ RValue MMIXABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
 void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
-  if (CGM.getLangOpts().CPlusPlus) {
-    if (const auto *Method = dyn_cast<CXXMethodDecl>(FD)) {
-      if (isa<CXXConstructorDecl, CXXDestructorDecl>(Method) &&
-          diagnoseUnsupportedMMIXCXXObjectLifetime(
-              CGM, FD->getLocation(), Method->getParent()))
-        return;
-    }
-
-    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, FD->getLocation(),
-                                           FD->getReturnType()))
-      return;
-    for (const ParmVarDecl *Param : FD->parameters()) {
-      if (diagnoseUnsupportedMMIXCXXBoundary(
-              CGM, Param->getLocation(), Param->getType()))
-        return;
-    }
-  }
-
   if (FD->hasAttr<NakedAttr>() || FD->hasAttr<TargetAttr>()) {
     StringRef Attribute = FD->hasAttr<NakedAttr>() ? "naked" : "target";
     unsigned DiagID = CGM.getDiags().getCustomDiagID(
@@ -1086,15 +1033,6 @@ void MMIXTargetCodeGenInfo::checkFunctionCallABI(
     QualType ReturnType) const {
   diagnoseUnsupportedMMIXVariadicSignature(CGM, CallLoc, Callee);
   diagnoseUnsupportedMMIXVariadicCallArguments(CGM, CallLoc, Callee, Args);
-
-  if (CGM.getLangOpts().CPlusPlus) {
-    if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, ReturnType))
-      return;
-    for (const CallArg &Arg : Args) {
-      if (diagnoseUnsupportedMMIXCXXBoundary(CGM, CallLoc, Arg.getType()))
-        return;
-    }
-  }
 
   ASTContext &Context = CGM.getContext();
   if (!(isDeferredMMIXBoundaryType(ReturnType) &&
