@@ -19,5 +19,5 @@ struct Base {};
 struct Derived : virtual Base {};
 
 void construct() { Derived Value; }
-// VIRTUAL-INHERITANCE: error: MMIX C++ producer profile does not support virtual inheritance
+// VIRTUAL-INHERITANCE: error: MMIX C++ producer profile does not support virtual-base construction and destruction
 #endif

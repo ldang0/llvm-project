@@ -99,7 +99,7 @@ enum class MMIXCXXFeature {
   GeneralDeallocation,
   PolymorphicRecordBoundary,
   RTTI,
-  VirtualInheritance,
+  VirtualBaseObjectLifetime,
   Coroutines,
 };
 
@@ -119,8 +119,8 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "polymorphic record call boundaries";
   case MMIXCXXFeature::RTTI:
     return "RTTI";
-  case MMIXCXXFeature::VirtualInheritance:
-    return "virtual inheritance";
+  case MMIXCXXFeature::VirtualBaseObjectLifetime:
+    return "virtual-base construction and destruction";
   case MMIXCXXFeature::Coroutines:
     return "coroutines";
   }
@@ -142,7 +142,7 @@ static bool diagnoseUnsupportedMMIXCXXObjectLifetime(CodeGenModule &CGM,
                                                       const CXXRecordDecl *RD) {
   if (RD->getNumVBases() != 0)
     return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, MMIXCXXFeature::VirtualInheritance);
+        CGM, Loc, MMIXCXXFeature::VirtualBaseObjectLifetime);
   return false;
 }
 
