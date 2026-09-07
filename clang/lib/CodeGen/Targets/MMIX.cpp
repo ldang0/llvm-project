@@ -120,7 +120,7 @@ static bool diagnoseUnsupportedMMIXCXXFeature(CodeGenModule &CGM,
                                               MMIXCXXFeature Feature) {
   unsigned DiagID = CGM.getDiags().getCustomDiagID(
       DiagnosticsEngine::Error,
-      "MMIX C++ producer profile does not support %0");
+      "MMIX does not support C++ %0");
   CGM.getDiags().Report(Loc, DiagID) << getMMIXCXXFeatureName(Feature);
   return true;
 }

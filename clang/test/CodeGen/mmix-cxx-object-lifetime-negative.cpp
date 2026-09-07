@@ -7,4 +7,4 @@ using size_t = decltype(sizeof(0));
 void *operator new(size_t);
 
 long *allocate() { return new long; }
-// GENERAL-ALLOCATION: error: MMIX C++ producer profile does not support general allocation
+// GENERAL-ALLOCATION: error: MMIX does not support C++ general allocation

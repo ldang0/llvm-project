@@ -28,13 +28,13 @@ struct Base {
 };
 
 void *runtime_type(Base *object) { return dynamic_cast<void *>(object); }
-// RTTI: error: MMIX C++ producer profile does not support RTTI
+// RTTI: error: MMIX does not support C++ RTTI
 #elif defined(TEST_EXCEPTIONS)
 void raise_error() { throw 1; }
-// EXCEPTIONS: error: MMIX C++ producer profile does not support exceptions
+// EXCEPTIONS: error: MMIX does not support C++ exceptions
 #elif defined(TEST_DEALLOCATION)
 void release(long *Object) { delete Object; }
-// DEALLOCATION: error: MMIX C++ producer profile does not support general deallocation
+// DEALLOCATION: error: MMIX does not support C++ general deallocation
 #elif defined(TEST_COROUTINE)
 namespace std {
 template <typename Ret, typename... Args> struct coroutine_traits {
@@ -64,7 +64,7 @@ struct Task {
 };
 
 Task coroutine() { co_return; }
-// COROUTINE: error: MMIX C++ producer profile does not support coroutines
+// COROUTINE: error: MMIX does not support C++ coroutines
 #elif defined(TEST_TLS)
 thread_local long Value;
 long read_tls() { return Value; }
