@@ -33,6 +33,10 @@ static bool isDeferredMMIXBoundaryType(QualType Ty) {
          Ty->isReferenceType();
 }
 
+static bool isUnsupportedMMIXCXXMemberPointerType(QualType Ty) {
+  return Ty->isMemberPointerType();
+}
+
 static bool isSupportedMMIXScalarType(const ASTContext &Context, QualType Ty,
                                       bool AllowVoid) {
   if (Ty->isVoidType())
@@ -60,6 +64,8 @@ static bool isUnsupportedMMIXScalarType(const ASTContext &Context,
                                         QualType Ty, bool AllowVoid) {
   if (isDeferredMMIXBoundaryType(Ty))
     return false;
+  if (isUnsupportedMMIXCXXMemberPointerType(Ty))
+    return true;
   return !isSupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
 
@@ -84,13 +90,55 @@ static bool isUnsupportedMMIXBoundaryScalarType(const ASTContext &Context,
          isUnsupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
 
+enum class MMIXCXXFeature {
+  DynamicInitialization,
+  DynamicLocalInitialization,
+  Exceptions,
+  GeneralAllocation,
+  GeneralDeallocation,
+  PolymorphicObjectLifetime,
+  RTTI,
+  VirtualDispatch,
+  VirtualInheritance,
+  VirtualMemberFunctions,
+  Coroutines,
+};
+
+static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
+  switch (Feature) {
+  case MMIXCXXFeature::DynamicInitialization:
+    return "dynamic initialization";
+  case MMIXCXXFeature::DynamicLocalInitialization:
+    return "dynamic local initialization";
+  case MMIXCXXFeature::Exceptions:
+    return "exceptions";
+  case MMIXCXXFeature::GeneralAllocation:
+    return "general allocation";
+  case MMIXCXXFeature::GeneralDeallocation:
+    return "general deallocation";
+  case MMIXCXXFeature::PolymorphicObjectLifetime:
+    return "polymorphic object lifetime";
+  case MMIXCXXFeature::RTTI:
+    return "RTTI";
+  case MMIXCXXFeature::VirtualDispatch:
+    return "virtual dispatch";
+  case MMIXCXXFeature::VirtualInheritance:
+    return "virtual inheritance";
+  case MMIXCXXFeature::VirtualMemberFunctions:
+    return "virtual member functions";
+  case MMIXCXXFeature::Coroutines:
+    return "coroutines";
+  }
+  llvm_unreachable("unknown MMIX C++ feature");
+}
+
 static bool diagnoseUnsupportedMMIXCXXFeature(CodeGenModule &CGM,
                                               SourceLocation Loc,
-                                              StringRef Feature) {
+                                              MMIXCXXFeature Feature) {
   unsigned DiagID = CGM.getDiags().getCustomDiagID(
       DiagnosticsEngine::Error,
       "MMIX C++ producer profile does not support %0");
-  CGM.getDiags().Report(Loc, DiagID) << Feature;
+  CGM.getDiags().Report(Loc, DiagID) << getMMIXCXXFeatureName(Feature);
   return true;
 }
 
@@ -98,11 +146,11 @@ static bool diagnoseUnsupportedMMIXCXXObjectLifetime(CodeGenModule &CGM,
                                                       SourceLocation Loc,
                                                       const CXXRecordDecl *RD) {
   if (RD->getNumVBases() != 0)
-    return diagnoseUnsupportedMMIXCXXFeature(CGM, Loc,
-                                             "virtual inheritance");
+    return diagnoseUnsupportedMMIXCXXFeature(
+        CGM, Loc, MMIXCXXFeature::VirtualInheritance);
   if (RD->isPolymorphic())
-    return diagnoseUnsupportedMMIXCXXFeature(CGM, Loc,
-                                             "polymorphic object lifetime");
+    return diagnoseUnsupportedMMIXCXXFeature(
+        CGM, Loc, MMIXCXXFeature::PolymorphicObjectLifetime);
   return false;
 }
 
@@ -341,7 +389,7 @@ public:
     if (CGM.getLangOpts().CPlusPlus && VD->isStaticLocal() && VD->hasInit() &&
         !VD->hasConstantInitialization())
       return !diagnoseUnsupportedMMIXCXXFeature(
-          CGM, VD->getLocation(), "dynamic local initialization");
+          CGM, VD->getLocation(), MMIXCXXFeature::DynamicLocalInitialization);
     return diagnoseAutomaticObjectAlignment(VD) &&
            diagnoseObjectType(VD->getLocation(), VD->getType());
   }
@@ -351,7 +399,7 @@ public:
     if (!Method || !Method->isVirtual())
       return true;
     return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              "virtual dispatch");
+                                              MMIXCXXFeature::VirtualDispatch);
   }
 
   bool VisitCXXConstructExpr(CXXConstructExpr *E) {
@@ -360,34 +408,36 @@ public:
   }
 
   bool VisitCXXDynamicCastExpr(CXXDynamicCastExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(), "RTTI");
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              MMIXCXXFeature::RTTI);
   }
 
   bool VisitCXXTypeidExpr(CXXTypeidExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(), "RTTI");
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              MMIXCXXFeature::RTTI);
   }
 
   bool VisitCXXThrowExpr(CXXThrowExpr *E) {
     return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              "exceptions");
+                                              MMIXCXXFeature::Exceptions);
   }
 
   bool VisitCoroutineBodyStmt(CoroutineBodyStmt *S) {
     return !diagnoseUnsupportedMMIXCXXFeature(CGM, S->getBeginLoc(),
-                                              "coroutines");
+                                              MMIXCXXFeature::Coroutines);
   }
 
   bool VisitCXXNewExpr(CXXNewExpr *E) {
     if (const FunctionDecl *OperatorNew = E->getOperatorNew();
         OperatorNew && OperatorNew->isReservedGlobalPlacementOperator())
       return true;
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              "general allocation");
+    return !diagnoseUnsupportedMMIXCXXFeature(
+        CGM, E->getExprLoc(), MMIXCXXFeature::GeneralAllocation);
   }
 
   bool VisitCXXDeleteExpr(CXXDeleteExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              "general deallocation");
+    return !diagnoseUnsupportedMMIXCXXFeature(
+        CGM, E->getExprLoc(), MMIXCXXFeature::GeneralDeallocation);
   }
 
   bool VisitExpr(Expr *E) {
@@ -779,7 +829,7 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
         !VD->getInit()->EvaluateAsRValue(Result, CGM.getContext()) ||
         Result.HasSideEffects) {
       diagnoseUnsupportedMMIXCXXFeature(CGM, VD->getLocation(),
-                                        "dynamic initialization");
+                                        MMIXCXXFeature::DynamicInitialization);
       return;
     }
   }
@@ -983,8 +1033,8 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
   if (CGM.getLangOpts().CPlusPlus) {
     if (const auto *Method = dyn_cast<CXXMethodDecl>(FD)) {
       if (Method->isVirtual()) {
-        diagnoseUnsupportedMMIXCXXFeature(CGM, FD->getLocation(),
-                                          "virtual member functions");
+        diagnoseUnsupportedMMIXCXXFeature(
+            CGM, FD->getLocation(), MMIXCXXFeature::VirtualMemberFunctions);
         return;
       }
       if (isa<CXXConstructorDecl, CXXDestructorDecl>(Method) &&
