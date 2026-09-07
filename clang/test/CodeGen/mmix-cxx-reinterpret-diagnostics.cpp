@@ -19,10 +19,6 @@
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_ADDRESS_SPACE %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=ADDRESS-SPACE
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_MEMBER_POINTER %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=MEMBER
 
 struct Source {
   long value;
@@ -56,9 +52,4 @@ Target *change_address_space(AS1Source *value) {
   return reinterpret_cast<Target *>(value);
 }
 // ADDRESS-SPACE: error: reinterpret_cast from 'AS1Source *' {{.*}}to 'Target *' is not allowed
-#elif defined(TEST_MEMBER_POINTER)
-long Source::*member_pointer(long Source::*value) {
-  return reinterpret_cast<long Source::*>(value);
-}
-// MEMBER: error: MMIX GNU ABI does not support return type 'long Source::*'
 #endif

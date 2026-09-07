@@ -14,10 +14,13 @@
 
 #if defined(TEST_MEMBER_POINTER)
 struct Owner {
-  long value;
+  long method(long);
 };
-long read(Owner *object, long Owner::*member) { return object->*member; }
-// MEMBER: error: MMIX GNU ABI does not support argument type 'long Owner::*'
+struct Derived : Owner {};
+using Member = long (Owner::*)(long);
+using DerivedMember = long (Derived::*)(long);
+DerivedMember convert(Member member) { return member; }
+// MEMBER: error: MMIX C++ producer profile does not support member-function-pointer inheritance conversions
 #elif defined(TEST_VIRTUAL_DISPATCH)
 struct Base {
   virtual long value();

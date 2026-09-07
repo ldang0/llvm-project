@@ -33,7 +33,7 @@ static bool isDeferredMMIXBoundaryType(QualType Ty) {
          Ty->isReferenceType();
 }
 
-static bool isUnsupportedMMIXCXXMemberPointerType(QualType Ty) {
+static bool isSupportedMMIXCXXMemberPointerType(QualType Ty) {
   return Ty->isMemberPointerType();
 }
 
@@ -41,6 +41,9 @@ static bool isSupportedMMIXScalarType(const ASTContext &Context, QualType Ty,
                                       bool AllowVoid) {
   if (Ty->isVoidType())
     return AllowVoid;
+
+  if (isSupportedMMIXCXXMemberPointerType(Ty))
+    return true;
 
   if (Ty->isIntegralOrEnumerationType()) {
     if (Ty->isBitIntType())
@@ -64,8 +67,6 @@ static bool isUnsupportedMMIXScalarType(const ASTContext &Context,
                                         QualType Ty, bool AllowVoid) {
   if (isDeferredMMIXBoundaryType(Ty))
     return false;
-  if (isUnsupportedMMIXCXXMemberPointerType(Ty))
-    return true;
   return !isSupportedMMIXScalarType(Context, Ty, AllowVoid);
 }
 
@@ -96,10 +97,12 @@ enum class MMIXCXXFeature {
   Exceptions,
   GeneralAllocation,
   GeneralDeallocation,
+  MemberFunctionPointerInheritance,
   PolymorphicObjectLifetime,
   RTTI,
   VirtualDispatch,
   VirtualInheritance,
+  VirtualMemberFunctionPointer,
   VirtualMemberFunctions,
   Coroutines,
 };
@@ -116,6 +119,8 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "general allocation";
   case MMIXCXXFeature::GeneralDeallocation:
     return "general deallocation";
+  case MMIXCXXFeature::MemberFunctionPointerInheritance:
+    return "member-function-pointer inheritance conversions";
   case MMIXCXXFeature::PolymorphicObjectLifetime:
     return "polymorphic object lifetime";
   case MMIXCXXFeature::RTTI:
@@ -124,6 +129,8 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "virtual dispatch";
   case MMIXCXXFeature::VirtualInheritance:
     return "virtual inheritance";
+  case MMIXCXXFeature::VirtualMemberFunctionPointer:
+    return "virtual member-function pointers";
   case MMIXCXXFeature::VirtualMemberFunctions:
     return "virtual member functions";
   case MMIXCXXFeature::Coroutines:
@@ -160,6 +167,47 @@ static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
   const auto *RT = Ty->getAs<RecordType>();
   const auto *RD = RT ? dyn_cast<CXXRecordDecl>(RT->getDecl()) : nullptr;
   return RD && diagnoseUnsupportedMMIXCXXObjectLifetime(CGM, Loc, RD);
+}
+
+static bool diagnoseUnsupportedMMIXCXXMemberPointerCast(CodeGenModule &CGM,
+                                                        const CastExpr *E) {
+  if (!E->getType()->isMemberFunctionPointerType())
+    return false;
+  if (E->getCastKind() != CK_BaseToDerivedMemberPointer &&
+      E->getCastKind() != CK_DerivedToBaseMemberPointer)
+    return false;
+  return diagnoseUnsupportedMMIXCXXFeature(
+      CGM, E->getExprLoc(), MMIXCXXFeature::MemberFunctionPointerInheritance);
+}
+
+static bool
+diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CodeGenModule &CGM,
+                                               const UnaryOperator *E) {
+  if (E->getOpcode() != UO_AddrOf ||
+      !E->getType()->isMemberFunctionPointerType())
+    return false;
+  const Expr *Operand = E->getSubExpr()->IgnoreParenImpCasts();
+  const auto *DRE = dyn_cast<DeclRefExpr>(Operand);
+  const auto *Method = DRE ? dyn_cast<CXXMethodDecl>(DRE->getDecl()) : nullptr;
+  if (!Method || !Method->isVirtual())
+    return false;
+  return diagnoseUnsupportedMMIXCXXFeature(
+      CGM, E->getExprLoc(), MMIXCXXFeature::VirtualMemberFunctionPointer);
+}
+
+static bool
+diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CodeGenModule &CGM,
+                                                   const Expr *E) {
+  E = E->IgnoreParens();
+  if (const auto *CE = dyn_cast<CastExpr>(E)) {
+    if (diagnoseUnsupportedMMIXCXXMemberPointerCast(CGM, CE))
+      return true;
+    return diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CGM,
+                                                              CE->getSubExpr());
+  }
+  if (const auto *UO = dyn_cast<UnaryOperator>(E))
+    return diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CGM, UO);
+  return false;
 }
 
 static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
@@ -456,6 +504,8 @@ public:
   }
 
   bool VisitUnaryOperator(UnaryOperator *E) {
+    if (diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CGM, E))
+      return false;
     if (E->isIncrementDecrementOp() &&
         E->getSubExpr()->getType()->isAtomicType() &&
         !isSupportedMMIXAtomicRMWType(E->getSubExpr()->getType()))
@@ -467,6 +517,8 @@ public:
   }
 
   bool VisitCastExpr(CastExpr *E) {
+    if (diagnoseUnsupportedMMIXCXXMemberPointerCast(CGM, E))
+      return false;
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getSubExpr()->getType());
@@ -818,6 +870,10 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
                                                 CodeGenModule &CGM) const {
   const auto *VD = dyn_cast_or_null<VarDecl>(D);
   if (!VD || !VD->hasGlobalStorage())
+    return;
+
+  if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
+      diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CGM, VD->getInit()))
     return;
 
   if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
