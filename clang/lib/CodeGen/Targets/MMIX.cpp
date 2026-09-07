@@ -93,8 +93,8 @@ static bool isUnsupportedMMIXBoundaryScalarType(const ASTContext &Context,
 
 enum class MMIXCXXFeature {
   Exceptions,
-  GeneralAllocation,
-  GeneralDeallocation,
+  AllocationForm,
+  DeallocationForm,
   RTTI,
   Coroutines,
 };
@@ -103,10 +103,10 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
   switch (Feature) {
   case MMIXCXXFeature::Exceptions:
     return "exceptions";
-  case MMIXCXXFeature::GeneralAllocation:
-    return "general allocation";
-  case MMIXCXXFeature::GeneralDeallocation:
-    return "general deallocation";
+  case MMIXCXXFeature::AllocationForm:
+    return "allocation form";
+  case MMIXCXXFeature::DeallocationForm:
+    return "deallocation form";
   case MMIXCXXFeature::RTTI:
     return "RTTI";
   case MMIXCXXFeature::Coroutines:
@@ -123,6 +123,27 @@ static bool diagnoseUnsupportedMMIXCXXFeature(CodeGenModule &CGM,
       "MMIX does not support C++ %0");
   CGM.getDiags().Report(Loc, DiagID) << getMMIXCXXFeatureName(Feature);
   return true;
+}
+
+static bool isSupportedMMIXCXXNewExpr(const CXXNewExpr &E) {
+  const FunctionDecl *OperatorNew = E.getOperatorNew();
+  if (!OperatorNew)
+    return false;
+  if (OperatorNew->isReservedGlobalPlacementOperator())
+    return true;
+  return E.getNumPlacementArgs() == 0 && !E.passAlignment() &&
+         OperatorNew->isReplaceableGlobalAllocationFunction();
+}
+
+static bool isSupportedMMIXCXXDeleteExpr(const CXXDeleteExpr &E) {
+  const FunctionDecl *OperatorDelete = E.getOperatorDelete();
+  if (!OperatorDelete)
+    return false;
+  UnsignedOrNone AlignmentParam = std::nullopt;
+  bool IsNothrow = false;
+  return OperatorDelete->isReplaceableGlobalAllocationFunction(&AlignmentParam,
+                                                               &IsNothrow) &&
+         !AlignmentParam && !IsNothrow;
 }
 
 static bool isMMIXNativeAtomicStorageType(const ASTContext &Context,
@@ -374,16 +395,17 @@ public:
   }
 
   bool VisitCXXNewExpr(CXXNewExpr *E) {
-    if (const FunctionDecl *OperatorNew = E->getOperatorNew();
-        OperatorNew && OperatorNew->isReservedGlobalPlacementOperator())
+    if (isSupportedMMIXCXXNewExpr(*E))
       return true;
-    return !diagnoseUnsupportedMMIXCXXFeature(
-        CGM, E->getExprLoc(), MMIXCXXFeature::GeneralAllocation);
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              MMIXCXXFeature::AllocationForm);
   }
 
   bool VisitCXXDeleteExpr(CXXDeleteExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(
-        CGM, E->getExprLoc(), MMIXCXXFeature::GeneralDeallocation);
+    if (isSupportedMMIXCXXDeleteExpr(*E))
+      return true;
+    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
+                                              MMIXCXXFeature::DeallocationForm);
   }
 
   bool VisitExpr(Expr *E) {

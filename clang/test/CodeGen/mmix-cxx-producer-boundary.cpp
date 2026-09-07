@@ -10,10 +10,6 @@
 // RUN:   -emit-llvm -o /dev/null \
 // RUN:   -DTEST_EXCEPTIONS %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=EXCEPTIONS
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_DEALLOCATION %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=DEALLOCATION
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++20 \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_COROUTINE %s 2>&1 \
@@ -32,9 +28,6 @@ void *runtime_type(Base *object) { return dynamic_cast<void *>(object); }
 #elif defined(TEST_EXCEPTIONS)
 void raise_error() { throw 1; }
 // EXCEPTIONS: error: MMIX does not support C++ exceptions
-#elif defined(TEST_DEALLOCATION)
-void release(long *Object) { delete Object; }
-// DEALLOCATION: error: MMIX does not support C++ general deallocation
 #elif defined(TEST_COROUTINE)
 namespace std {
 template <typename Ret, typename... Args> struct coroutine_traits {

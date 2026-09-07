@@ -9,22 +9,31 @@
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
+# RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.cxx.a
 # RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
+# RUN: test -f %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a
 # RUN: test ! -e %S/../../../../compiler-rt/lib/mmix-unknown-unknown/libclang_rt.builtins.a
+# RUN: test ! -e %S/../../../../compiler-rt/lib/mmix-unknown-unknown/libclang_rt.cxx.a
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a
 # RUN: cp %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   %t.dir/installed.a
+# RUN: cp %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   %t.dir/installed-cxx.a
 # RUN: ninja -C %t.dir/build install-builtins > %t.dir-reinstall.log
 # RUN: cmp %t.dir/installed.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
-# RUN: find %t.dir/resource -type f | count 3
+# RUN: cmp %t.dir/installed-cxx.a \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a
+# RUN: find %t.dir/resource -type f | count 4
 # RUN: find %t.dir/resource -name libatomic.a | count 0
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
@@ -62,6 +71,18 @@
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 # RUN:   | not grep ' U '
+# RUN: llvm-readobj --file-headers \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | FileCheck %s --check-prefix=CXX-ELF
+# RUN: llvm-ar t \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | count 2
+# RUN: llvm-nm --defined-only --extern-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | FileCheck %s --check-prefix=CXX-SYMBOL
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | FileCheck %s --check-prefix=CXX-DEPENDENCY
 
 # ELF-COUNT-5: Format: elf64-mmix
 # ELF: Arch: mmix
@@ -95,3 +116,17 @@
 # STACK-SYMBOL-DAG: W __mmix_stack_chk_terminate
 # STACK-SYMBOL-DAG: T __stack_chk_fail
 # STACK-SYMBOL-DAG: V __stack_chk_guard
+# CXX-ELF: Format: elf64-mmix
+# CXX-ELF: Arch: mmix
+# CXX-ELF: DataEncoding: BigEndian
+# CXX-ELF: Type: Relocatable
+# CXX-ELF: Machine: EM_MMIX
+# CXX-SYMBOL-DAG: W _ZdaPv
+# CXX-SYMBOL-DAG: W _ZdaPvm
+# CXX-SYMBOL-DAG: W _ZdlPv
+# CXX-SYMBOL-DAG: W _ZdlPvm
+# CXX-SYMBOL-DAG: W _Znam
+# CXX-SYMBOL-DAG: W _Znwm
+# CXX-DEPENDENCY-DAG: U abort
+# CXX-DEPENDENCY-DAG: U free
+# CXX-DEPENDENCY-DAG: U malloc

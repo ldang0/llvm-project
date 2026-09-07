@@ -20,7 +20,8 @@ function(compiler_rt_validate_mmix_runtime_selection)
     if(${runtime})
       message(FATAL_ERROR
         "${runtime} is not supported by the MMIX compiler-rt configuration; "
-        "only the MMIX builtins and atomic fallback archives may be enabled")
+        "only the MMIX builtins, atomic fallback, stack protector, and C++ "
+        "foundation archives may be enabled")
     endif()
   endforeach()
 endfunction()
