@@ -5,20 +5,6 @@
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c++17 -O2 \
 // RUN:   -mrelocation-model static -emit-llvm -o - %s \
 // RUN:   | FileCheck %s --check-prefixes=COMMON,O2
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_POLYMORPHIC_CONSTRUCTION %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=POLYMORPHIC-CONSTRUCTION
-
-#if defined(TEST_POLYMORPHIC_CONSTRUCTION)
-struct Polymorphic {
-  Polymorphic();
-  virtual long value() const;
-};
-
-void construct() { Polymorphic Value; }
-// POLYMORPHIC-CONSTRUCTION: error: MMIX C++ producer profile does not support polymorphic object lifetime
-#else
 struct Counter {
   long Value;
 
@@ -57,4 +43,3 @@ extern "C" long reference_entry(Counter *Object, long *Value, long Delta) {
 // O0: call noundef i64 {{.*}}(ptr noundef nonnull align 8 dereferenceable(8)
 // O0: call noundef i1 {{.*}}(ptr null)
 // O2: ret i64
-#endif

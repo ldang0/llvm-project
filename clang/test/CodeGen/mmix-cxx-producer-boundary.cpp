@@ -4,9 +4,6 @@
 // RUN:   | FileCheck %s --check-prefix=SUPPORTED
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_VIRTUAL %s 2>&1 | FileCheck %s --check-prefix=VIRTUAL
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_RTTI %s 2>&1 | FileCheck %s --check-prefix=RTTI
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
@@ -19,10 +16,6 @@
 // RUN:   | FileCheck %s --check-prefix=EXCEPTIONS
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_PURE_VIRTUAL %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=PURE-VIRTUAL
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_DEALLOCATION %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=DEALLOCATION
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++20 \
@@ -33,14 +26,7 @@
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_TLS %s 2>&1 | FileCheck %s --check-prefix=TLS
 
-#if defined(TEST_VIRTUAL)
-struct Polymorphic {
-  virtual long value() const;
-};
-
-long read(Polymorphic *object) { return object->value(); }
-// VIRTUAL: error: MMIX C++ producer profile does not support virtual dispatch
-#elif defined(TEST_RTTI)
+#if defined(TEST_RTTI)
 struct Base {
   virtual ~Base();
 };
@@ -58,13 +44,6 @@ int read_initialized() {
 #elif defined(TEST_EXCEPTIONS)
 void raise_error() { throw 1; }
 // EXCEPTIONS: error: MMIX C++ producer profile does not support exceptions
-#elif defined(TEST_PURE_VIRTUAL)
-struct Abstract {
-  virtual long value() const = 0;
-};
-
-long read_abstract(Abstract *Object) { return Object->value(); }
-// PURE-VIRTUAL: error: MMIX C++ producer profile does not support virtual dispatch
 #elif defined(TEST_DEALLOCATION)
 void release(long *Object) { delete Object; }
 // DEALLOCATION: error: MMIX C++ producer profile does not support general deallocation

@@ -73,17 +73,12 @@
 // RUN: not test -s %t.tls.o
 
 // MMIX has no exception producer. Explicit exception producers stop at the
-// target Driver boundary, while unsupported C++ constructs stop at the
-// target-owned producer boundary. Neither path emits an object.
+// target Driver boundary and do not emit an object.
 // RUN: not %clangxx --target=mmix-unknown-unknown -ffreestanding -std=c++17 \
 // RUN:   -fexceptions -fcxx-exceptions -DTEST_EXCEPTION \
 // RUN:   -c %S/Inputs/unsupported-source.cpp -o %t.exception.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=EXCEPTION
 // RUN: not test -s %t.exception.o
-// RUN: not %clangxx --target=mmix-unknown-unknown -ffreestanding -std=c++17 \
-// RUN:   -c %S/Inputs/unsupported-source.cpp -o %t.cxx.o 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=CXX
-// RUN: not test -s %t.cxx.o
 
 // HALF: error: _Float16 is not supported on this target
 // BITINT: error: MMIX GNU ABI does not support extended scalar operation CodeGen involving type '_BitInt(17)'
@@ -102,4 +97,3 @@
 // CALLING-CONVENTION: error: 'fastcall' calling convention is not supported for this target
 // TLS: error: thread-local storage is not supported for the current target
 // EXCEPTION: error: unsupported option '-fcxx-exceptions' for target 'mmix-unknown-unknown'
-// CXX: error: MMIX C++ producer profile does not support virtual dispatch

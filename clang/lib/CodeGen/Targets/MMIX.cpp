@@ -97,12 +97,9 @@ enum class MMIXCXXFeature {
   Exceptions,
   GeneralAllocation,
   GeneralDeallocation,
-  PolymorphicObjectLifetime,
+  PolymorphicRecordBoundary,
   RTTI,
-  VirtualDispatch,
   VirtualInheritance,
-  VirtualMemberFunctionPointer,
-  VirtualMemberFunctions,
   Coroutines,
 };
 
@@ -118,18 +115,12 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "general allocation";
   case MMIXCXXFeature::GeneralDeallocation:
     return "general deallocation";
-  case MMIXCXXFeature::PolymorphicObjectLifetime:
-    return "polymorphic object lifetime";
+  case MMIXCXXFeature::PolymorphicRecordBoundary:
+    return "polymorphic record call boundaries";
   case MMIXCXXFeature::RTTI:
     return "RTTI";
-  case MMIXCXXFeature::VirtualDispatch:
-    return "virtual dispatch";
   case MMIXCXXFeature::VirtualInheritance:
     return "virtual inheritance";
-  case MMIXCXXFeature::VirtualMemberFunctionPointer:
-    return "virtual member-function pointers";
-  case MMIXCXXFeature::VirtualMemberFunctions:
-    return "virtual member functions";
   case MMIXCXXFeature::Coroutines:
     return "coroutines";
   }
@@ -152,9 +143,6 @@ static bool diagnoseUnsupportedMMIXCXXObjectLifetime(CodeGenModule &CGM,
   if (RD->getNumVBases() != 0)
     return diagnoseUnsupportedMMIXCXXFeature(
         CGM, Loc, MMIXCXXFeature::VirtualInheritance);
-  if (RD->isPolymorphic())
-    return diagnoseUnsupportedMMIXCXXFeature(
-        CGM, Loc, MMIXCXXFeature::PolymorphicObjectLifetime);
   return false;
 }
 
@@ -163,34 +151,13 @@ static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
                                                QualType Ty) {
   const auto *RT = Ty->getAs<RecordType>();
   const auto *RD = RT ? dyn_cast<CXXRecordDecl>(RT->getDecl()) : nullptr;
-  return RD && diagnoseUnsupportedMMIXCXXObjectLifetime(CGM, Loc, RD);
-}
-
-static bool
-diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CodeGenModule &CGM,
-                                               const UnaryOperator *E) {
-  if (E->getOpcode() != UO_AddrOf ||
-      !E->getType()->isMemberFunctionPointerType())
+  if (!RD)
     return false;
-  const Expr *Operand = E->getSubExpr()->IgnoreParenImpCasts();
-  const auto *DRE = dyn_cast<DeclRefExpr>(Operand);
-  const auto *Method = DRE ? dyn_cast<CXXMethodDecl>(DRE->getDecl()) : nullptr;
-  if (!Method || !Method->isVirtual())
-    return false;
-  return diagnoseUnsupportedMMIXCXXFeature(
-      CGM, E->getExprLoc(), MMIXCXXFeature::VirtualMemberFunctionPointer);
-}
-
-static bool
-diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CodeGenModule &CGM,
-                                                   const Expr *E) {
-  E = E->IgnoreParens();
-  if (const auto *CE = dyn_cast<CastExpr>(E)) {
-    return diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CGM,
-                                                              CE->getSubExpr());
-  }
-  if (const auto *UO = dyn_cast<UnaryOperator>(E))
-    return diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CGM, UO);
+  if (diagnoseUnsupportedMMIXCXXObjectLifetime(CGM, Loc, RD))
+    return true;
+  if (RD->isPolymorphic())
+    return diagnoseUnsupportedMMIXCXXFeature(
+        CGM, Loc, MMIXCXXFeature::PolymorphicRecordBoundary);
   return false;
 }
 
@@ -426,14 +393,6 @@ public:
            diagnoseObjectType(VD->getLocation(), VD->getType());
   }
 
-  bool VisitCXXMemberCallExpr(CXXMemberCallExpr *E) {
-    const CXXMethodDecl *Method = E->getMethodDecl();
-    if (!Method || !Method->isVirtual())
-      return true;
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              MMIXCXXFeature::VirtualDispatch);
-  }
-
   bool VisitCXXConstructExpr(CXXConstructExpr *E) {
     return !diagnoseUnsupportedMMIXCXXObjectLifetime(
         CGM, E->getExprLoc(), E->getConstructor()->getParent());
@@ -488,8 +447,6 @@ public:
   }
 
   bool VisitUnaryOperator(UnaryOperator *E) {
-    if (diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CGM, E))
-      return false;
     if (E->isIncrementDecrementOp() &&
         E->getSubExpr()->getType()->isAtomicType() &&
         !isSupportedMMIXAtomicRMWType(E->getSubExpr()->getType()))
@@ -855,10 +812,6 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
     return;
 
   if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
-      diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CGM, VD->getInit()))
-    return;
-
-  if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
       !VD->hasConstantInitialization()) {
     // Clang can fold pointer reinterpret casts into static relocations even
     // though C++ does not classify them as constant initialization.
@@ -1070,11 +1023,6 @@ void MMIXTargetCodeGenInfo::checkFunctionABI(CodeGenModule &CGM,
                                              const FunctionDecl *FD) const {
   if (CGM.getLangOpts().CPlusPlus) {
     if (const auto *Method = dyn_cast<CXXMethodDecl>(FD)) {
-      if (Method->isVirtual()) {
-        diagnoseUnsupportedMMIXCXXFeature(
-            CGM, FD->getLocation(), MMIXCXXFeature::VirtualMemberFunctions);
-        return;
-      }
       if (isa<CXXConstructorDecl, CXXDestructorDecl>(Method) &&
           diagnoseUnsupportedMMIXCXXObjectLifetime(
               CGM, FD->getLocation(), Method->getParent()))

@@ -10,4 +10,4 @@ struct Value {
 
 int read(Value value) { return value.get(); }
 
-// CHECK: error: MMIX C++ producer profile does not support polymorphic object lifetime
+// CHECK: error: MMIX C++ producer profile does not support polymorphic record call boundaries
