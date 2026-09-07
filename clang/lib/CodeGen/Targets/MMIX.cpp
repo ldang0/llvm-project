@@ -97,7 +97,6 @@ enum class MMIXCXXFeature {
   Exceptions,
   GeneralAllocation,
   GeneralDeallocation,
-  MemberFunctionPointerInheritance,
   PolymorphicObjectLifetime,
   RTTI,
   VirtualDispatch,
@@ -119,8 +118,6 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "general allocation";
   case MMIXCXXFeature::GeneralDeallocation:
     return "general deallocation";
-  case MMIXCXXFeature::MemberFunctionPointerInheritance:
-    return "member-function-pointer inheritance conversions";
   case MMIXCXXFeature::PolymorphicObjectLifetime:
     return "polymorphic object lifetime";
   case MMIXCXXFeature::RTTI:
@@ -169,17 +166,6 @@ static bool diagnoseUnsupportedMMIXCXXBoundary(CodeGenModule &CGM,
   return RD && diagnoseUnsupportedMMIXCXXObjectLifetime(CGM, Loc, RD);
 }
 
-static bool diagnoseUnsupportedMMIXCXXMemberPointerCast(CodeGenModule &CGM,
-                                                        const CastExpr *E) {
-  if (!E->getType()->isMemberFunctionPointerType())
-    return false;
-  if (E->getCastKind() != CK_BaseToDerivedMemberPointer &&
-      E->getCastKind() != CK_DerivedToBaseMemberPointer)
-    return false;
-  return diagnoseUnsupportedMMIXCXXFeature(
-      CGM, E->getExprLoc(), MMIXCXXFeature::MemberFunctionPointerInheritance);
-}
-
 static bool
 diagnoseUnsupportedMMIXCXXVirtualMemberPointer(CodeGenModule &CGM,
                                                const UnaryOperator *E) {
@@ -200,8 +186,6 @@ diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CodeGenModule &CGM,
                                                    const Expr *E) {
   E = E->IgnoreParens();
   if (const auto *CE = dyn_cast<CastExpr>(E)) {
-    if (diagnoseUnsupportedMMIXCXXMemberPointerCast(CGM, CE))
-      return true;
     return diagnoseUnsupportedMMIXCXXMemberPointerInitializer(CGM,
                                                               CE->getSubExpr());
   }
@@ -517,8 +501,6 @@ public:
   }
 
   bool VisitCastExpr(CastExpr *E) {
-    if (diagnoseUnsupportedMMIXCXXMemberPointerCast(CGM, E))
-      return false;
     return diagnoseExtendedScalarOperation(E->getExprLoc(), E->getType()) &&
            diagnoseExtendedScalarOperation(E->getExprLoc(),
                                            E->getSubExpr()->getType());
