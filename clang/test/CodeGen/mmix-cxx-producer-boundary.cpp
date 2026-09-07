@@ -6,10 +6,6 @@
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_RTTI %s 2>&1 | FileCheck %s --check-prefix=RTTI
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_DYNAMIC_INIT %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=DYNAMIC-INIT
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -fexceptions -fcxx-exceptions \
 // RUN:   -emit-llvm -o /dev/null \
 // RUN:   -DTEST_EXCEPTIONS %s 2>&1 \
@@ -33,14 +29,6 @@ struct Base {
 
 void *runtime_type(Base *object) { return dynamic_cast<void *>(object); }
 // RTTI: error: MMIX C++ producer profile does not support RTTI
-#elif defined(TEST_DYNAMIC_INIT)
-extern int make_value();
-
-int read_initialized() {
-  static int value = make_value();
-  return value;
-}
-// DYNAMIC-INIT: error: MMIX C++ producer profile does not support dynamic local initialization
 #elif defined(TEST_EXCEPTIONS)
 void raise_error() { throw 1; }
 // EXCEPTIONS: error: MMIX C++ producer profile does not support exceptions

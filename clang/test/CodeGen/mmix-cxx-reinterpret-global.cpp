@@ -12,11 +12,6 @@
 // RUN: llvm-readobj --sections --relocations %t.o \
 // RUN:   | FileCheck %s --check-prefix=ELF \
 // RUN:   --implicit-check-not=.init_array
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_DYNAMIC_INITIALIZER %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=DYNAMIC
-
 struct Source {
   long first;
   long second;
@@ -29,11 +24,6 @@ struct Target {
 using Unary = long (*)(long);
 using Other = unsigned long (*)(unsigned long);
 
-#if defined(TEST_DYNAMIC_INITIALIZER)
-extern Target *make_pointer();
-Target *dynamic_pointer = make_pointer();
-// DYNAMIC: error: MMIX C++ producer profile does not support dynamic initialization
-#else
 extern Source external_source;
 extern const Source external_const_source;
 extern long external_function(long);
@@ -56,4 +46,3 @@ Target *null_pointer = reinterpret_cast<Target *>(0);
 // ELF-NEXT: 0x8 R_MMIX_64 external_const_source 0x0
 // ELF-NEXT: 0x10 R_MMIX_64 external_source 0x8
 // ELF-NEXT: 0x18 R_MMIX_64 _Z17external_functionl 0x0
-#endif

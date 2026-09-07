@@ -92,8 +92,6 @@ static bool isUnsupportedMMIXBoundaryScalarType(const ASTContext &Context,
 }
 
 enum class MMIXCXXFeature {
-  DynamicInitialization,
-  DynamicLocalInitialization,
   Exceptions,
   GeneralAllocation,
   GeneralDeallocation,
@@ -103,10 +101,6 @@ enum class MMIXCXXFeature {
 
 static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
   switch (Feature) {
-  case MMIXCXXFeature::DynamicInitialization:
-    return "dynamic initialization";
-  case MMIXCXXFeature::DynamicLocalInitialization:
-    return "dynamic local initialization";
   case MMIXCXXFeature::Exceptions:
     return "exceptions";
   case MMIXCXXFeature::GeneralAllocation:
@@ -355,10 +349,6 @@ public:
   explicit MMIXCodeGenBoundaryVisitor(CodeGenModule &CGM) : CGM(CGM) {}
 
   bool VisitVarDecl(VarDecl *VD) {
-    if (CGM.getLangOpts().CPlusPlus && VD->isStaticLocal() && VD->hasInit() &&
-        !VD->hasConstantInitialization())
-      return !diagnoseUnsupportedMMIXCXXFeature(
-          CGM, VD->getLocation(), MMIXCXXFeature::DynamicLocalInitialization);
     return diagnoseAutomaticObjectAlignment(VD) &&
            diagnoseObjectType(VD->getLocation(), VD->getType());
   }
@@ -775,20 +765,6 @@ void MMIXTargetCodeGenInfo::setTargetAttributes(const Decl *D,
   const auto *VD = dyn_cast_or_null<VarDecl>(D);
   if (!VD || !VD->hasGlobalStorage())
     return;
-
-  if (CGM.getLangOpts().CPlusPlus && VD->hasInit() &&
-      !VD->hasConstantInitialization()) {
-    // Clang can fold pointer reinterpret casts into static relocations even
-    // though C++ does not classify them as constant initialization.
-    Expr::EvalResult Result;
-    if (!VD->getType()->isPointerType() ||
-        !VD->getInit()->EvaluateAsRValue(Result, CGM.getContext()) ||
-        Result.HasSideEffects) {
-      diagnoseUnsupportedMMIXCXXFeature(CGM, VD->getLocation(),
-                                        MMIXCXXFeature::DynamicInitialization);
-      return;
-    }
-  }
 
   diagnoseUnsupportedMMIXObject(CGM, VD->getLocation(), VD->getType());
 }
