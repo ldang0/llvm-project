@@ -6,20 +6,26 @@
 // RUN: echo '#define MMIX_EXPLICIT_HEADER 1' \
 // RUN:   > %t.dir/explicit/mmix-explicit.h
 
+// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=PATHS
+// RUN: %clang -### --target=mmix-unknown-elf \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=PATHS
+// RUN: %clang --target=mmix-unknown-unknown \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   -I %t.dir/explicit -fsyntax-only %s
+// RUN: %clang --target=mmix-unknown-elf \
+// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+// RUN:   -I %t.dir/explicit -fsyntax-only %s
+
 // RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=PATHS
-// RUN: %clang -### --target=mmix-unknown-elf --cstdlib=llvm-libc \
-// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
-// RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=PATHS
-// RUN: %clang --target=mmix-unknown-unknown --cstdlib=llvm-libc \
-// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
-// RUN:   -I %t.dir/explicit -fsyntax-only %s
-// RUN: %clang --target=mmix-unknown-elf --cstdlib=llvm-libc \
-// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
-// RUN:   -I %t.dir/explicit -fsyntax-only %s
+// RUN:   | FileCheck %s --check-prefix=PATHS \
+// RUN:       --implicit-check-not='argument unused'
 
 // RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
@@ -40,7 +46,7 @@
 // RUN: mkdir -p %t.dir/missing/usr/include %t.dir/missing/include
 // RUN: echo '#define MMIX_LLVM_LIBC_HEADER 1' \
 // RUN:   > %t.dir/missing/usr/include/mmix-hosted.h
-// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=llvm-libc \
+// RUN: not %clang -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/missing -resource-dir=%t.dir/resource \
 // RUN:   -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING \

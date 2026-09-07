@@ -310,7 +310,7 @@ ToolChain::CStdlibType
 MMIXToolChain::GetCStdlibType(const ArgList &Args) const {
   const Arg *A = Args.getLastArg(options::OPT_cstdlib_EQ);
   if (!A)
-    return ToolChain::CST_Newlib;
+    return ToolChain::CST_LLVMLibC;
 
   CStdlibType Type = ToolChain::GetCStdlibType(Args);
   if (Type == ToolChain::CST_Newlib || Type == ToolChain::CST_LLVMLibC)
@@ -326,7 +326,7 @@ MMIXToolChain::GetCStdlibType(const ArgList &Args) const {
   }
 
   // Keep later target-private policy dispatch on a supported provider.
-  return ToolChain::CST_Newlib;
+  return ToolChain::CST_LLVMLibC;
 }
 
 std::string

@@ -24,7 +24,7 @@
 // RUN: llvm-ar rc %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 // RUN: llvm-ar rc %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
 // RUN: env PATH=/usr/bin:/bin %clang --target=mmix-unknown-unknown \
-// RUN:   --cstdlib=llvm-libc --sysroot=%t.dir/sysroot \
+// RUN:   --sysroot=%t.dir/sysroot \
 // RUN:   -resource-dir=%t.dir/resource %t.dir/user.o -o %t.dir/a.out
 // RUN: llvm-readobj --file-headers --sections --symbols %t.dir/a.out \
 // RUN:   | FileCheck %s

@@ -19,61 +19,56 @@
 // RUN: touch %t.dir/host/bin/gcc %t.dir/host/bin/ld \
 // RUN:   %t.dir/host/lib/libm.a
 
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/canonical 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=HOSTED \
-// RUN:       --implicit-check-not='{{[/\\](gcc|libgcc|ld.bfd)[^/\\"]*}}' \
-// RUN:       --implicit-check-not=libm.a
-// RUN: %clang -### --target=mmix-unknown-unknown \
-// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
-// RUN:   --cstdlib=newlib %s -o %t.dir/explicit-newlib 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=HOSTED \
 // RUN:       --implicit-check-not='argument unused' \
 // RUN:       --implicit-check-not='{{[/\\](gcc|libgcc|ld.bfd)[^/\\"]*}}' \
 // RUN:       --implicit-check-not=libm.a
-// RUN: %clang -### --target=mmix-unknown-elf \
+// RUN: %clang -### --target=mmix-unknown-elf --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/explicit-elf 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=HOSTED \
 // RUN:       --implicit-check-not='{{[/\\](gcc|libgcc|ld.bfd)[^/\\"]*}}'
-// RUN: %clang -### --target=mmix-unknown-unknown -ffreestanding \
+// RUN: %clang -### --target=mmix-unknown-unknown -ffreestanding --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/freestanding-hosted 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=HOSTED
 // RUN: %clang -### --target=mmix-unknown-unknown -O2 -flto \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/full-lto 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=FULL-LTO \
 // RUN:       --implicit-check-not='"-plugin"'
 
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -lm %s -o %t.dir/math 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MATH
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -T %t.dir/explicit/custom.ld %s -o %t.dir/script 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=SCRIPT \
 // RUN:       --implicit-check-not=mmix-qemu.ld
 
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nostartfiles %t.dir/explicit/custom-start.o -o %t.dir/no-start 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO-START \
 // RUN:       --implicit-check-not='{{[/\\](crt0|crti|crtn|trip-vectors)\.o}}'
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nodefaultlibs %s -o %t.dir/no-default-libs 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO-LIBS \
 // RUN:       --implicit-check-not='{{[/\\](libc|libgloss|libclang_rt\.[^/\\]+)\.a}}'
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nostdlib %s -o %t.dir/no-stdlib 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO-STDLIB \
 // RUN:       --implicit-check-not='{{[/\\](crt0|crti|crtn|trip-vectors)\.o}}' \
 // RUN:       --implicit-check-not='{{[/\\](libc|libgloss|libclang_rt\.[^/\\]+)\.a}}'
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nostdlib -T %t.dir/explicit/custom.ld \
 // RUN:   -L %t.dir/explicit %t.dir/explicit/custom-start.o -lcustom \
@@ -82,51 +77,51 @@
 
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/crti.o \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/crtn.o
-// RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN: %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/no-fragments 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO-FRAGMENTS \
 // RUN:       --implicit-check-not='{{[/\\](crti|crtn)\.o}}'
 
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/crt0.o
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-crt0 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-CRT0 --implicit-check-not=ld.lld
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/crt0.o
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/trip-vectors.o
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-vectors 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-VECTORS --implicit-check-not=ld.lld
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/trip-vectors.o
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/mmix-qemu.ld
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-script 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-SCRIPT --implicit-check-not=ld.lld
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/mmix-qemu.ld
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/libc.a
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-libc 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-LIBC --implicit-check-not=ld.lld
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/libc.a
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/libgloss.a
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-libgloss 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-LIBGLOSS --implicit-check-not=ld.lld
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/libgloss.a
 // RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-runtime 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-BUILTINS \
 // RUN:       --implicit-check-not=ld.lld
 // RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 // RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-runtime 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-ATOMIC \
@@ -134,7 +129,7 @@
 // RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 // RUN: rm %t.dir/sysroot/usr/lib/mmix/libm.a
 // RUN: env LIBRARY_PATH=%t.dir/host/lib COMPILER_PATH=%t.dir/host/bin \
-// RUN:   not %clang --target=mmix-unknown-unknown \
+// RUN:   not %clang --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -lm %s -o %t.dir/missing-libm 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-LIBM \
@@ -142,7 +137,7 @@
 // RUN: test ! -e %t.dir/missing-libm
 // RUN: touch %t.dir/sysroot/usr/lib/mmix/libm.a
 // RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
-// RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN: not %clang -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   %s -o %t.dir/missing-runtime 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-STACK-PROTECTOR \

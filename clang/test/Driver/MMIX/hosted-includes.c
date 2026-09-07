@@ -7,47 +7,52 @@
 // RUN:   > %t.dir/explicit/mmix-explicit.h
 // RUN: %clang -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
-// RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=PATHS
-// RUN: %clang -### --target=mmix-unknown-unknown \
-// RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   --cstdlib=newlib -I %t.dir/explicit -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=PATHS \
 // RUN:       --implicit-check-not='argument unused'
 // RUN: %clang -### --target=mmix-unknown-elf \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -I %t.dir/explicit -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=PATHS
-// RUN: %clang --target=mmix-unknown-unknown --sysroot=%t.dir/sysroot \
+// RUN: %clang --target=mmix-unknown-unknown --cstdlib=newlib \
+// RUN:   --sysroot=%t.dir/sysroot \
 // RUN:   -resource-dir=%t.dir/resource -I %t.dir/explicit -fsyntax-only %s
-// RUN: %clang --target=mmix-unknown-elf --sysroot=%t.dir/sysroot \
+// RUN: %clang --target=mmix-unknown-elf --cstdlib=newlib \
+// RUN:   --sysroot=%t.dir/sysroot \
 // RUN:   -resource-dir=%t.dir/resource -I %t.dir/explicit -fsyntax-only %s
 
 // RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nostdinc -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO-INCLUDES \
 // RUN:       --implicit-check-not=-internal-isystem
 // RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nobuiltininc -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NEWLIB-ONLY \
 // RUN:       --implicit-check-not=%t.dir/resource/include
 // RUN: %clang -### --target=mmix-unknown-unknown \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nostdlibinc -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=RESOURCE-ONLY \
 // RUN:       --implicit-check-not=%t.dir/sysroot/usr/include
 
 // RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/missing -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-SYSROOT
 // RUN: touch %t.dir/not-a-directory
 // RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/not-a-directory -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MALFORMED-SYSROOT
 // RUN: mkdir %t.dir/incomplete
 // RUN: not %clang -### --target=mmix-unknown-unknown \
+// RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/incomplete -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=MISSING-HEADERS
 
