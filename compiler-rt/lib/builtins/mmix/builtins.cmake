@@ -22,6 +22,17 @@ set(mmix_CXX_SOURCES
 option(COMPILER_RT_BUILD_MMIX_CXX_SUPPORT
   "Build the MMIX allocation and DSO companion for libc++abi" OFF)
 
+function(add_mmix_crtdso)
+  # Generic-system CMake defaults to .obj; this is an ELF CRT object.
+  set(CMAKE_C_OUTPUT_EXTENSION .o)
+  add_compiler_rt_runtime(clang_rt.crtdso
+    OBJECT
+    ARCHS mmix
+    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/mmix/cxx_dso_handle.c
+    CFLAGS ${BUILTIN_CFLAGS_mmix}
+    PARENT_TARGET builtins)
+endfunction()
+
 function(add_mmix_cxx_support)
   if(COMPILER_RT_BUILD_MMIX_CXX_SUPPORT)
     # libc++abi owns guards and virtual-call failures in this composition.

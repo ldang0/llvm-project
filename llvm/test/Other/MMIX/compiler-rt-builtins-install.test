@@ -33,7 +33,16 @@
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cmp %t.dir/installed-cxx.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a
-# RUN: find %t.dir/resource -type f | count 4
+# RUN: find %t.dir/resource -type f | count 5
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/clang_rt.crtdso.o \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o
+# RUN: llvm-readobj --file-headers --sections --relocations --symbols \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o \
+# RUN:   | FileCheck %s --check-prefix=CRTDSO
+# RUN: llvm-nm --undefined-only %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o | count 0
+# RUN: llvm-nm --defined-only --extern-only --format=just-symbols \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o \
+# RUN:   | FileCheck %s --check-prefix=CRTDSO-EXPORT
 # RUN: find %t.dir/resource -name libatomic.a | count 0
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
@@ -216,6 +225,23 @@
 
 # UNUSED: T _start
 # UNUSED: T main
+
+# CRTDSO: Format: elf64-mmix
+# CRTDSO: DataEncoding: BigEndian
+# CRTDSO: Type: Relocatable
+# CRTDSO: Machine: EM_MMIX
+# CRTDSO: Name: .data
+# CRTDSO: Size: 8
+# CRTDSO: AddressAlignment: 8
+# CRTDSO: 0x0 R_MMIX_64 __dso_handle 0x0
+# CRTDSO: Name: __dso_handle
+# CRTDSO-NEXT: Value: 0x0
+# CRTDSO-NEXT: Size: 8
+# CRTDSO-NEXT: Binding: Global
+# CRTDSO-NEXT: Type: Object
+# CRTDSO: STV_HIDDEN
+# CRTDSO-EXPORT: {{^}}__dso_handle{{$}}
+# CRTDSO-EXPORT-NOT: {{.}}
 
 #--- start.s
 .text
