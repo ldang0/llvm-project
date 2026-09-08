@@ -1,0 +1,98 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: clang --target=mmix -ffreestanding -std=c++17 -D_LIBUNWIND_IS_NATIVE_ONLY -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -fsyntax-only %t/layout.cpp
+# RUN: clang --target=mmix -ffreestanding -D_LIBUNWIND_IS_NATIVE_ONLY -I %S/../../../../libunwind/include -x c -fsyntax-only %t/public.c
+# Pure storage/access tests run through the host-endian interpreter, not MMIX
+# execution. Native capture, restore and register-window traversal are separate.
+# RUN: clang --target=x86_64-unknown-linux-gnu -std=c++17 -O1 -fno-exceptions -fno-rtti -D__mmix__ -D_LIBUNWIND_IS_NATIVE_ONLY -D_LIBUNWIND_IS_BAREMETAL -DNDEBUG -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -emit-llvm -c %t/access.cpp -o %t/access.bc
+# RUN: lli -force-interpreter=true %t/access.bc
+# Instantiate the shared cursor with the MMIX register class without linking
+# the not-yet-implemented native capture and restore entrypoints.
+# RUN: clang --target=x86_64-unknown-linux-gnu -std=c++17 -fno-exceptions -fno-rtti -D__mmix__ -D_LIBUNWIND_IS_NATIVE_ONLY -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_HAS_NO_THREADS -DNDEBUG -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -emit-llvm -c %S/../../../../libunwind/src/libunwind.cpp -o %t/cursor.bc
+
+#--- layout.cpp
+#include <libunwind.h>
+#include "mmix/Context.h"
+static_assert(sizeof(unw_context_t) == 2128, "context storage");
+static_assert(sizeof(unw_cursor_t) == 2224, "cursor storage");
+static_assert(alignof(unw_context_t) == 8, "context alignment");
+static_assert(alignof(unw_cursor_t) == 8, "cursor alignment");
+static_assert(UNW_MMIX_R231 == 7 && UNW_MMIX_R232 == 8, "EH registers");
+static_assert(UNW_MMIX_R253 == 29 && UNW_MMIX_R254 == 30, "software stack");
+static_assert(UNW_MMIX_RJ == 35 && UNW_MMIX_RO == 38, "return and window");
+static_assert(_LIBUNWIND_HIGHEST_DWARF_REGISTER == UNW_MMIX_PC, "DWARF bound");
+
+#--- public.c
+#include <libunwind.h>
+_Static_assert(sizeof(unw_context_t) == 2128, "C context storage");
+_Static_assert(sizeof(unw_cursor_t) == 2224, "C cursor storage");
+
+#--- access.cpp
+#include "UnwindCursor.hpp"
+using namespace libunwind;
+static_assert(sizeof(UnwindCursor<LocalAddressSpace, Registers_mmix>) <=
+                  sizeof(unw_cursor_t), "cursor must fit opaque storage");
+static_assert(alignof(UnwindCursor<LocalAddressSpace, Registers_mmix>) <=
+                  alignof(unw_cursor_t), "cursor alignment");
+
+int main() {
+  MMIXUnwindContext context{};
+  for (int i = 0; i < 256; ++i)
+    context.gpr[i] = 0x8000000000000000ULL + i;
+  context.rd = 32; context.re = 33; context.rh = 34; context.rj = 35;
+  context.rr = 36; context.ro = 38; context.rs = 283;
+  context.rg = 291; context.rl = 292; context.ip = 304;
+  Registers_mmix registers(&context);
+  for (int i = 0; i < 256; ++i) {
+    int dwarf = i < 224 ? i + 48 : i - 224;
+    if (!registers.validRegister(dwarf) ||
+        registers.getRegister(dwarf) != context.gpr[i])
+      return 1;
+    registers.setRegister(dwarf, 0x123456789abcdef0ULL + i);
+    if (registers.getRegister(dwarf) != 0x123456789abcdef0ULL + i ||
+        context.gpr[i] != 0x8000000000000000ULL + i)
+      return 2;
+    // Check architectural names independently of the DWARF index.
+    const char *name = Registers_mmix::getRegisterName(dwarf);
+    if (*name++ != '$') return 3;
+    int number = 0;
+    while (*name) number = number * 10 + (*name++ - '0');
+    if (number != i) return 4;
+  }
+  int specials[] = {32, 33, 34, 35, 36, 38, 283, 291, 292, 304};
+  for (int dwarf : specials) {
+    if (!registers.validRegister(dwarf) ||
+        registers.getRegister(dwarf) != static_cast<uint64_t>(dwarf))
+      return 5;
+    registers.setRegister(dwarf, 0xfedcba9876543210ULL);
+    if (registers.getRegister(dwarf) != 0xfedcba9876543210ULL)
+      return 6;
+  }
+  for (int n = 0; n <= 305; ++n) {
+    bool valid = n <= 36 || n == 38 || (n >= 48 && n <= 271) ||
+                 n == 283 || n == 291 || n == 292 || n == 304;
+    if (registers.validRegister(n) != valid ||
+        registers.validFloatRegister(n) || registers.validVectorRegister(n))
+      return 7;
+    if (!valid && Registers_mmix::getRegisterName(n)[0] != 'u')
+      return 8;
+  }
+  if (registers.validRegister(-3) || registers.validRegister(0x7fffffff))
+    return 9;
+  registers.setRegister(UNW_REG_SP, 0x8000000000000100ULL);
+  registers.setRegister(UNW_REG_IP, 0x8000000000000200ULL);
+  registers.setRegisterWindow(0x6000000000000300ULL);
+  if (registers.getSP() != registers.getRegister(30) ||
+      registers.getIP() != registers.getRegister(304) ||
+      registers.getRegisterWindow() != registers.getRegister(38))
+    return 10;
+  Registers_mmix copy = registers;
+  registers.setSP(0); registers.setIP(0); registers.setRegisterWindow(0);
+  if (copy.getRegister(UNW_REG_SP) != 0x8000000000000100ULL ||
+      copy.getRegister(UNW_REG_IP) != 0x8000000000000200ULL ||
+      copy.getRegisterWindow() != 0x6000000000000300ULL)
+    return 11;
+  Registers_mmix empty;
+  if (empty.getSP() || empty.getIP() || empty.getRegisterWindow()) return 12;
+  return 0;
+}

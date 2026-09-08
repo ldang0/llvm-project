@@ -14,6 +14,7 @@
 #define __LIBUNWIND__
 
 #include <__libunwind_config.h>
+#include <mmix/Registers.h>
 
 #include <stdint.h>
 #include <stddef.h>

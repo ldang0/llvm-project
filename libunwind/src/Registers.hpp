@@ -49,6 +49,7 @@ enum {
   REGISTERS_VE,
   REGISTERS_S390X,
   REGISTERS_LOONGARCH,
+  REGISTERS_MMIX,
 };
 
 #if defined(_LIBUNWIND_TARGET_I386)
@@ -5567,5 +5568,9 @@ inline void Registers_loongarch::setVectorRegister(int, v128) {
 #endif //_LIBUNWIND_TARGET_LOONGARCH
 
 } // namespace libunwind
+
+#if defined(_LIBUNWIND_TARGET_MMIX)
+#include "mmix/Registers.hpp"
+#endif
 
 #endif // __REGISTERS_HPP__

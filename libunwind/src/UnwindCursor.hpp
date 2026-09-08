@@ -1316,6 +1316,10 @@ private:
   }
 #endif
 
+#if defined(_LIBUNWIND_TARGET_MMIX)
+  compact_unwind_encoding_t dwarfEncoding(Registers_mmix &) const { return 0; }
+#endif
+
 #if defined(_LIBUNWIND_TARGET_SPARC)
   compact_unwind_encoding_t dwarfEncoding(Registers_sparc &) const { return 0; }
 #endif

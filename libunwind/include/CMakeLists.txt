@@ -2,6 +2,8 @@ set(files
     __libunwind_config.h
     libunwind.h
     libunwind.modulemap
+    mmix/Registers.h
+    mmix/UnwindConfig.h
     mach-o/compact_unwind_encoding.h
     unwind_arm_ehabi.h
     unwind_itanium.h
