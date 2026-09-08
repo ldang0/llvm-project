@@ -3,9 +3,6 @@
 // RUN:   -mrelocation-model static -emit-llvm -o - %s \
 // RUN:   | FileCheck %s --check-prefix=SUPPORTED
 // RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
-// RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
-// RUN:   -DTEST_RTTI %s 2>&1 | FileCheck %s --check-prefix=RTTI
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -mrelocation-model static -fexceptions -fcxx-exceptions \
 // RUN:   -emit-llvm -o /dev/null \
 // RUN:   -DTEST_EXCEPTIONS %s 2>&1 \
@@ -18,14 +15,7 @@
 // RUN:   -mrelocation-model static -emit-llvm -o /dev/null \
 // RUN:   -DTEST_TLS %s 2>&1 | FileCheck %s --check-prefix=TLS
 
-#if defined(TEST_RTTI)
-struct Base {
-  virtual ~Base();
-};
-
-void *runtime_type(Base *object) { return dynamic_cast<void *>(object); }
-// RTTI: error: MMIX does not support C++ RTTI
-#elif defined(TEST_EXCEPTIONS)
+#if defined(TEST_EXCEPTIONS)
 void raise_error() { throw 1; }
 // EXCEPTIONS: error: MMIX does not support C++ exceptions
 #elif defined(TEST_COROUTINE)

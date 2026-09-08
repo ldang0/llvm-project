@@ -95,7 +95,6 @@ enum class MMIXCXXFeature {
   Exceptions,
   AllocationForm,
   DeallocationForm,
-  RTTI,
   Coroutines,
 };
 
@@ -107,8 +106,6 @@ static StringRef getMMIXCXXFeatureName(MMIXCXXFeature Feature) {
     return "allocation form";
   case MMIXCXXFeature::DeallocationForm:
     return "deallocation form";
-  case MMIXCXXFeature::RTTI:
-    return "RTTI";
   case MMIXCXXFeature::Coroutines:
     return "coroutines";
   }
@@ -372,16 +369,6 @@ public:
   bool VisitVarDecl(VarDecl *VD) {
     return diagnoseAutomaticObjectAlignment(VD) &&
            diagnoseObjectType(VD->getLocation(), VD->getType());
-  }
-
-  bool VisitCXXDynamicCastExpr(CXXDynamicCastExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              MMIXCXXFeature::RTTI);
-  }
-
-  bool VisitCXXTypeidExpr(CXXTypeidExpr *E) {
-    return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
-                                              MMIXCXXFeature::RTTI);
   }
 
   bool VisitCXXThrowExpr(CXXThrowExpr *E) {
