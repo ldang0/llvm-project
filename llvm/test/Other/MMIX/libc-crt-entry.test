@@ -32,6 +32,13 @@
 # RUN: llvm-readobj --relocations %t.dir/crt1.o | \
 # RUN:   FileCheck %s --check-prefix=RELOCS \
 # RUN:   --implicit-check-not=__llvm_libc_argument_
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/build/libc/src/stdlib/CMakeFiles/libc.src.stdlib.exit.dir/exit.cpp.o | \
+# RUN:   FileCheck %s --check-prefix=NORMAL-EXIT
+# RUN: llvm-nm --undefined-only \
+# RUN:   %t.dir/build/libc/src/stdlib/CMakeFiles/libc.src.stdlib._Exit.dir/_Exit.cpp.o | \
+# RUN:   FileCheck %s --check-prefix=IMMEDIATE-EXIT \
+# RUN:   --implicit-check-not=__cxa_finalize
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/install/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   FileCheck %s --check-prefix=LIBC-SYMBOLS
@@ -110,8 +117,20 @@
 # SYMBOLS:      Other [
 # SYMBOLS-NEXT: STV_HIDDEN
 
-# RELOCS: R_MMIX_PUSHJ_STUBBABLE __llvm_libc_mmix_start_main
-# RELOCS: R_MMIX_PUSHJ_STUBBABLE main
+# RELOCS:      Section {{.*}} .rela.text.__llvm_libc_mmix_start_main {
+# RELOCS:      R_MMIX_PUSHJ_STUBBABLE {{.*}}atexit
+# RELOCS:      R_MMIX_PUSHJ_STUBBABLE {{.*}}atexit
+# RELOCS:      R_MMIX_GETA __preinit_array_end
+# RELOCS:      R_MMIX_GETA __preinit_array_start
+# RELOCS:      R_MMIX_GETA __init_array_end
+# RELOCS:      R_MMIX_GETA __init_array_start
+# RELOCS:      R_MMIX_PUSHJ_STUBBABLE main
+# RELOCS-NEXT: R_MMIX_PUSHJ_STUBBABLE {{.*}}exit
+
+# NORMAL-EXIT-DAG: U __cxa_finalize
+# NORMAL-EXIT-DAG: U {{.*}}internal4exitEi
+
+# IMMEDIATE-EXIT: U {{.*}}internal4exitEi
 
 # LIBC-SYMBOLS-DAG: T _Exit
 # LIBC-SYMBOLS-DAG: T abort

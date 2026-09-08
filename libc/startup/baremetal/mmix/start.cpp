@@ -108,13 +108,13 @@ __llvm_libc_mmix_start_main(__UINT64_TYPE__ argc, char **argv) {
     startup_failure();
 
   initialize_memory();
-  call_forward(__preinit_array_start, __preinit_array_end);
-  call_forward(__init_array_start, __init_array_end);
-
   // LIFO registration runs user callbacks before stream and fini teardown.
   if (LIBC_NAMESPACE::atexit(&call_fini_array) != 0 ||
       LIBC_NAMESPACE::atexit(&terminate_streams) != 0)
     startup_failure();
+
+  call_forward(__preinit_array_start, __preinit_array_end);
+  call_forward(__init_array_start, __init_array_end);
   LIBC_NAMESPACE::exit(main(static_cast<int>(argc), argv, nullptr));
 }
 
