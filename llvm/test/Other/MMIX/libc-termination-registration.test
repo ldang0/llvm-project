@@ -1,0 +1,60 @@
+# REQUIRES: mmix-registered-target
+
+# RUN: rm -rf %t.dir && split-file %s %t.dir
+# Use a host-compatible triple because lli cannot interpret cross-endian memory.
+# RUN: clang -cc1 -triple x86_64-unknown-linux-gnu -std=c++17 -ffreestanding \
+# RUN:   -DLIBC_FULL_BUILD \
+# RUN:   -DLIBC_COPT_PUBLIC_PACKAGING -DLIBC_NAMESPACE=__llvm_libc_20_0_0_git \
+# RUN:   -I %S/../../../../libc -emit-llvm-bc -o %t.dir/atexit.bc \
+# RUN:   %S/../../../../libc/src/__support/OSUtil/baremetal/mmix/atexit.cpp
+# RUN: clang -cc1 -triple x86_64-unknown-linux-gnu -std=c++17 -ffreestanding \
+# RUN:   -emit-llvm-bc -o %t.dir/harness.bc \
+# RUN:   %t.dir/harness.cpp
+# RUN: llvm-link %t.dir/atexit.bc %t.dir/harness.bc -o %t.dir/test.bc
+# RUN: lli -force-interpreter=true %t.dir/test.bc
+
+#--- harness.cpp
+using Callback = void(void *);
+
+extern "C" int __cxa_atexit(Callback *, void *, void *);
+extern "C" void __cxa_finalize(void *);
+extern "C" int atexit(void (*)(void));
+
+int sequence[80];
+int sequence_size;
+char first_dso;
+char second_dso;
+
+void record(void *payload) {
+  sequence[sequence_size++] = static_cast<int>(
+      reinterpret_cast<unsigned long long>(payload));
+}
+
+void record_plain() { sequence[sequence_size++] = 2; }
+
+extern "C" int main() {
+  if (__cxa_atexit(nullptr, nullptr, nullptr) != -1 ||
+      atexit(nullptr) != -1)
+    return 1;
+  if (__cxa_atexit(record, reinterpret_cast<void *>(1), &first_dso) != 0 ||
+      atexit(record_plain) != 0 ||
+      __cxa_atexit(record, reinterpret_cast<void *>(3), &second_dso) != 0)
+    return 2;
+
+  __cxa_finalize(&first_dso);
+  if (sequence_size != 1 || sequence[0] != 1)
+    return 3;
+  __cxa_finalize(&first_dso);
+  if (sequence_size != 1)
+    return 4;
+  __cxa_finalize(nullptr);
+  if (sequence_size != 3 || sequence[1] != 3 || sequence[2] != 2)
+    return 5;
+
+  for (int index = 0; index != 64; ++index)
+    if (__cxa_atexit(record, nullptr, nullptr) != 0)
+      return 6;
+  if (__cxa_atexit(record, nullptr, nullptr) != -1)
+    return 7;
+  return 0;
+}

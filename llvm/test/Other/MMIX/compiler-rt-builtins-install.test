@@ -76,7 +76,7 @@
 # RUN:   | FileCheck %s --check-prefix=CXX-ELF
 # RUN: llvm-ar t \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
-# RUN:   | count 4
+# RUN:   | count 5
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
 # RUN:   | FileCheck %s --check-prefix=CXX-SYMBOL
@@ -130,6 +130,7 @@
 # CXX-SYMBOL-DAG: T __cxa_guard_acquire
 # CXX-SYMBOL-DAG: T __cxa_guard_release
 # CXX-SYMBOL-DAG: T __cxa_pure_virtual
+# CXX-SYMBOL-DAG: D __dso_handle
 # CXX-SYMBOL-NOT: __cxa_guard_abort
 # CXX-DEPENDENCY-DAG: U abort
 # CXX-DEPENDENCY-DAG: U free
