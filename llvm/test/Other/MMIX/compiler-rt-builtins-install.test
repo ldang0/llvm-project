@@ -1,11 +1,11 @@
-# RUN: rm -rf %t.dir
+# RUN: rm -rf %t.dir && split-file %s %t.dir
 # RUN: cmake -G Ninja -S %S/../../../../compiler-rt -B %t.dir/build \
 # RUN:   -C %S/../../../../compiler-rt/cmake/caches/MMIX.cmake \
 # RUN:   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang \
 # RUN:   -DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib \
 # RUN:   -DLLVM_CONFIG_PATH=llvm-config \
 # RUN:   -DCMAKE_INSTALL_PREFIX=%t.dir/resource > %t.dir-configure.log
-# RUN: ninja -C %t.dir/build install-builtins > %t.dir-install.log
+# RUN: ninja -C %t.dir/build -j 4 install-builtins > %t.dir-install.log
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.atomic.a
 # RUN: test -f %t.dir/build/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
@@ -28,7 +28,7 @@
 # RUN:   %t.dir/installed.a
 # RUN: cp %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
 # RUN:   %t.dir/installed-cxx.a
-# RUN: ninja -C %t.dir/build install-builtins > %t.dir-reinstall.log
+# RUN: ninja -C %t.dir/build -j 4 install-builtins > %t.dir-reinstall.log
 # RUN: cmp %t.dir/installed.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: cmp %t.dir/installed-cxx.a \
@@ -76,13 +76,65 @@
 # RUN:   | FileCheck %s --check-prefix=CXX-ELF
 # RUN: llvm-ar t \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
-# RUN:   | count 5
+# RUN:   | FileCheck %s --check-prefix=CXX-MEMBERS
 # RUN: llvm-nm --defined-only --extern-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
 # RUN:   | FileCheck %s --check-prefix=CXX-SYMBOL
+# RUN: llvm-nm --defined-only --extern-only --format=posix \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | awk '$2 ~ /^[DTW]$/ {print $1}' | sort -u \
+# RUN:   | FileCheck %s --check-prefix=CXX-DEFINED-EXACT
 # RUN: llvm-nm --undefined-only \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
 # RUN:   | FileCheck %s --check-prefix=CXX-DEPENDENCY
+# RUN: llvm-nm --undefined-only --format=posix \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | awk '$2 == "U" {print $1}' | sort -u \
+# RUN:   | FileCheck %s --check-prefix=CXX-UNDEFINED-EXACT
+# RUN: llvm-readobj --relocations \
+# RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+# RUN:   | grep -o 'R_MMIX_[A-Z0-9_]* [^ ]*' | sort -u \
+# RUN:   | FileCheck %s --check-prefix=CXX-RELOCATIONS-EXACT
+
+# RUN: mkdir -p %t.dir/sysroot/include/mmix-unknown-unknown \
+# RUN:   %t.dir/sysroot/lib/mmix-unknown-unknown \
+# RUN:   %t.dir/sysroot/usr/include %t.dir/sysroot/usr/lib/mmix
+# RUN: clang --target=mmix-unknown-unknown -c %t.dir/start.s -o %t.dir/start.o
+# RUN: clang --target=mmix-unknown-unknown -c %t.dir/empty.s -o %t.dir/empty.o
+# RUN: clang --target=mmix-unknown-unknown -ffreestanding -c \
+# RUN:   %t.dir/provider.c -o %t.dir/provider.o
+# RUN: llvm-ar cr %t.dir/sysroot/lib/mmix-unknown-unknown/libc.a \
+# RUN:   %t.dir/provider.o
+# RUN: llvm-ar cr %t.dir/sysroot/lib/mmix-unknown-unknown/libmmixplatform.a
+# RUN: cp %t.dir/start.o %t.dir/sysroot/lib/mmix-unknown-unknown/crt1.o
+# RUN: cp %t.dir/link.ld \
+# RUN:   %t.dir/sysroot/lib/mmix-unknown-unknown/mmix-qemu.ld
+# RUN: llvm-ar cr %t.dir/sysroot/usr/lib/mmix/libc.a %t.dir/provider.o
+# RUN: llvm-ar cr %t.dir/sysroot/usr/lib/mmix/libgloss.a
+# RUN: cp %t.dir/start.o %t.dir/sysroot/usr/lib/mmix/crt0.o
+# RUN: cp %t.dir/empty.o %t.dir/sysroot/usr/lib/mmix/trip-vectors.o
+# RUN: cp %t.dir/link.ld %t.dir/sysroot/usr/lib/mmix/mmix-qemu.ld
+# RUN: clang++ --target=mmix-unknown-unknown --sysroot=%t.dir/sysroot \
+# RUN:   -resource-dir=%t.dir/resource -fno-exceptions -fno-rtti \
+# RUN:   %t.dir/consumer.cpp -o %t.dir/llvm-libc
+# RUN: clang++ --target=mmix-unknown-unknown --sysroot=%t.dir/sysroot \
+# RUN:   -resource-dir=%t.dir/resource -fno-exceptions -fno-rtti \
+# RUN:   %t.dir/consumer.cpp -o %t.dir/llvm-libc-repeat
+# RUN: cmp %t.dir/llvm-libc %t.dir/llvm-libc-repeat
+# RUN: clang++ --target=mmix-unknown-unknown --cstdlib=newlib \
+# RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
+# RUN:   -fno-exceptions -fno-rtti %t.dir/consumer.cpp -o %t.dir/newlib
+# RUN: llvm-nm --undefined-only %t.dir/llvm-libc | count 0
+# RUN: llvm-nm --undefined-only %t.dir/newlib | count 0
+# RUN: clang++ --target=mmix-unknown-unknown --sysroot=%t.dir/sysroot \
+# RUN:   -resource-dir=%t.dir/resource -fno-exceptions -fno-rtti \
+# RUN:   -Wl,--why-extract=%t.dir/unused-extracts.txt \
+# RUN:   %t.dir/empty.cpp -o %t.dir/unused
+# RUN: not grep libclang_rt.cxx.a %t.dir/unused-extracts.txt
+# RUN: llvm-nm --defined-only %t.dir/unused \
+# RUN:   | FileCheck %s --check-prefix=UNUSED \
+# RUN:       --implicit-check-not=_Zn --implicit-check-not=_Zd \
+# RUN:       --implicit-check-not=__cxa_
 
 # ELF-COUNT-5: Format: elf64-mmix
 # ELF: Arch: mmix
@@ -135,3 +187,80 @@
 # CXX-DEPENDENCY-DAG: U abort
 # CXX-DEPENDENCY-DAG: U free
 # CXX-DEPENDENCY-DAG: U malloc
+
+# CXX-MEMBERS:      cxx_delete.c.obj
+# CXX-MEMBERS-NEXT: cxx_dso_handle.c.obj
+# CXX-MEMBERS-NEXT: cxx_failure.c.obj
+# CXX-MEMBERS-NEXT: cxx_guard.c.obj
+# CXX-MEMBERS-NEXT: cxx_new.c.obj
+
+# CXX-DEFINED-EXACT:      _ZdaPv
+# CXX-DEFINED-EXACT-NEXT: _ZdaPvm
+# CXX-DEFINED-EXACT-NEXT: _ZdlPv
+# CXX-DEFINED-EXACT-NEXT: _ZdlPvm
+# CXX-DEFINED-EXACT-NEXT: _Znam
+# CXX-DEFINED-EXACT-NEXT: _Znwm
+# CXX-DEFINED-EXACT-NEXT: __cxa_guard_acquire
+# CXX-DEFINED-EXACT-NEXT: __cxa_guard_release
+# CXX-DEFINED-EXACT-NEXT: __cxa_pure_virtual
+# CXX-DEFINED-EXACT-NEXT: __dso_handle
+
+# CXX-UNDEFINED-EXACT:      abort
+# CXX-UNDEFINED-EXACT-NEXT: free
+# CXX-UNDEFINED-EXACT-NEXT: malloc
+
+# CXX-RELOCATIONS-EXACT:      R_MMIX_64 __dso_handle
+# CXX-RELOCATIONS-EXACT-NEXT: R_MMIX_GETA free
+# CXX-RELOCATIONS-EXACT-NEXT: R_MMIX_PUSHJ_STUBBABLE abort
+# CXX-RELOCATIONS-EXACT-NEXT: R_MMIX_PUSHJ_STUBBABLE malloc
+
+# UNUSED: T _start
+# UNUSED: T main
+
+#--- start.s
+.text
+.globl _start
+.type _start,@function
+_start:
+  PUSHJ r31,main
+1:
+  JMP 1b
+.size _start,.-_start
+
+#--- empty.s
+.text
+
+#--- provider.c
+static unsigned char storage[64];
+
+void *malloc(__SIZE_TYPE__ size) {
+  return size <= sizeof(storage) ? storage : (void *)0;
+}
+
+void free(void *pointer) { (void)pointer; }
+
+__attribute__((noreturn)) void abort(void) {
+  __builtin_trap();
+}
+
+#--- consumer.cpp
+int main() {
+  long *value = new long(7);
+  long result = *value;
+  delete value;
+  return result != 7;
+}
+
+#--- empty.cpp
+int main() { return 0; }
+
+#--- link.ld
+ENTRY(_start)
+SECTIONS {
+  . = 0x100000;
+  .text : { *(.text .text.*) }
+  .rodata : { *(.rodata .rodata.*) }
+  .data : { *(.data .data.*) }
+  .bss : { *(.bss .bss.*) *(COMMON) }
+  .MMIX.reg_contents : { *(.MMIX.reg_contents) }
+}
