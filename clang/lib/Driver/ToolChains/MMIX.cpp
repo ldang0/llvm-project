@@ -159,6 +159,8 @@ public:
     const bool AddDefaultLibraries =
         IsHosted &&
         !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
+    const bool AddCXXRuntime =
+        AddDefaultLibraries && TC.ShouldLinkCXXStdlib(Args);
     ToolChain::CStdlibType CStdlib = TC.GetCStdlibType(Args);
 
     if (IsHosted && !isDirectory(TC, D.SysRoot)) {
@@ -171,6 +173,7 @@ public:
     SmallVector<std::string, 3> StartFiles;
     std::string TerminationFile;
     SmallVector<std::string, 1> PlatformLibraries;
+    std::string CXXRuntime;
     std::string LibC;
     std::string Builtins;
     std::string Atomic;
@@ -227,6 +230,10 @@ public:
       }
 
       if (AddDefaultLibraries) {
+        if (AddCXXRuntime) {
+          CXXRuntime = TC.getCompilerRT(Args, "cxx", ToolChain::FT_Static);
+          InputsValid &= isRegularFile(TC, CXXRuntime);
+        }
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
         StackProtector =
@@ -267,6 +274,8 @@ public:
     tools::AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
     if (AddDefaultLibraries) {
       CmdArgs.push_back("--start-group");
+      if (AddCXXRuntime)
+        CmdArgs.push_back(Args.MakeArgString(CXXRuntime));
       CmdArgs.push_back(Args.MakeArgString(LibC));
       for (const std::string &PlatformLibrary : PlatformLibraries)
         CmdArgs.push_back(Args.MakeArgString(PlatformLibrary));
