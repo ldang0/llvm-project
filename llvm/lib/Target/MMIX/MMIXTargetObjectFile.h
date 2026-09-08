@@ -19,6 +19,10 @@ public:
     TargetLoweringObjectFileELF::Initialize(Ctx, TM);
     // Match the MC path without limiting static code to signed PC-relative reach.
     FDECFIEncoding = dwarf::DW_EH_PE_absptr;
+    // Static exception metadata must also reach the full MMIX address space.
+    PersonalityEncoding = dwarf::DW_EH_PE_absptr;
+    LSDAEncoding = dwarf::DW_EH_PE_absptr;
+    TTypeEncoding = dwarf::DW_EH_PE_absptr;
   }
 };
 } // namespace llvm
