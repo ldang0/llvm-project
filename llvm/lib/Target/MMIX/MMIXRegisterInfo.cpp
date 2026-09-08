@@ -115,8 +115,8 @@ bool MMIXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     }
     const auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
     IsPreFramePointerStore |=
-        MMFI->hasDebugReturnAddressFrameIndex() &&
-        MMFI->getDebugReturnAddressFrameIndex() == FrameIndex;
+        MMFI->hasUnwindReturnAddressFrameIndex() &&
+        MMFI->getUnwindReturnAddressFrameIndex() == FrameIndex;
   }
 
   // Prologue spills emitted before the new frame pointer is established must

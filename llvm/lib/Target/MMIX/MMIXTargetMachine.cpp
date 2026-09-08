@@ -53,6 +53,7 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
           getMMIXEffectiveCodeModel(CM), OL),
       TLOF(std::make_unique<MMIXTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this) {
+  this->Options.EnableCFIFixup = true;
   initAsmInfo();
 }
 

@@ -23,6 +23,7 @@ public:
   MMIXFrameLowering();
 
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
+  bool enableCFIFixup(const MachineFunction &MF) const override;
   StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
                                      Register &FrameReg) const override;
   void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,

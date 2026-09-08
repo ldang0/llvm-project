@@ -1,0 +1,14 @@
+# RUN: not llc -mtriple=mmix -start-before=prolog-epilog %s -o /dev/null 2>&1 | FileCheck %s
+# CHECK: MMIX cannot unwind opaque stack adjustments in function 'opaque'
+--- |
+  define void @opaque() uwtable(sync) { ret void }
+...
+---
+name: opaque
+selected: true
+frameInfo:
+  hasOpaqueSPAdjustment: true
+body: |
+  bb.0:
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...

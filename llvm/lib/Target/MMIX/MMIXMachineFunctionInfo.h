@@ -22,7 +22,7 @@ class MMIXMachineFunctionInfo final : public MachineFunctionInfo {
   unsigned FirstVarArgRegisterIndex = 0;
   unsigned VarArgsSaveSize = 0;
   int VarArgsFrameIndex = std::numeric_limits<int>::max();
-  int DebugReturnAddressFrameIndex = std::numeric_limits<int>::max();
+  int UnwindReturnAddressFrameIndex = std::numeric_limits<int>::max();
 
 public:
   MMIXMachineFunctionInfo(const Function &, const TargetSubtargetInfo *) {}
@@ -65,18 +65,18 @@ public:
     return VarArgsFrameIndex != std::numeric_limits<int>::max();
   }
 
-  void setDebugReturnAddressFrameIndex(int FrameIndex) {
-    assert(!hasDebugReturnAddressFrameIndex() &&
-           "MMIX debug return-address frame index is already set");
-    DebugReturnAddressFrameIndex = FrameIndex;
+  void setUnwindReturnAddressFrameIndex(int FrameIndex) {
+    assert(!hasUnwindReturnAddressFrameIndex() &&
+           "MMIX unwind return-address frame index is already set");
+    UnwindReturnAddressFrameIndex = FrameIndex;
   }
-  int getDebugReturnAddressFrameIndex() const {
-    assert(hasDebugReturnAddressFrameIndex() &&
-           "MMIX debug return-address frame index is not set");
-    return DebugReturnAddressFrameIndex;
+  int getUnwindReturnAddressFrameIndex() const {
+    assert(hasUnwindReturnAddressFrameIndex() &&
+           "MMIX unwind return-address frame index is not set");
+    return UnwindReturnAddressFrameIndex;
   }
-  bool hasDebugReturnAddressFrameIndex() const {
-    return DebugReturnAddressFrameIndex != std::numeric_limits<int>::max();
+  bool hasUnwindReturnAddressFrameIndex() const {
+    return UnwindReturnAddressFrameIndex != std::numeric_limits<int>::max();
   }
 };
 

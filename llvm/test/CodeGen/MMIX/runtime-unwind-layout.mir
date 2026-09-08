@@ -1,0 +1,44 @@
+# RUN: llc -mtriple=mmix -start-before=prolog-epilog -enable-tail-merge=false -verify-machineinstrs %s -o - | FileCheck %s
+# RUN: llc -O0 -mtriple=mmix -start-before=prolog-epilog -enable-tail-merge=false -verify-machineinstrs %s -o - | FileCheck %s
+# RUN: llc -mtriple=mmix -start-before=prolog-epilog -enable-tail-merge=false -filetype=obj %s -o %t.o
+# RUN: llvm-dwarfdump --eh-frame %t.o | FileCheck %s --check-prefix=DWARF
+
+# Disable tail merging to keep two physical epilogues. Neither may leak the
+# restored CFA into the other block's body.
+# CHECK-LABEL: multiple_returns:
+# CHECK: .cfi_offset rJ,
+# CHECK: .cfi_remember_state
+# CHECK: .cfi_register rJ, r30
+# CHECK: .cfi_def_cfa_offset 0
+# CHECK: POP 0, 0
+# CHECK: .cfi_restore_state
+# CHECK: .cfi_register rJ, r30
+# CHECK: .cfi_def_cfa_offset 0
+# CHECK: POP 0, 0
+# DWARF: DW_CFA_remember_state:
+# DWARF: DW_CFA_restore_state:
+
+--- |
+  define void @multiple_returns() uwtable(sync) { ret void }
+...
+---
+name: multiple_returns
+selected: true
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+stack:
+  - { id: 0, type: spill-slot, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    liveins: $r231
+    STOUI $r231, %stack.0, 0
+    PseudoB $r231, %bb.2, 5
+    PseudoJMP %bb.1
+  bb.1:
+    $r231 = LDOUI %stack.0, 0
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+  bb.2:
+    $r231 = SETL 2
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...
