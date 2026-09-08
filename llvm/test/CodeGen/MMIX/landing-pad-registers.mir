@@ -1,0 +1,63 @@
+# RUN: llc -mtriple=mmix -start-before=greedy -verify-machineinstrs %s -o - | FileCheck %s
+# RUN: llc -O0 -mtriple=mmix -start-before=regallocfast -verify-machineinstrs %s -o %t.fast.s
+# RUN: FileCheck %s --check-prefix=FAST < %t.fast.s
+# RUN: llc -mtriple=mmix -start-before=greedy -verify-machineinstrs -filetype=obj %s -o %t.o
+# RUN: llvm-objdump -d %t.o | FileCheck %s --check-prefix=OBJ
+
+# Exercise the selected machine entry contract independently of invoke/LSDA
+# admission. Both incoming values remain live across two clobbering calls.
+# CHECK-LABEL: landing_values:
+# CHECK-DAG: OR [[PTR:r[0-9]+]], r231, 0
+# CHECK-DAG: OR [[SEL:r[0-9]+]], r232, 0
+# CHECK: PUSHJ
+# CHECK: PUSHJ
+# CHECK-DAG: OR r231, [[PTR]], 0
+# CHECK-DAG: OR r232, [[SEL]], 0
+# OBJ-LABEL: <landing_values>:
+# OBJ: PUSHJ
+# OBJ: PUSHJ
+# FAST-LABEL: landing_values:
+# FAST-DAG: STOU r231, r254, [[PTR_SLOT:[0-9]+]]
+# FAST-DAG: STOU r232, r254, [[SEL_SLOT:[0-9]+]]
+# FAST: PUSHJ
+# FAST: PUSHJ
+# FAST-DAG: LDOU r231, r254, [[PTR_SLOT]]
+# FAST-DAG: LDOU r232, r254, [[SEL_SLOT]]
+
+--- |
+  define internal void @cleanup() { ret void }
+  define void @landing_values() uwtable(sync) { ret void }
+...
+---
+name: cleanup
+selected: true
+tracksRegLiveness: true
+body: |
+  bb.0:
+    $r231 = SETL 0
+    $r232 = SETL 0
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...
+---
+name: landing_values
+selected: true
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    CALL_STATE @cleanup, csr_mmix, implicit-def $r231, implicit-def $r232
+    PseudoJMP %bb.2
+  bb.1 (landing-pad):
+    liveins: $r231, $r232
+    %0:gpr64 = COPY $r231
+    %1:gpr64 = COPY $r232
+    CALL_STATE @cleanup, csr_mmix, implicit-def $r231, implicit-def $r232
+    CALL_STATE @cleanup, csr_mmix, implicit-def $r231, implicit-def $r232
+    $r231 = COPY %0
+    $r232 = COPY %1
+    RET implicit $r231, implicit $r232, implicit $rj, implicit $rl, implicit $ro, implicit $rg
+  bb.2:
+    RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
+...

@@ -39,6 +39,16 @@
 
 using namespace llvm;
 
+Register MMIXTargetLowering::getExceptionPointerRegister(
+    ExceptionHandling EH, const Constant *) const {
+  return EH == ExceptionHandling::DwarfCFI ? Register(MMIX::R231) : Register();
+}
+
+Register MMIXTargetLowering::getExceptionSelectorRegister(
+    ExceptionHandling EH, const Constant *) const {
+  return EH == ExceptionHandling::DwarfCFI ? Register(MMIX::R232) : Register();
+}
+
 #define GET_CALLING_CONV_IMPL
 #include "MMIXGenCallingConv.inc"
 

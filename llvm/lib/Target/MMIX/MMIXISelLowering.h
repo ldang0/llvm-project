@@ -65,6 +65,11 @@ class MMIXTargetLowering final : public TargetLowering {
 public:
   MMIXTargetLowering(const TargetMachine &TM, const MMIXSubtarget &STI);
 
+  Register getExceptionPointerRegister(
+      ExceptionHandling EH, const Constant *PersonalityFn) const override;
+  Register getExceptionSelectorRegister(
+      ExceptionHandling EH, const Constant *PersonalityFn) const override;
+
   AsmOperandInfoVector ParseConstraints(const DataLayout &DL,
                                         const TargetRegisterInfo *TRI,
                                         const CallBase &Call) const override;
