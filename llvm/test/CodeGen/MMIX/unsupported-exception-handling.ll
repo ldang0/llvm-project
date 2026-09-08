@@ -3,7 +3,7 @@
 ; RUN: not llc -mtriple=mmix -filetype=obj %s -o %t.o 2>&1 | FileCheck %s
 ; RUN: test ! -s %t.o
 
-; CHECK: LLVM ERROR: MMIX does not support exception handling in function 'invoke_callee'
+; CHECK: LLVM ERROR: MMIX exception handling requires the explicit DWARF model in function 'invoke_callee'
 
 declare void @callee()
 declare i32 @__gxx_personality_v0(...)

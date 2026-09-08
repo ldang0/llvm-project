@@ -23,9 +23,14 @@
 
 using namespace llvm;
 
+static bool needsRuntimeCFI(const MachineFunction &MF) {
+  return MF.getFunction().hasUWTable() ||
+         (MF.getTarget().getMCAsmInfo().usesCFIForEH() &&
+          MF.getFunction().needsUnwindTableEntry());
+}
+
 static bool needsCFI(const MachineFunction &MF) {
-  return (MF.getFunction().getSubprogram() != nullptr ||
-          MF.getFunction().hasUWTable()) &&
+  return (MF.getFunction().getSubprogram() != nullptr || needsRuntimeCFI(MF)) &&
          MF.getTarget().getMCAsmInfo().getOutputAssemblerDialect() ==
              MMIXII::CanonicalAsmVariant;
 }
@@ -113,7 +118,7 @@ static void validateFrame(const MachineFunction &MF,
     reportFatalUsageError(
         Twine("MMIX does not support asynchronous unwind tables in function '") +
         MF.getName() + "'");
-  if (MF.getFunction().hasUWTable() && MFI.hasOpaqueSPAdjustment())
+  if (needsRuntimeCFI(MF) && MFI.hasOpaqueSPAdjustment())
     reportFatalUsageError(
         Twine("MMIX cannot unwind opaque stack adjustments in function '") +
         MF.getName() + "'");

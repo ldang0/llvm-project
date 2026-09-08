@@ -28,7 +28,7 @@
 ; VARARG: input module cannot be verified
 ; RUNTIME-CC: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'runtime_call'
 ; COROUTINE: LLVM ERROR: MMIX does not support coroutines in function 'fast_coroutine'
-; EXCEPTION: LLVM ERROR: MMIX does not support exception handling in function 'fast_exception_path'
+; EXCEPTION: LLVM ERROR: MMIX exception handling requires the explicit DWARF model in function 'fast_exception_path'
 
 ;--- vararg.ll
 target triple = "mmix-unknown-elf"

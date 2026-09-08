@@ -22,6 +22,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/EHPersonalities.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
@@ -2323,10 +2324,16 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
       }
     }
   }
-  if (F.hasPersonalityFn())
-    reportFatalUsageError(
-        Twine("MMIX does not support exception handling in function '") +
-        F.getName() + "'");
+  if (F.hasPersonalityFn()) {
+    if (getTargetMachine().getExceptionModel() != ExceptionHandling::DwarfCFI)
+      reportFatalUsageError(
+          Twine("MMIX exception handling requires the explicit DWARF model in ") +
+          "function '" + F.getName() + "'");
+    if (classifyEHPersonality(F.getPersonalityFn()) != EHPersonality::GNU_CXX)
+      reportFatalUsageError(
+          Twine("MMIX supports only the GNU C++ DWARF personality in function '") +
+          F.getName() + "'");
+  }
   if (!isSupportedMMIXCallingConv(CallConv))
     reportFatalUsageError(
         Twine(

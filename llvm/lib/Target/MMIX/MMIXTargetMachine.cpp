@@ -53,6 +53,9 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
           getMMIXEffectiveCodeModel(CM), OL),
       TLOF(std::make_unique<MMIXTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this) {
+  if (Options.ExceptionModel != ExceptionHandling::None &&
+      Options.ExceptionModel != ExceptionHandling::DwarfCFI)
+    reportFatalUsageError("MMIX supports only the DWARF exception model");
   this->Options.EnableCFIFixup = true;
   initAsmInfo();
 }

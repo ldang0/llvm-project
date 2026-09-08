@@ -90,4 +90,4 @@ extern "C" long c_entry() { return 0; }
 // EH-IR: call i32 @__cxa_guard_acquire(ptr @_ZGVZ7guardedvE5value)
 // EH-IR: landingpad
 // EH-IR: call void @__cxa_guard_abort(ptr @_ZGVZ7guardedvE5value)
-// EH-DIAG: fatal error: error in backend: MMIX does not support exception handling in function '_Z7guardedv'
+// EH-DIAG: fatal error: error in backend: MMIX exception handling requires the explicit DWARF model in function '_Z7guardedv'

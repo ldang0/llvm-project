@@ -8,6 +8,7 @@
 
 #include "MMIXSubtarget.h"
 #include "llvm/CodeGen/LibcallLoweringInfo.h"
+#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
@@ -37,6 +38,9 @@ MMIXSubtarget::MMIXSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       TLInfo(TM, *this) {}
 
 void MMIXSubtarget::initLibcallLoweringInfo(LibcallLoweringInfo &Info) const {
+  if (TLInfo.getTargetMachine().getExceptionModel() == ExceptionHandling::DwarfCFI)
+    Info.setLibcallImpl(RTLIB::UNWIND_RESUME, RTLIB::impl__Unwind_Resume);
+
   Info.setLibcallImpl(RTLIB::MEMCPY, RTLIB::impl_memcpy);
   Info.setLibcallImpl(RTLIB::MEMMOVE, RTLIB::impl_memmove);
   Info.setLibcallImpl(RTLIB::MEMSET, RTLIB::impl_memset);
