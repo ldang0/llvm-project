@@ -96,7 +96,10 @@ set(expected_libc
     libc.src.stdio.baremetal.mmix.buffering
     libc.src.stdio.baremetal.mmix.unavailable_file_operations
     libc.src.stdio.asprintf
-    libc.src.stdio.baremetal.mmix.formatted_output
+  libc.src.stdio.baremetal.mmix.formatted_output
+  libc.src.stdio.baremetal.mmix.fprintf
+  libc.src.stdio.baremetal.mmix.vfprintf
+  libc.src.stdio.baremetal.mmix.remove
     libc.src.stdio.baremetal.mmix.formatted_input
     libc.src.stdio.snprintf
     libc.src.stdio.sprintf

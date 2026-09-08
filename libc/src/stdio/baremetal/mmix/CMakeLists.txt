@@ -105,3 +105,9 @@ add_entrypoint_object(
     libc.src.stdio.scanf_core.reader
     libc.src.stdio.scanf_core.scanf_main
 )
+
+# Public names are needed by hdrgen even when one object defines several APIs.
+foreach(name fprintf vfprintf)
+  add_entrypoint_object(${name} ALIAS DEPENDS .formatted_output)
+endforeach()
+add_entrypoint_object(remove ALIAS DEPENDS .unavailable_file_operations)
