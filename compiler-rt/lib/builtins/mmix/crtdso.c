@@ -1,4 +1,4 @@
-//===-- cxx_dso_handle.c - MMIX static executable identity --------------===//
+//===-- crtdso.c - MMIX static executable identity -----------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.

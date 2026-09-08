@@ -1190,7 +1190,6 @@ else ()
 
       if (arch STREQUAL "mmix")
         add_mmix_crtdso()
-        add_mmix_cxx_support()
         add_compiler_rt_runtime(clang_rt.atomic
                                 STATIC
                                 ARCHS ${arch}
@@ -1205,15 +1204,6 @@ else ()
                                 ARCHS ${arch}
                                 DEPS ${deps_${arch}}
                                 SOURCES ${mmix_STACK_PROTECTOR_SOURCES}
-                                DEFS ${BUILTIN_DEFS}
-                                CFLAGS ${BUILTIN_CFLAGS_${arch}}
-                                C_STANDARD 11
-                                PARENT_TARGET builtins)
-        add_compiler_rt_runtime(clang_rt.cxx
-                                STATIC
-                                ARCHS ${arch}
-                                DEPS ${deps_${arch}}
-                                SOURCES ${mmix_CXX_SOURCES}
                                 DEFS ${BUILTIN_DEFS}
                                 CFLAGS ${BUILTIN_CFLAGS_${arch}}
                                 C_STANDARD 11

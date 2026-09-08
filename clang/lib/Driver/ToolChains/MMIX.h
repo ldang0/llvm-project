@@ -43,6 +43,9 @@ public:
                             FileType Type = ToolChain::FT_Static,
                             bool IsFortran = false) const override;
   void
+  AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+                             llvm::opt::ArgStringList &CC1Args) const override;
+  void
   AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
                             llvm::opt::ArgStringList &CC1Args) const override;
   void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,

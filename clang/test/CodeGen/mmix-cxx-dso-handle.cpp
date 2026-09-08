@@ -4,7 +4,7 @@
 // RUN:   -mrelocation-model static -emit-obj -O2 -o %t.user.o %t/user.cpp
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c11 -ffreestanding \
 // RUN:   -mrelocation-model static -emit-obj -O2 -o %t.dso.o \
-// RUN:   %S/../../../compiler-rt/lib/builtins/mmix/cxx_dso_handle.c
+// RUN:   %S/../../../compiler-rt/lib/builtins/mmix/crtdso.c
 // RUN: llvm-readobj --symbols --relocations %t.dso.o \
 // RUN:   | FileCheck %s --check-prefix=DSO-OBJECT
 // RUN: llvm-ar rc %t.runtime.a %t.dso.o

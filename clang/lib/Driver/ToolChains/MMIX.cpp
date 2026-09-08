@@ -174,6 +174,7 @@ public:
     std::string TerminationFile;
     SmallVector<std::string, 1> PlatformLibraries;
     std::string CXXRuntime;
+    std::string DSORuntime;
     std::string LibC;
     std::string Builtins;
     std::string Atomic;
@@ -231,8 +232,18 @@ public:
 
       if (AddDefaultLibraries) {
         if (AddCXXRuntime) {
-          CXXRuntime = TC.getCompilerRT(Args, "cxx", ToolChain::FT_Static);
-          InputsValid &= isRegularFile(TC, CXXRuntime);
+          SmallString<128> Path(TC.getCompilerRTPath());
+          llvm::sys::path::append(Path, "libc++abi.a");
+          CXXRuntime = std::string(Path);
+          if (!isRegularFile(TC, CXXRuntime)) {
+            D.Diag(diag::err_drv_no_such_file) << CXXRuntime;
+            InputsValid = false;
+          }
+          // DSO identity follows C++ default-runtime and startup suppression.
+          if (!Args.hasArg(options::OPT_nostartfiles)) {
+            DSORuntime = TC.getCompilerRT(Args, "crtdso", ToolChain::FT_Object);
+            InputsValid &= isRegularFile(TC, DSORuntime);
+          }
         }
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
         Atomic = TC.getCompilerRT(Args, "atomic", ToolChain::FT_Static);
@@ -268,6 +279,8 @@ public:
     }
     for (const std::string &StartFile : StartFiles)
       CmdArgs.push_back(Args.MakeArgString(StartFile));
+    if (!DSORuntime.empty())
+      CmdArgs.push_back(Args.MakeArgString(DSORuntime));
     if (auto LTO = TC.getLTOMode(Args); LTO != LTOK_None)
       tools::addLTOOptions(TC, Args, CmdArgs, Output, Inputs,
                            LTO == LTOK_Thin);
@@ -358,7 +371,7 @@ std::string MMIXToolChain::getCompilerRTPath() const {
 std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
                                          StringRef Component, FileType Type,
                                          bool IsFortran) const {
-  if (Type != ToolChain::FT_Static || IsFortran)
+  if ((Type != ToolChain::FT_Static && Type != ToolChain::FT_Object) || IsFortran)
     return ToolChain::getCompilerRT(Args, Component, Type, IsFortran);
 
   SmallString<128> Path(getCompilerRTPath());
@@ -368,6 +381,16 @@ std::string MMIXToolChain::getCompilerRT(const ArgList &Args,
   if (!isRegularFile(*this, Path))
     getDriver().Diag(diag::err_drv_no_such_file) << Path;
   return std::string(Path);
+}
+
+void MMIXToolChain::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
+                                               ArgStringList &CC1Args) const {
+  if (DriverArgs.hasArg(options::OPT_nostdinc, options::OPT_nostdincxx,
+                       options::OPT_nostdlibinc))
+    return;
+  SmallString<128> Path(getDriver().ResourceDir);
+  llvm::sys::path::append(Path, "include", "mmix-unknown-unknown", "c++", "v1");
+  addSystemInclude(DriverArgs, CC1Args, Path);
 }
 
 void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,

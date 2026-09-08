@@ -5,18 +5,7 @@
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c++17 \
 // RUN:   -fno-rtti -mrelocation-model static \
 // RUN:   -emit-obj -O2 -o %t.user.o %s
-// RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c11 \
-// RUN:   -ffreestanding -mrelocation-model static -I %S/../../../compiler-rt/lib/builtins \
-// RUN:   -emit-obj -O2 -o %t.new.o \
-// RUN:   %S/../../../compiler-rt/lib/builtins/mmix/cxx_new.c
-// RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c11 \
-// RUN:   -ffreestanding -mrelocation-model static \
-// RUN:   -emit-obj -O2 -o %t.delete.o \
-// RUN:   %S/../../../compiler-rt/lib/builtins/mmix/cxx_delete.c
-// RUN: llvm-ar rc %t.runtime.a %t.new.o %t.delete.o
-// RUN: llvm-nm --defined-only %t.runtime.a | FileCheck %s --check-prefix=RUNTIME
-// RUN: ld.lld -m elf64mmix -r -o %t.linked.o %t.user.o %t.runtime.a
-// RUN: llvm-nm --undefined-only %t.linked.o | FileCheck %s --check-prefix=DEPS
+// RUN: llvm-nm --undefined-only %t.user.o | FileCheck %s --check-prefix=DEPS
 
 using size_t = decltype(sizeof(0));
 void *operator new(size_t);
@@ -40,14 +29,7 @@ void release_array(Value *value) { delete[] value; }
 // IR-DAG: call void @_ZdlPvm(ptr noundef
 // IR-DAG: call void @_ZdaPv(ptr noundef
 
-// RUNTIME-DAG: W _ZdaPv
-// RUNTIME-DAG: W _ZdaPvm
-// RUNTIME-DAG: W _ZdlPv
-// RUNTIME-DAG: W _ZdlPvm
-// RUNTIME-DAG: W _Znam
-// RUNTIME-DAG: W _Znwm
-
-// DEPS-DAG: U abort
-// DEPS-DAG: U free
-// DEPS-DAG: U malloc
-// DEPS-NOT: U _Z
+// DEPS-DAG: U _Znwm
+// DEPS-DAG: U _Znam
+// DEPS-DAG: U _ZdlPvm
+// DEPS-DAG: U _ZdaPv

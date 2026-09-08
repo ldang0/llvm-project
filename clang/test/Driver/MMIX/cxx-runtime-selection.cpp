@@ -13,7 +13,8 @@
 // RUN:   %t.dir/sysroot/usr/lib/mmix/libc.a \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/libgloss.a \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/mmix-qemu.ld \
-// RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a \
+// RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libc++abi.a \
+// RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
@@ -26,7 +27,7 @@
 // RUN: %clangxx -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -fno-exceptions -fno-rtti %s -o %t.dir/llvm-libc 2>&1 \
-// RUN:   | grep -o libclang_rt.cxx.a | count 1
+// RUN:   | grep -o libc++abi.a | count 1
 // RUN: %clangxx -### --target=mmix-unknown-unknown --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -fno-exceptions -fno-rtti %s -o %t.dir/newlib 2>&1 \
@@ -55,7 +56,35 @@
 // RUN:   -o %t.dir/nostdlibxx 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NO-CXX-RUNTIME
 
-// RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a
+// RUN: %clangxx -### --target=mmix --sysroot=%t.dir/sysroot \
+// RUN:   -resource-dir=%t.dir/resource -nostartfiles %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NO-START
+// NO-START: "{{.*}}ld.lld"
+// NO-START-NOT: clang_rt.crtdso.o
+// NO-START: libc++abi.a
+// NO-START-NOT: clang_rt.crtdso.o
+// RUN: %clangxx -### --target=mmix -resource-dir=%t.dir/resource -c %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=HEADERS
+// HEADERS: "-internal-isystem" "{{.*}}resource{{/|\\}}include{{/|\\}}mmix-unknown-unknown{{/|\\}}c++{{/|\\}}v1"
+// RUN: %clangxx -### --target=mmix -resource-dir=%t.dir/resource -nostdinc++ -c %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NO-HEADERS
+// NO-HEADERS-NOT: c++{{/|\\}}v1
+// RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o
+// RUN: %clangxx -### --target=mmix -resource-dir=%t.dir/resource -nostdinc -c %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NO-HEADERS
+// RUN: %clangxx -### --target=mmix -resource-dir=%t.dir/resource -nostdlibinc -c %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NO-HEADERS
+// RUN: %clangxx -### --target=mmix --sysroot=%t.dir/sysroot \
+// RUN:   -resource-dir=%t.dir/resource -nostartfiles -nostdlib++ %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=NO-CXX-RUNTIME
+// RUN: not %clangxx -### --target=mmix --sysroot=%t.dir/sysroot \
+// RUN:   -resource-dir=%t.dir/resource %s 2>&1 \
+// RUN:   | FileCheck %s --check-prefix=MISSING-DSO --implicit-check-not=ld.lld
+// MISSING-DSO: error: no such file or directory: '{{.*}}clang_rt.crtdso.o'
+// RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o
+
+// RUN: touch %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.cxx.a
+// RUN: rm %t.dir/resource/lib/mmix-unknown-unknown/libc++abi.a
 // RUN: not %clangxx -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -fno-exceptions -fno-rtti %s -o %t.dir/missing 2>&1 \
@@ -63,18 +92,21 @@
 // RUN:       --implicit-check-not=ld.lld
 
 // LLVM-LIBC:      "{{.*}}ld.lld"
-// LLVM-LIBC-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.cxx.a"
+// LLVM-LIBC-SAME: "{{[^\"]+}}clang_rt.crtdso.o"
+// LLVM-LIBC-SAME: "{{[^\"]+}}{{/|\\}}libc++abi.a"
 // LLVM-LIBC-SAME: "[[LIBC:[^\"]+]]{{/|\\}}libc.a"
 // LLVM-LIBC-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.builtins.a"
 
 // NEWLIB:      "{{.*}}ld.lld"
-// NEWLIB-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.cxx.a"
+// NEWLIB-SAME: "{{[^\"]+}}clang_rt.crtdso.o"
+// NEWLIB-SAME: "{{[^\"]+}}{{/|\\}}libc++abi.a"
 // NEWLIB-SAME: "[[NEWLIB:[^\"]+]]{{/|\\}}libc.a"
 // NEWLIB-SAME: "[[NEWLIB]]{{/|\\}}libgloss.a"
 // NEWLIB-SAME: "{{[^\"]+}}{{/|\\}}libclang_rt.builtins.a"
 
-// NO-CXX-RUNTIME-NOT: libclang_rt.cxx.a
+// NO-CXX-RUNTIME-NOT: libc++abi.a
+// NO-CXX-RUNTIME-NOT: clang_rt.crtdso.o
 
-// MISSING: error: no such file or directory: '{{.*}}libclang_rt.cxx.a'
+// MISSING: error: no such file or directory: '{{.*}}libc++abi.a'
 
 int main() { return 0; }
