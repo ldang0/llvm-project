@@ -14,11 +14,13 @@
 #include "MMIXMCAsmInfo.h"
 #include "MMIXTargetStreamer.h"
 #include "TargetInfo/MMIXTargetInfo.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -29,6 +31,22 @@
 #include <utility>
 
 using namespace llvm;
+
+namespace {
+class MMIXMCObjectFileInfo : public MCObjectFileInfo {
+public:
+  MMIXMCObjectFileInfo(MCContext &Ctx, bool PIC, bool Large) {
+    initMCObjectFileInfo(Ctx, PIC, Large);
+    // Static MMIX code addresses need the full unsigned address space.
+    FDECFIEncoding = dwarf::DW_EH_PE_absptr;
+  }
+};
+} // namespace
+
+static MCObjectFileInfo *createMMIXMCObjectFileInfo(MCContext &Ctx, bool PIC,
+                                                  bool Large) {
+  return new MMIXMCObjectFileInfo(Ctx, PIC, Large);
+}
 
 #define GET_SUBTARGETINFO_MC_DESC
 #include "MMIXGenSubtargetInfo.inc"
@@ -92,6 +110,7 @@ createMMIXAsmStreamer(MCContext &Ctx, std::unique_ptr<formatted_raw_ostream> OS,
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMMIXTargetMC() {
   Target &T = getTheMMIXTarget();
   RegisterMCAsmInfo<MMIXMCAsmInfo> X(T);
+  TargetRegistry::RegisterMCObjectFileInfo(T, createMMIXMCObjectFileInfo);
   TargetRegistry::RegisterMCInstrInfo(T, createMMIXMCInstrInfo);
   TargetRegistry::RegisterMCRegInfo(T, createMMIXMCRegisterInfo);
   TargetRegistry::RegisterMCSubtargetInfo(T, createMMIXMCSubtargetInfo);

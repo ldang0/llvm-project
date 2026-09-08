@@ -23,8 +23,9 @@
 
 using namespace llvm;
 
-static bool needsDebugCFI(const MachineFunction &MF) {
-  return MF.getFunction().getSubprogram() != nullptr &&
+static bool needsCFI(const MachineFunction &MF) {
+  return (MF.getFunction().getSubprogram() != nullptr ||
+          MF.getFunction().hasUWTable()) &&
          MF.getTarget().getMCAsmInfo().getOutputAssemblerDialect() ==
              MMIXII::CanonicalAsmVariant;
 }
@@ -77,7 +78,7 @@ void MMIXFrameLowering::determineCalleeSaves(MachineFunction &MF,
   if (hasFP(MF))
     SavedRegs.set(MMIX::R253);
 
-  if (MF.getFrameInfo().hasCalls() && needsDebugCFI(MF)) {
+  if (MF.getFrameInfo().hasCalls() && needsCFI(MF)) {
     auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
     if (!MMFI->hasDebugReturnAddressFrameIndex())
       MMFI->setDebugReturnAddressFrameIndex(
@@ -108,9 +109,16 @@ static void validateFrame(const MachineFunction &MF,
     reportFatalUsageError(
         Twine("MMIX does not support stack probing in function '") +
         MF.getName() + "'");
-  if (MF.getFunction().hasUWTable())
+  if (MF.getFunction().getUWTableKind() == UWTableKind::Async)
     reportFatalUsageError(
-        Twine("MMIX does not support runtime unwind tables in function '") +
+        Twine("MMIX does not support asynchronous unwind tables in function '") +
+        MF.getName() + "'");
+  // FIXME: Admit other frames after their runtime saved-state rules are ready.
+  if (MF.getFunction().hasUWTable() &&
+      (MFI.hasCalls() || MFI.getStackSize() || MFI.hasVarSizedObjects() ||
+       TFI.hasFP(MF) || MFI.hasOpaqueSPAdjustment()))
+    reportFatalUsageError(
+        Twine("MMIX runtime unwind tables require a frameless leaf in function '") +
         MF.getName() + "'");
 }
 
@@ -142,7 +150,7 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc DL;
   const auto *TRI = MF.getSubtarget().getRegisterInfo();
-  const bool NeedsCFI = needsDebugCFI(MF);
+  const bool NeedsCFI = needsCFI(MF);
 
   if (NeedsCFI)
     emitCFI(MF, MBB, MBBI,
@@ -208,7 +216,7 @@ void MMIXFrameLowering::emitCallerStateRestore(
   const auto &MMIXII =
       *static_cast<const MMIXInstrInfo *>(MF.getSubtarget().getInstrInfo());
   const auto *TRI = MF.getSubtarget().getRegisterInfo();
-  const bool NeedsCFI = needsDebugCFI(MF);
+  const bool NeedsCFI = needsCFI(MF);
   if (MF.getFrameInfo().hasVarSizedObjects()) {
     MachineBasicBlock::iterator FirstRestore = MBBI;
     ArrayRef<CalleeSavedInfo> CSI = MF.getFrameInfo().getCalleeSavedInfo();

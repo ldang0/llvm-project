@@ -1,0 +1,26 @@
+//===-- MMIXTargetObjectFile.h - MMIX object lowering ------------*- C++ -*-===//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+
+#ifndef LLVM_LIB_TARGET_MMIX_MMIXTARGETOBJECTFILE_H
+#define LLVM_LIB_TARGET_MMIX_MMIXTARGETOBJECTFILE_H
+
+#include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+
+namespace llvm {
+class MMIXTargetObjectFile : public TargetLoweringObjectFileELF {
+public:
+  void Initialize(MCContext &Ctx, const TargetMachine &TM) override {
+    TargetLoweringObjectFileELF::Initialize(Ctx, TM);
+    // Match the MC path without limiting static code to signed PC-relative reach.
+    FDECFIEncoding = dwarf::DW_EH_PE_absptr;
+  }
+};
+} // namespace llvm
+
+#endif

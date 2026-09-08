@@ -11,10 +11,10 @@
 #include "MMIX.h"
 #include "MMIXALModuleValidator.h"
 #include "MMIXMachineFunctionInfo.h"
+#include "MMIXTargetObjectFile.h"
 #include "MMIXTargetTransformInfo.h"
 #include "TargetInfo/MMIXTargetInfo.h"
 #include "llvm/CodeGen/AtomicExpand.h"
-#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -51,7 +51,7 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
           T, TT.computeDataLayout(), TT, CPU, FS, Options,
           getEffectiveRelocModel(RM),
           getMMIXEffectiveCodeModel(CM), OL),
-      TLOF(std::make_unique<TargetLoweringObjectFileELF>()),
+      TLOF(std::make_unique<MMIXTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
 }
