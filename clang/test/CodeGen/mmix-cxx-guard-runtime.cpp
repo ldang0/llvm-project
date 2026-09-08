@@ -19,12 +19,12 @@
 // RUN:   %t/guard-harness.c
 // RUN: llvm-link %t.guard.bc %t.harness.bc -o %t.guard-test.bc
 // RUN: lli -force-interpreter=true -entry-function=success %t.guard-test.bc
-// RUN: not lli -force-interpreter=true -entry-function=recursive \
-// RUN:   %t.guard-test.bc
-// RUN: not lli -force-interpreter=true -entry-function=malformed \
-// RUN:   %t.guard-test.bc
-// RUN: not lli -force-interpreter=true -entry-function=invalid_release \
-// RUN:   %t.guard-test.bc
+// RUN: not --crash lli -force-interpreter=true -entry-function=recursive \
+// RUN:   %t.guard-test.bc 2> /dev/null
+// RUN: not --crash lli -force-interpreter=true -entry-function=malformed \
+// RUN:   %t.guard-test.bc 2> /dev/null
+// RUN: not --crash lli -force-interpreter=true -entry-function=invalid_release \
+// RUN:   %t.guard-test.bc 2> /dev/null
 
 //--- user.cpp
 struct Value {
@@ -45,8 +45,7 @@ typedef unsigned long long guard_type;
 int __cxa_guard_acquire(guard_type *);
 void __cxa_guard_release(guard_type *);
 
-extern void exit(int) __attribute__((noreturn));
-void abort(void) { exit(86); }
+void abort(void) { __builtin_trap(); }
 
 int success(void) {
   guard_type guard = 0;

@@ -14,5 +14,6 @@ set(mmix_STACK_PROTECTOR_SOURCES
 
 set(mmix_CXX_SOURCES
   mmix/cxx_delete.c
+  mmix/cxx_failure.c
   mmix/cxx_guard.c
   mmix/cxx_new.c)
