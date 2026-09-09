@@ -224,22 +224,22 @@ target triple = "mmix-unknown-elf"
 @mergeable_string = private unnamed_addr constant [6 x i8] c"hello\00",
     align 1
 
-define internal void @local_function() {
+define internal void @local_function() nounwind {
   ret void
 }
 
-define weak void @weak_function() {
+define weak void @weak_function() nounwind {
   ret void
 }
 
-define hidden void @hidden_function() {
+define hidden void @hidden_function() nounwind {
   ret void
 }
 
-define protected void @protected_function() {
+define protected void @protected_function() nounwind {
   ret void
 }
 
-define void @global_function() {
+define void @global_function() nounwind {
   ret void
 }

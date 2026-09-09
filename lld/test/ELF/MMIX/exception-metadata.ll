@@ -10,10 +10,15 @@
 ; RUN: llvm-dwarfdump --eh-frame %t/high | FileCheck %s --check-prefixes=CFI,HIGH
 ; RUN: llvm-readobj --hex-dump=.gcc_except_table.live %t/low | FileCheck %s --check-prefix=TYPE
 ; RUN: llvm-readobj --hex-dump=.gcc_except_table.live %t/high | FileCheck %s --check-prefix=TYPE
+; RUN: llvm-as %t/input.ll -o %t/input.bc
+; RUN: ld.lld --gc-sections -e live -T %t/layout.lds --defsym=base=0x10000 %t/input.bc -o %t/lto
+; RUN: llvm-readobj --sections --symbols --relocations %t/lto | FileCheck %s --check-prefix=LINK --implicit-check-not=unused_type --implicit-check-not=.gcc_except_table.dead
+; RUN: llvm-dwarfdump --eh-frame %t/lto | FileCheck %s --check-prefixes=CFI,LOW
 
 ; Duplicate COMDAT definitions must select their code and LSDA together.
 ; The undefined type referenced only by dead code must not retain its LSDA.
 ; Absolute stand-in symbols test relocation reach, not executable runtime code.
+; Direct Full LTO uses the target's default DWARF exception model.
 ; GROUP: R_MMIX_64 typeinfo 0x0
 ; GROUP: R_MMIX_64 unused_type 0x0
 ; GROUP: R_MMIX_64 __gxx_personality_v0 0x0
@@ -55,6 +60,9 @@ SECTIONS {
 }
 
 ;--- input.ll
+target datalayout = "E-m:e-p:64:64-i64:64-n64-S64"
+target triple = "mmix-unknown-unknown"
+
 declare i32 @__gxx_personality_v0(...)
 declare void @callee()
 @typeinfo = external constant ptr

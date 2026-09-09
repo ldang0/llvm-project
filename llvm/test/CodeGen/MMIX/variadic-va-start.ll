@@ -53,7 +53,7 @@ declare void @sink(ptr)
 ; ASM-NEXT:  STOU r246, r254, 128
 ; ASM-NEXT:  ADDU r231, r254, 8
 ; ASM-NEXT:  STOU r231, r254, 0
-define ptr @k0(...) {
+define ptr @k0(...) nounwind {
   %ap = alloca ptr, align 8
   call void @llvm.va_start(ptr %ap)
   %cursor = load ptr, ptr %ap, align 8
@@ -94,7 +94,7 @@ define void @k15(i64, i64, i64, i64, i64, i64, i64, i64,
 ; ASM-NEXT:  ADDU r231, r254, 8
 ; ASM-NEXT:  STOU r231, r254, 0
 define ptr @k16(i64, i64, i64, i64, i64, i64, i64, i64,
-                i64, i64, i64, i64, i64, i64, i64, i64, ...) {
+                i64, i64, i64, i64, i64, i64, i64, i64, ...) nounwind {
   %ap = alloca ptr, align 8
   call void @llvm.va_start(ptr %ap)
   %cursor = load ptr, ptr %ap, align 8
@@ -113,7 +113,7 @@ define ptr @k16(i64, i64, i64, i64, i64, i64, i64, i64,
 ; ASM-NEXT:  ADDU r231, r254, 16
 ; ASM-NEXT:  STOU r231, r254, 0
 define ptr @k17(i64, i64, i64, i64, i64, i64, i64, i64,
-                i64, i64, i64, i64, i64, i64, i64, i64, i64, ...) {
+                i64, i64, i64, i64, i64, i64, i64, i64, i64, ...) nounwind {
   %ap = alloca ptr, align 8
   call void @llvm.va_start(ptr %ap)
   %cursor = load ptr, ptr %ap, align 8

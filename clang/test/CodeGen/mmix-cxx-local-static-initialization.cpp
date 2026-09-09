@@ -27,10 +27,10 @@
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c++17 -fno-rtti \
 // RUN:   -fexceptions -fcxx-exceptions -O0 -mrelocation-model static \
 // RUN:   -emit-llvm -o - %t/local.cpp | FileCheck %s --check-prefix=EH-IR
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=c++17 -fno-rtti \
+// RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c++17 -fno-rtti \
 // RUN:   -fexceptions -fcxx-exceptions -O0 -mrelocation-model static \
-// RUN:   -emit-obj -o /dev/null %t/local.cpp 2>&1 \
-// RUN:   | FileCheck %s --check-prefix=EH-DIAG
+// RUN:   -emit-obj -o %t/local-eh.o %t/local.cpp
+// RUN: llvm-readobj --relocations %t/local-eh.o | FileCheck %s --check-prefix=EH-OBJ
 
 //--- local.cpp
 extern long make_value(long);
@@ -90,4 +90,5 @@ extern "C" long c_entry() { return 0; }
 // EH-IR: call i32 @__cxa_guard_acquire(ptr @_ZGVZ7guardedvE5value)
 // EH-IR: landingpad
 // EH-IR: call void @__cxa_guard_abort(ptr @_ZGVZ7guardedvE5value)
-// EH-DIAG: fatal error: error in backend: MMIX exception handling requires the explicit DWARF model in function '_Z7guardedv'
+// EH-OBJ-DAG: __cxa_guard_abort
+// EH-OBJ-DAG: __gxx_personality_v0

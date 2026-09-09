@@ -3,7 +3,7 @@
 ; RUN: llc -mtriple=mmix -filetype=obj < %s -o %t.o
 ; RUN: llvm-readobj -S -r -x .text %t.o | FileCheck %s --check-prefix=OBJECT
 
-define void @trap() {
+define void @trap() nounwind {
 ; CHECK-LABEL: trap:
 ; CHECK:       TRAP 255, 0, 0
 ; CHECK-NOT:   POP

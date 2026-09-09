@@ -121,6 +121,6 @@ target triple = "mmix-unknown-elf"
 
 declare void @external_function()
 
-define internal void @defined_function() {
+define internal void @defined_function() nounwind {
   ret void
 }

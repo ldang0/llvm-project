@@ -29,7 +29,7 @@
 # DIS-NEXT:  {{ *}}10: f0 00 00 00{{.*}}JMP 0
 
 --- |
-  define void @branch_directions() {
+  define void @branch_directions() nounwind {
     ret void
   }
 ...

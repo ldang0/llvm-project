@@ -2327,7 +2327,7 @@ SDValue MMIXTargetLowering::LowerFormalArguments(
   if (F.hasPersonalityFn()) {
     if (getTargetMachine().getExceptionModel() != ExceptionHandling::DwarfCFI)
       reportFatalUsageError(
-          Twine("MMIX exception handling requires the explicit DWARF model in ") +
+          Twine("MMIX exception handling requires the DWARF model in ") +
           "function '" + F.getName() + "'");
     if (classifyEHPersonality(F.getPersonalityFn()) != EHPersonality::GNU_CXX)
       reportFatalUsageError(

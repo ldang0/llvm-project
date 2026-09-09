@@ -166,7 +166,7 @@ define void @forward_copy(ptr byval(%pair) align 8 %value) {
 ; ASM:       STOU {{r[0-9]+}}, r253, r255
 ; ASM:       ADDU r231, r253, r255
 ; ASM:       PUSHGO
-define void @copy_with_frame_pointer(ptr %source) #0 {
+define void @copy_with_frame_pointer(ptr %source) nounwind #0 {
   call void @take_pair(ptr byval(%pair) align 8 %source)
   ret void
 }

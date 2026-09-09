@@ -95,7 +95,7 @@ target triple = "mmix-unknown-elf"
 declare void @declared()
 declare extern_weak void @weak_declared()
 
-define internal void @backward_target() {
+define internal void @backward_target() nounwind {
   ret void
 }
 
@@ -108,7 +108,7 @@ define internal void @backward_target() {
 ; POSTRA:       PseudoPUSHJ $r31, @backward_target, csr_mmix
 ; ASM-LABEL: call_backward:
 ; ASM:       PUSHJB r31, backward_target
-define void @call_backward() {
+define void @call_backward() nounwind {
   call void @backward_target()
   ret void
 }
@@ -121,16 +121,16 @@ define void @call_backward() {
 ; POSTRA:       PseudoPUSHJ $r31, @forward_target, csr_mmix
 ; ASM-LABEL: call_forward:
 ; ASM:       PUSHJ r31, forward_target
-define void @call_forward() {
+define void @call_forward() nounwind {
   call void @forward_target()
   ret void
 }
 
-define internal void @forward_target() {
+define internal void @forward_target() nounwind {
   ret void
 }
 
-define internal void @section_target() section ".text.separate" {
+define internal void @section_target() nounwind section ".text.separate" {
   ret void
 }
 
@@ -145,7 +145,7 @@ define internal void @section_target() section ".text.separate" {
 ; ASM-LABEL: call_other_section:
 ; ASM:       GETA [[SECTION_TEXT:r[0-9]+]], %geta(section_target)
 ; ASM:       PUSHGO r31, [[SECTION_TEXT]], 0
-define void @call_other_section() {
+define void @call_other_section() nounwind {
   call void @section_target()
   ret void
 }
@@ -158,12 +158,12 @@ define void @call_other_section() {
 ; ASM-LABEL: call_declaration:
 ; ASM:       GETA [[DECL_TEXT:r[0-9]+]], %geta(declared)
 ; ASM:       PUSHGO r31, [[DECL_TEXT]], 0
-define void @call_declaration() {
+define void @call_declaration() nounwind {
   call void @declared()
   ret void
 }
 
-define dso_preemptable void @visible_target() {
+define dso_preemptable void @visible_target() nounwind {
   ret void
 }
 
@@ -171,7 +171,7 @@ define dso_preemptable void @visible_target() {
 ; ISEL:       DIRECT_CALL_STATE @visible_target, {{.*}}csr_mmix
 ; POSTRA-LABEL: name: call_visible
 ; POSTRA:       PseudoDirectCall $r31, @visible_target, {{.*}}csr_mmix
-define void @call_visible() {
+define void @call_visible() nounwind {
   call void @visible_target()
   ret void
 }
@@ -180,7 +180,7 @@ define void @call_visible() {
 ; ISEL:       DIRECT_CALL_STATE @weak_declared, {{.*}}csr_mmix
 ; POSTRA-LABEL: name: call_weak
 ; POSTRA:       PseudoDirectCall $r31, @weak_declared, {{.*}}csr_mmix
-define void @call_weak() {
+define void @call_weak() nounwind {
   call void @weak_declared()
   ret void
 }
@@ -195,7 +195,7 @@ define void @call_weak() {
 ; ASM-LABEL: call_with_addend:
 ; ASM:       GETA [[ADDEND_TEXT:r[0-9]+]], %geta(declared-12)
 ; ASM:       PUSHGO r31, [[ADDEND_TEXT]], 0
-define void @call_with_addend() {
+define void @call_with_addend() nounwind {
   call void getelementptr (i8, ptr @declared, i64 -12)()
   ret void
 }
@@ -211,7 +211,7 @@ define void @call_with_addend() {
 ; POSTRA:       PseudoPUSHGO $r31, killed $r231, 0, csr_mmix
 ; ASM-LABEL: call_indirect:
 ; ASM:       PUSHGO r31, r231, 0
-define void @call_indirect(ptr %callee) {
+define void @call_indirect(ptr %callee) nounwind {
   call void %callee()
   ret void
 }

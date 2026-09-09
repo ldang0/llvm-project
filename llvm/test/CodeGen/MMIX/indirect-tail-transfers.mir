@@ -46,11 +46,11 @@
 
 --- |
   target triple = "mmix-unknown-elf"
-  define internal void @callee() { ret void }
-  define void @indirect() { ret void }
-  define void @overlapping_argument() { ret void }
-  define void @materialized_indirect() { ret void }
-  define void @frame_pointer() { ret void }
+  define internal void @callee() nounwind { ret void }
+  define void @indirect() nounwind { ret void }
+  define void @overlapping_argument() nounwind { ret void }
+  define void @materialized_indirect() nounwind { ret void }
+  define void @frame_pointer() nounwind { ret void }
 ...
 ---
 name: callee

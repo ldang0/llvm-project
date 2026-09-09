@@ -339,29 +339,29 @@ module asm "JMP mc_external - 8"
 
 declare void @external_function()
 
-define internal void @local_target() {
+define internal void @local_target() nounwind {
   ret void
 }
 
-define void @local_call() {
+define void @local_call() nounwind {
   call void @local_target()
   ret void
 }
 
-define void @symbolic_call() {
+define void @symbolic_call() nounwind {
   call void @external_function()
   ret void
 }
 
-define ptr @external_address() {
+define ptr @external_address() nounwind {
   ret ptr @external_data
 }
 
-define ptr @constant_pool_address() {
+define ptr @constant_pool_address() nounwind {
   ret ptr @constant_pool_entry
 }
 
-define ptr @block_address(i1 %condition) {
+define ptr @block_address(i1 %condition) nounwind {
 entry:
   br i1 %condition, label %taken, label %other
 

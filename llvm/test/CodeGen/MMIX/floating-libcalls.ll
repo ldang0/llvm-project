@@ -20,7 +20,7 @@ target triple = "mmix-unknown-elf"
 ; ASM-NOT:   FREM
 ; ISEL-LABEL: name: remainder_f32
 ; ISEL:       DIRECT_CALL_STATE &fmodf, {{.*}}implicit $r231, implicit $r232, implicit-def $r254, implicit-def $r231
-define float @remainder_f32(float %lhs, float %rhs) {
+define float @remainder_f32(float %lhs, float %rhs) nounwind {
   %result = frem float %lhs, %rhs
   ret float %result
 }
@@ -31,7 +31,7 @@ define float @remainder_f32(float %lhs, float %rhs) {
 ; ASM-NOT:   FREM
 ; ISEL-LABEL: name: remainder_f64
 ; ISEL:       DIRECT_CALL_STATE &fmod, {{.*}}implicit $r231, implicit $r232, implicit-def $r254, implicit-def $r231
-define double @remainder_f64(double %lhs, double %rhs) {
+define double @remainder_f64(double %lhs, double %rhs) nounwind {
   %result = frem double %lhs, %rhs
   ret double %result
 }
@@ -41,7 +41,7 @@ define double @remainder_f64(double %lhs, double %rhs) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: fused_multiply_add_f32
 ; ISEL:       DIRECT_CALL_STATE &fmaf, {{.*}}implicit $r231, implicit $r232, implicit $r233, implicit-def $r254, implicit-def $r231
-define float @fused_multiply_add_f32(float %lhs, float %rhs, float %addend) {
+define float @fused_multiply_add_f32(float %lhs, float %rhs, float %addend) nounwind {
   %result = call float @llvm.fma.f32(float %lhs, float %rhs, float %addend)
   ret float %result
 }
@@ -52,7 +52,7 @@ define float @fused_multiply_add_f32(float %lhs, float %rhs, float %addend) {
 ; ISEL-LABEL: name: fused_multiply_add_f64
 ; ISEL:       DIRECT_CALL_STATE &fma, {{.*}}implicit $r231, implicit $r232, implicit $r233, implicit-def $r254, implicit-def $r231
 define double @fused_multiply_add_f64(double %lhs, double %rhs,
-                                      double %addend) {
+                                      double %addend) nounwind {
   %result = call double @llvm.fma.f64(double %lhs, double %rhs,
                                       double %addend)
   ret double %result
@@ -63,7 +63,7 @@ define double @fused_multiply_add_f64(double %lhs, double %rhs,
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: round_f32
 ; ISEL:       DIRECT_CALL_STATE &roundf, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
-define float @round_f32(float %value) {
+define float @round_f32(float %value) nounwind {
   %result = call float @llvm.round.f32(float %value)
   ret float %result
 }
@@ -73,7 +73,7 @@ define float @round_f32(float %value) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: round_f64
 ; ISEL:       DIRECT_CALL_STATE &round, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
-define double @round_f64(double %value) {
+define double @round_f64(double %value) nounwind {
   %result = call double @llvm.round.f64(double %value)
   ret double %result
 }
@@ -83,7 +83,7 @@ define double @round_f64(double %value) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: nearbyint_f32
 ; ISEL:       DIRECT_CALL_STATE &nearbyintf, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
-define float @nearbyint_f32(float %value) {
+define float @nearbyint_f32(float %value) nounwind {
   %result = call float @llvm.nearbyint.f32(float %value)
   ret float %result
 }
@@ -93,7 +93,7 @@ define float @nearbyint_f32(float %value) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: nearbyint_f64
 ; ISEL:       DIRECT_CALL_STATE &nearbyint, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
-define double @nearbyint_f64(double %value) {
+define double @nearbyint_f64(double %value) nounwind {
   %result = call double @llvm.nearbyint.f64(double %value)
   ret double %result
 }
@@ -106,7 +106,7 @@ define double @nearbyint_f64(double %value) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: explicit_fmal
 ; ISEL:       DIRECT_CALL_STATE @fmal, {{.*}}implicit $r231, implicit $r232, implicit $r233, implicit-def $r254, implicit-def $r231
-define double @explicit_fmal(double %lhs, double %rhs, double %addend) {
+define double @explicit_fmal(double %lhs, double %rhs, double %addend) nounwind {
   %result = call double @fmal(double %lhs, double %rhs, double %addend)
   ret double %result
 }

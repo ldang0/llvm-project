@@ -5,7 +5,7 @@ target triple = "mmix"
 ; CHECK-LABEL: add:
 ; CHECK:       FADD r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define double @add(double %lhs, double %rhs) {
+define double @add(double %lhs, double %rhs) nounwind {
   %result = fadd double %lhs, %rhs
   ret double %result
 }
@@ -13,7 +13,7 @@ define double @add(double %lhs, double %rhs) {
 ; CHECK-LABEL: subtract:
 ; CHECK:       FSUB r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define double @subtract(double %lhs, double %rhs) {
+define double @subtract(double %lhs, double %rhs) nounwind {
   %result = fsub double %lhs, %rhs
   ret double %result
 }
@@ -21,7 +21,7 @@ define double @subtract(double %lhs, double %rhs) {
 ; CHECK-LABEL: multiply:
 ; CHECK:       FMUL r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define double @multiply(double %lhs, double %rhs) {
+define double @multiply(double %lhs, double %rhs) nounwind {
   %result = fmul double %lhs, %rhs
   ret double %result
 }
@@ -29,7 +29,7 @@ define double @multiply(double %lhs, double %rhs) {
 ; CHECK-LABEL: divide:
 ; CHECK:       FDIV r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define double @divide(double %lhs, double %rhs) {
+define double @divide(double %lhs, double %rhs) nounwind {
   %result = fdiv double %lhs, %rhs
   ret double %result
 }
@@ -38,7 +38,7 @@ define double @divide(double %lhs, double %rhs) {
 ; CHECK-LABEL: add_fast:
 ; CHECK:       FADD r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define double @add_fast(double %lhs, double %rhs) {
+define double @add_fast(double %lhs, double %rhs) nounwind {
   %result = fadd fast double %lhs, %rhs
   ret double %result
 }
@@ -88,7 +88,7 @@ define double @select_double(i1 %condition, double %if_true,
 ; CHECK-LABEL: square_root:
 ; CHECK:       FSQRT r231, 4, r231
 ; CHECK-NEXT:  POP 0, 0
-define double @square_root(double %value) {
+define double @square_root(double %value) nounwind {
   %result = call double @llvm.sqrt.f64(double %value)
   ret double %result
 }
@@ -98,7 +98,7 @@ define double @square_root(double %value) {
 ; CHECK-NOT:   FEQLE
 ; CHECK:       FEQL r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define i1 @ordered_equal_signed_zero(double %lhs, double %rhs) {
+define i1 @ordered_equal_signed_zero(double %lhs, double %rhs) nounwind {
   %result = fcmp oeq double %lhs, %rhs
   ret i1 %result
 }
@@ -171,7 +171,7 @@ define i1 @ordered(double %lhs, double %rhs) {
 ; CHECK-NOT:   FUNE
 ; CHECK:       FUN r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define i1 @unordered(double %lhs, double %rhs) {
+define i1 @unordered(double %lhs, double %rhs) nounwind {
   %result = fcmp uno double %lhs, %rhs
   ret i1 %result
 }

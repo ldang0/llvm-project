@@ -113,7 +113,7 @@ define void @call_sret(ptr %out, i32 %value) {
 ; ASM-DAG:   STOU {{r[0-9]+}}, {{r[0-9]+}}, 16
 ; ASM-DAG:   STOU {{r[0-9]+}}, {{r[0-9]+}}, 24
 define void @call_stack(%small %small, ptr %large, ptr %pointer, double %fp,
-                        i32 %integer) {
+                        i32 %integer) nounwind {
   call void (i64, i64, i64, i64, i64, i64, i64, i64,
              i64, i64, i64, i64, i64, i64, i64, ...) @many(
       i64 0, i64 1, i64 2, i64 3, i64 4, i64 5, i64 6, i64 7,

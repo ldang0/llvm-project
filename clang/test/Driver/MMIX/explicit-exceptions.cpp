@@ -8,6 +8,14 @@
 // RUN: not %clangxx --target=mmix -ffreestanding -fcxx-exceptions -fno-cxx-exceptions -c %s -o %t.no-cxx.o 2>&1 | FileCheck %s --check-prefix=DISABLED
 // RUN: not %clangxx --target=mmix -ffreestanding -fcxx-exceptions -fno-exceptions -c %s -o %t.no-all.o 2>&1 | FileCheck %s --check-prefix=DISABLED
 // RUN: %clangxx --target=mmix -fexceptions -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -### %s 2>&1 | FileCheck %s --check-prefix=MANUAL
+// RUN: %clangxx --target=mmix -flto -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -### %s 2>&1 | FileCheck %s --check-prefix=LTO
+// RUN: %clangxx --target=mmix -flto -fno-exceptions -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -### %s 2>&1 | FileCheck %s --check-prefix=LTO
+// RUN: %clang --target=mmix -x c -flto -fexceptions -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -### %s 2>&1 | FileCheck %s --check-prefix=LTO
+// RUN: %clang --target=mmix -x c -flto -ffreestanding -nostdlib -nostartfiles -nodefaultlibs -### %s 2>&1 | FileCheck %s --check-prefix=C-LTO
+// LTO: ld.lld
+// LTO-NOT: -exception-model=dwarf
+// C-LTO: ld.lld
+// C-LTO-NOT: -exception-model=dwarf
 // MODEL: "-exception-model=dwarf"
 // DISABLED: error: cannot use 'throw' with exceptions disabled
 // MANUAL-NOT: libc++abi.a

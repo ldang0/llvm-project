@@ -92,31 +92,31 @@
 --- |
   declare void @callee()
 
-  define void @small_frame() {
+  define void @small_frame() nounwind {
     ret void
   }
 
-  define void @frame_pointer() {
+  define void @frame_pointer() nounwind {
     ret void
   }
 
-  define void @large_frame() {
+  define void @large_frame() nounwind {
     ret void
   }
 
-  define void @reserved_call_frame() {
+  define void @reserved_call_frame() nounwind {
     ret void
   }
 
-  define void @frame_pointer_call() {
+  define void @frame_pointer_call() nounwind {
     ret void
   }
 
-  define void @local_register() {
+  define void @local_register() nounwind {
     ret void
   }
 
-  define void @aligned_locals() {
+  define void @aligned_locals() nounwind {
     ret void
   }
 ...

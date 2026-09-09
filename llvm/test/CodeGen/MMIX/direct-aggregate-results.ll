@@ -58,7 +58,7 @@ define %bytes3 @return_bytes(i8 %a, i8 %b, i8 %c) {
 ; ASM-LABEL: return_union_storage:
 ; ASM-NEXT:  # %bb.0:
 ; ASM-NEXT:  POP 0, 0
-define %union8 @return_union_storage(i64 %bits) {
+define %union8 @return_union_storage(i64 %bits) nounwind {
   %value = insertvalue %union8 poison, i64 %bits, 0
   ret %union8 %value
 }

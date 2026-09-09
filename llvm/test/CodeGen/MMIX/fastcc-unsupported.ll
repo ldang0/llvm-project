@@ -17,18 +17,11 @@
 ; RUN: not llc -mtriple=mmix -filetype=obj %t/coroutine.ll \
 ; RUN:   -o %t/coroutine.o 2>&1 | FileCheck %s --check-prefix=COROUTINE
 ; RUN: test ! -s %t/coroutine.o
-; RUN: not llc -mtriple=mmix -filetype=asm %t/exception.ll \
-; RUN:   -o %t/exception.s 2>&1 | FileCheck %s --check-prefix=EXCEPTION
-; RUN: test ! -s %t/exception.s
-; RUN: not llc -mtriple=mmix -filetype=obj %t/exception.ll \
-; RUN:   -o %t/exception.o 2>&1 | FileCheck %s --check-prefix=EXCEPTION
-; RUN: test ! -s %t/exception.o
 
 ; VARARG: Calling convention does not support varargs or perfect forwarding!
 ; VARARG: input module cannot be verified
 ; RUNTIME-CC: LLVM ERROR: MMIX supports only C and Fast calling conventions in function 'runtime_call'
 ; COROUTINE: LLVM ERROR: MMIX does not support coroutines in function 'fast_coroutine'
-; EXCEPTION: LLVM ERROR: MMIX exception handling requires the explicit DWARF model in function 'fast_exception_path'
 
 ;--- vararg.ll
 target triple = "mmix-unknown-elf"
@@ -55,24 +48,4 @@ target triple = "mmix-unknown-elf"
 
 define fastcc void @fast_coroutine() presplitcoroutine {
   ret void
-}
-
-;--- exception.ll
-target triple = "mmix-unknown-elf"
-
-declare fastcc void @fast_throwing_callee()
-declare i32 @__gxx_personality_v0(...)
-
-define fastcc void @fast_exception_path() personality ptr @__gxx_personality_v0 {
-entry:
-  invoke fastcc void @fast_throwing_callee()
-      to label %return unwind label %cleanup
-
-return:
-  ret void
-
-cleanup:
-  %landing = landingpad { ptr, i32 }
-      cleanup
-  resume { ptr, i32 } %landing
 }

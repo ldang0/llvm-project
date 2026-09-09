@@ -41,7 +41,7 @@
 # DIS-NEXT:  {{.*}} POP 0, 0
 
 --- |
-  define void @constant_pool_address() {
+  define void @constant_pool_address() nounwind {
   entry:
     ret void
   }

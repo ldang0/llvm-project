@@ -26,7 +26,7 @@ declare void @take_first_stack(i64, i64, i64, i64, i64, i64, i64, i64,
 ; ASM-LABEL: packed_leading_byte:
 ; ASM:       SRU r231, r231, 32
 ; ASM-NEXT:  POP 0, 0
-define i8 @packed_leading_byte(%packed5 %value) {
+define i8 @packed_leading_byte(%packed5 %value) nounwind {
   %field = extractvalue %packed5 %value, 0
   ret i8 %field
 }
@@ -73,7 +73,7 @@ define void @call_nested(i16 %word) {
 ; ASM-LABEL: array_middle_byte:
 ; ASM:       SRU r231, r231, 8
 ; ASM-NEXT:  POP 0, 0
-define i8 @array_middle_byte(%bytes3 %value) {
+define i8 @array_middle_byte(%bytes3 %value) nounwind {
   %field = extractvalue %bytes3 %value, 1
   ret i8 %field
 }
@@ -95,7 +95,7 @@ define void @call_byte_array(i8 %a, i8 %b, i8 %c) {
 ; ASM-LABEL: float_leading_field:
 ; ASM:       SRU r231, r231, 32
 ; ASM-NEXT:  POP 0, 0
-define float @float_leading_field(%float_pair %value) {
+define float @float_leading_field(%float_pair %value) nounwind {
   %field = extractvalue %float_pair %value, 0
   ret float %field
 }
@@ -117,7 +117,7 @@ define void @call_float_pair(float %fp, i32 %integer) {
 ; ASM-LABEL: empty_consumes_no_slot:
 ; ASM:       OR r231, r232, 0
 ; ASM-NEXT:  POP 0, 0
-define i64 @empty_consumes_no_slot(i64 %first, %empty %ignored, i64 %second) {
+define i64 @empty_consumes_no_slot(i64 %first, %empty %ignored, i64 %second) nounwind {
   ret i64 %second
 }
 
@@ -141,7 +141,7 @@ define i8 @aggregate_in_last_register_slot(
     i64 %a0, i64 %a1, i64 %a2, i64 %a3, i64 %a4,
     i64 %a5, i64 %a6, i64 %a7, i64 %a8, i64 %a9,
     i64 %a10, i64 %a11, i64 %a12, i64 %a13, i64 %a14,
-    %packed5 %value) {
+    %packed5 %value) nounwind {
   %field = extractvalue %packed5 %value, 1
   %byte = trunc i32 %field to i8
   ret i8 %byte

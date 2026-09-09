@@ -25,6 +25,6 @@
 
 target triple = "mmix-unknown-elf"
 
-define void @smoke() {
+define void @smoke() nounwind {
   ret void
 }

@@ -41,9 +41,9 @@
   declare void @callee17()
   declare void @callee18()
   declare void @callee20()
-  define void @seventeen_slots() { ret void }
-  define void @eighteen_slot_swap() { ret void }
-  define void @twenty_slots() { ret void }
+  define void @seventeen_slots() nounwind { ret void }
+  define void @eighteen_slot_swap() nounwind { ret void }
+  define void @twenty_slots() nounwind { ret void }
 ...
 ---
 name: seventeen_slots

@@ -18,7 +18,7 @@ target triple = "mmix-unknown-elf"
 ; ASM-NEXT:  LDOU [[LOW:r[0-9]+]], r232, 0
 ; ASM-NEXT:  STOU [[LOW]], r231, 0
 ; ASM-NOT:   memcpy
-define void @copy_16(ptr %destination, ptr %source) {
+define void @copy_16(ptr %destination, ptr %source) nounwind {
   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %destination,
                                    ptr align 8 %source, i64 16, i1 false)
   ret void
@@ -34,7 +34,7 @@ define void @copy_16(ptr %destination, ptr %source) {
 ; ASM-NEXT:  LDBU [[BYTE0:r[0-9]+]], r232, 0
 ; ASM-NEXT:  STBU [[BYTE0]], r231, 0
 ; ASM-NOT:   memcpy
-define void @copy_unaligned_3(ptr %destination, ptr %source) {
+define void @copy_unaligned_3(ptr %destination, ptr %source) nounwind {
   call void @llvm.memcpy.p0.p0.i64(ptr align 1 %destination,
                                    ptr align 1 %source, i64 3, i1 false)
   ret void
@@ -48,7 +48,7 @@ define void @copy_unaligned_3(ptr %destination, ptr %source) {
 ; ASM-NEXT:  STOU [[SECOND]], r231, 8
 ; ASM-NEXT:  STOU [[FIRST]], r231, 0
 ; ASM-NOT:   memmove
-define void @move_16(ptr %destination, ptr %source) {
+define void @move_16(ptr %destination, ptr %source) nounwind {
   call void @llvm.memmove.p0.p0.i64(ptr align 8 %destination,
                                     ptr align 8 %source, i64 16, i1 false)
   ret void
@@ -58,7 +58,7 @@ define void @move_16(ptr %destination, ptr %source) {
 ; ASM-LABEL: set_16:
 ; ASM-COUNT-2: STOU
 ; ASM-NOT: memset
-define void @set_16(ptr %destination, i32 signext %value) {
+define void @set_16(ptr %destination, i32 signext %value) nounwind {
   %byte = trunc i32 %value to i8
   call void @llvm.memset.p0.i64(ptr align 8 %destination, i8 %byte, i64 16,
                                 i1 false)
@@ -79,7 +79,7 @@ define void @set_16(ptr %destination, i32 signext %value) {
 ; ASM-NEXT:  LDOU [[OCTA0:r[0-9]+]], r232, 0
 ; ASM-NEXT:  STOU [[OCTA0]], r231, 0
 ; ASM-NOT:   memcpy
-define void @copy_40(ptr %destination, ptr %source) {
+define void @copy_40(ptr %destination, ptr %source) nounwind {
   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %destination,
                                    ptr align 8 %source, i64 40, i1 false)
   ret void
@@ -90,7 +90,7 @@ define void @copy_40(ptr %destination, ptr %source) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: copy_40_minsize
 ; ISEL:       DIRECT_CALL_STATE &memcpy, {{.*}}implicit $r231, implicit $r232, implicit $r233
-define void @copy_40_minsize(ptr %destination, ptr %source) minsize {
+define void @copy_40_minsize(ptr %destination, ptr %source) nounwind minsize {
   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %destination,
                                    ptr align 8 %source, i64 40, i1 false)
   ret void
@@ -103,7 +103,7 @@ define void @copy_40_minsize(ptr %destination, ptr %source) minsize {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: copy_128
 ; ISEL:       DIRECT_CALL_STATE &memcpy, {{.*}}implicit $r231, implicit $r232, implicit $r233
-define void @copy_128(ptr %destination, ptr %source) {
+define void @copy_128(ptr %destination, ptr %source) nounwind {
   call void @llvm.memcpy.p0.p0.i64(ptr align 8 %destination,
                                    ptr align 8 %source, i64 128, i1 false)
   ret void
@@ -114,7 +114,7 @@ define void @copy_128(ptr %destination, ptr %source) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: copy_dynamic
 ; ISEL:       DIRECT_CALL_STATE &memcpy, {{.*}}implicit $r231, implicit $r232, implicit $r233
-define void @copy_dynamic(ptr %destination, ptr %source, i64 %size) {
+define void @copy_dynamic(ptr %destination, ptr %source, i64 %size) nounwind {
   call void @llvm.memcpy.p0.p0.i64(ptr align 1 %destination,
                                    ptr align 1 %source, i64 %size, i1 false)
   ret void
@@ -126,7 +126,7 @@ define void @copy_dynamic(ptr %destination, ptr %source, i64 %size) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: move_128
 ; ISEL:       DIRECT_CALL_STATE &memmove, {{.*}}implicit $r231, implicit $r232, implicit $r233
-define void @move_128(ptr %destination, ptr %source) {
+define void @move_128(ptr %destination, ptr %source) nounwind {
   call void @llvm.memmove.p0.p0.i64(ptr align 8 %destination,
                                     ptr align 8 %source, i64 128, i1 false)
   ret void
@@ -137,7 +137,7 @@ define void @move_128(ptr %destination, ptr %source) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: set_128
 ; ISEL:       DIRECT_CALL_STATE &memset, {{.*}}implicit $r231, implicit $r232, implicit $r233
-define void @set_128(ptr %destination, i32 signext %value) {
+define void @set_128(ptr %destination, i32 signext %value) nounwind {
   %byte = trunc i32 %value to i8
   call void @llvm.memset.p0.i64(ptr align 8 %destination, i8 %byte, i64 128,
                                 i1 false)
@@ -148,7 +148,7 @@ define void @set_128(ptr %destination, i32 signext %value) {
 ; ASM-LABEL: population_count:
 ; ASM:       SADD r231, r231, 0
 ; ASM-NOT:   __ffsdi2
-define i64 @population_count(i64 %value) {
+define i64 @population_count(i64 %value) nounwind {
   %count = call i64 @llvm.ctpop.i64(i64 %value)
   ret i64 %count
 }
@@ -160,7 +160,7 @@ define i64 @population_count(i64 %value) {
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
 ; ISEL-LABEL: name: explicit_ffsdi2
 ; ISEL:       DIRECT_CALL_STATE @__ffsdi2, {{.*}}implicit $r231, implicit-def $r254, implicit-def $r231
-define i32 @explicit_ffsdi2(i64 %value) {
+define i32 @explicit_ffsdi2(i64 %value) nounwind {
   %result = call i32 @__ffsdi2(i64 %value)
   ret i32 %result
 }

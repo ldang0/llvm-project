@@ -24,7 +24,7 @@
 --- |
   declare void @callee()
 
-  define void @dynamic_frame() {
+  define void @dynamic_frame() nounwind {
     ret void
   }
 ...

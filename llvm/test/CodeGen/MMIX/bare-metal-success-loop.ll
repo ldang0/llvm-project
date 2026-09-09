@@ -12,7 +12,7 @@
 
 target triple = "mmix-unknown-elf"
 
-define void @Main() {
+define void @Main() nounwind {
 entry:
   br label %bare_metal_success
 

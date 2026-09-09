@@ -7,8 +7,7 @@
 ; RUN: FileCheck %s --check-prefix=MIR < %t.mir
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ
 
-; The default producer remains no-exceptions. These explicit DWARF-model tests
-; qualify backend transfers, not an executable exception runtime.
+; Explicit selection and the default model share the same backend transfers.
 ; ASM-LABEL: invoke_cleanup:
 ; ASM: .cfi_startproc
 ; ASM: .cfi_offset rJ,

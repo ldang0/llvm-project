@@ -30,7 +30,7 @@ define internal fastcc i64 @fast_leaf(i64 %value) noinline {
 ; ASM:       PUT rJ, r30
 define i64 @mixed_direct_live(
     i64 %a0, i64 %a1, i64 %a2, i64 %a3,
-    i64 %a4, i64 %a5, i64 %a6, i64 %a7) noinline {
+    i64 %a4, i64 %a5, i64 %a6, i64 %a7) nounwind noinline {
   %call = call fastcc i64 @fast_leaf(i64 %a0)
   %s0 = add i64 %call, %a1
   %s1 = add i64 %s0, %a2
@@ -60,7 +60,7 @@ define i64 @mixed_direct_live(
 ; ASM:       PUT rJ, r30
 define fastcc i64 @fast_indirect_live(
     ptr %callee, i64 %a0, i64 %a1, i64 %a2, i64 %a3,
-    i64 %a4, i64 %a5, i64 %a6, i64 %a7) noinline {
+    i64 %a4, i64 %a5, i64 %a6, i64 %a7) nounwind noinline {
   %call = call fastcc i64 %callee(i64 %a0)
   %s0 = add i64 %call, %a1
   %s1 = add i64 %s0, %a2
@@ -85,7 +85,7 @@ define fastcc i64 @fast_indirect_live(
 ; ASM:       PUT rJ, r30
 define i64 @mixed_nested_live(
     ptr %callee, i64 %a0, i64 %a1, i64 %a2, i64 %a3,
-    i64 %a4, i64 %a5, i64 %a6, i64 %a7) noinline {
+    i64 %a4, i64 %a5, i64 %a6, i64 %a7) nounwind noinline {
   %first = call fastcc i64 @fast_leaf(i64 %a0)
   %second = call fastcc i64 @fast_indirect_live(
       ptr %callee, i64 %first, i64 %a1, i64 %a2, i64 %a3,
@@ -107,7 +107,7 @@ define i64 @mixed_nested_live(
 ; ASM:       PUSHJB r31, fast_leaf
 ; ASM:       ADDU r231, r231, [[GLOBAL_VALUE]]
 ; ASM:       STOU r231, [[GLOBAL_ADDR]], 0
-define i64 @mixed_global_live(i64 %value) noinline {
+define i64 @mixed_global_live(i64 %value) nounwind noinline {
   %before = load volatile i64, ptr @global_state, align 8
   %call = call fastcc i64 @fast_leaf(i64 %value)
   %result = add i64 %call, %before
@@ -135,7 +135,7 @@ define i64 @mixed_global_live(i64 %value) noinline {
 ; ASM:       LDOU r253, r253, {{r[0-9]+}}
 ; ASM:       ADDU r254, r254, 8
 ; ASM:       PUT rJ, r30
-define i64 @mixed_frame_live(i64 %value, i64 %live) #0 {
+define i64 @mixed_frame_live(i64 %value, i64 %live) nounwind #0 {
   %call = call fastcc i64 @fast_leaf(i64 %value)
   %result = add i64 %call, %live
   ret i64 %result

@@ -63,7 +63,7 @@ define i64 @return_last_reg_arg(
     i64 %a0, i64 %a1, i64 %a2, i64 %a3,
     i64 %a4, i64 %a5, i64 %a6, i64 %a7,
     i64 %a8, i64 %a9, i64 %a10, i64 %a11,
-    i64 %a12, i64 %a13, i64 %a14, i64 %a15) {
+    i64 %a12, i64 %a13, i64 %a14, i64 %a15) nounwind {
   ret i64 %a15
 }
 
@@ -79,7 +79,7 @@ define i64 @return_stack_arg(
     i64 %a4, i64 %a5, i64 %a6, i64 %a7,
     i64 %a8, i64 %a9, i64 %a10, i64 %a11,
     i64 %a12, i64 %a13, i64 %a14, i64 %a15,
-    i64 %a16) {
+    i64 %a16) nounwind {
   ret i64 %a16
 }
 
@@ -94,6 +94,6 @@ define double @return_second_stack_arg(
     i64 %a4, i64 %a5, i64 %a6, i64 %a7,
     i64 %a8, i64 %a9, i64 %a10, i64 %a11,
     i64 %a12, i64 %a13, i64 %a14, i64 %a15,
-    double %a16, double %a17) {
+    double %a16, double %a17) nounwind {
   ret double %a17
 }

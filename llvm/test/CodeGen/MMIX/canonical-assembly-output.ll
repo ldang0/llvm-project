@@ -33,7 +33,7 @@ target triple = "mmix-unknown-elf"
 
 @canonical_data = global i64 42, align 8
 
-define i64 @canonical_output(i64 %limit) {
+define i64 @canonical_output(i64 %limit) nounwind {
 entry:
   br label %loop
 

@@ -58,6 +58,10 @@ MMIXTargetMachine::MMIXTargetMachine(const Target &T, const Triple &TT,
     reportFatalUsageError("MMIX supports only the DWARF exception model");
   this->Options.EnableCFIFixup = true;
   initAsmInfo();
+  // MMIXAL has no unwind-table representation; its validator rejects EH IR.
+  if (getMCAsmInfo().getOutputAssemblerDialect() == MMIXII::MMIXALAsmVariant)
+    const_cast<MCAsmInfo &>(getMCAsmInfo())
+        .setExceptionsType(ExceptionHandling::None);
 }
 
 MMIXTargetMachine::~MMIXTargetMachine() = default;

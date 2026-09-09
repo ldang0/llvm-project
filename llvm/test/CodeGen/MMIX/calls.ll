@@ -19,7 +19,7 @@ define internal void @earlier() {
 ; CHECK:       PUSHJB r31, earlier
 ; CHECK:       PUT rJ, r30
 ; CHECK-NEXT:  POP 0, 0
-define void @call_backward() {
+define void @call_backward() nounwind {
   call void @earlier()
   ret void
 }
@@ -35,7 +35,7 @@ define void @call_backward() {
 ; CHECK:       PUSHJ r31, later
 ; CHECK:       PUT rJ, r30
 ; CHECK-NEXT:  POP 0, 0
-define void @call_forward() {
+define void @call_forward() nounwind {
   call void @later()
   ret void
 }
@@ -52,7 +52,7 @@ define internal void @later() {
 ; CHECK:       PUSHGO r31, [[TARGET]], 0
 ; CHECK:       PUT rJ, r30
 ; CHECK-NEXT:  POP 0, 0
-define void @call_external() {
+define void @call_external() nounwind {
   call void @external_callee()
   ret void
 }
@@ -62,7 +62,7 @@ define void @call_external() {
 ; CHECK:       PUSHGO r31, r231, 0
 ; CHECK:       PUT rJ, r30
 ; CHECK-NEXT:  POP 0, 0
-define void @call_indirect(ptr %callee) {
+define void @call_indirect(ptr %callee) nounwind {
   call void %callee()
   ret void
 }

@@ -7,7 +7,7 @@ target triple = "mmix"
 ; CHECK-LABEL: signed_to_double:
 ; CHECK:       FLOT r231, 4, r231
 ; CHECK-NEXT:  POP 0, 0
-define double @signed_to_double(i64 %value) {
+define double @signed_to_double(i64 %value) nounwind {
   %result = sitofp i64 %value to double
   ret double %result
 }
@@ -15,7 +15,7 @@ define double @signed_to_double(i64 %value) {
 ; CHECK-LABEL: unsigned_to_double:
 ; CHECK:       FLOTU r231, 4, r231
 ; CHECK-NEXT:  POP 0, 0
-define double @unsigned_to_double(i64 %value) {
+define double @unsigned_to_double(i64 %value) nounwind {
   %result = uitofp i64 %value to double
   ret double %result
 }
@@ -47,7 +47,7 @@ define double @unsigned_i32_to_double(i32 %value) {
 ; CHECK:       SETMH r231, 57344
 ; CHECK-NEXT:  INCH r231, 16495
 ; CHECK-NEXT:  POP 0, 0
-define double @signed_immediate_to_double() {
+define double @signed_immediate_to_double() nounwind {
   %result = sitofp i64 255 to double
   ret double %result
 }
@@ -56,7 +56,7 @@ define double @signed_immediate_to_double() {
 ; CHECK-LABEL: signed_boundary_to_double:
 ; CHECK:       SETH r231, 50144
 ; CHECK-NEXT:  POP 0, 0
-define double @signed_boundary_to_double() {
+define double @signed_boundary_to_double() nounwind {
   %result = sitofp i64 -9223372036854775808 to double
   ret double %result
 }
@@ -66,7 +66,7 @@ define double @signed_boundary_to_double() {
 ; CHECK-LABEL: double_to_signed:
 ; CHECK:       FIXU r231, 1, r231
 ; CHECK-NEXT:  POP 0, 0
-define i64 @double_to_signed(double %value) {
+define i64 @double_to_signed(double %value) nounwind {
   %result = fptosi double %value to i64
   ret i64 %result
 }
@@ -74,7 +74,7 @@ define i64 @double_to_signed(double %value) {
 ; CHECK-LABEL: double_to_unsigned:
 ; CHECK:       FIXU r231, 1, r231
 ; CHECK-NEXT:  POP 0, 0
-define i64 @double_to_unsigned(double %value) {
+define i64 @double_to_unsigned(double %value) nounwind {
   %result = fptoui double %value to i64
   ret i64 %result
 }

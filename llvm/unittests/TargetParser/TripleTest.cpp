@@ -3989,6 +3989,13 @@ TEST(DataLayoutTest, MMIX) {
   EXPECT_EQ("E-m:e-p:64:64-i64:64-n64-S64", TT.computeDataLayout());
 }
 
+TEST(TripleTest, MMIXExceptionHandling) {
+  for (StringRef Name : {"mmix", "mmix-unknown-unknown",
+                        "mmix-unknown-unknown-elf"})
+    EXPECT_EQ(ExceptionHandling::DwarfCFI,
+              Triple(Name).getDefaultExceptionHandling());
+}
+
 TEST(TripleTest, WindowsOrUEFI) {
   EXPECT_TRUE(Triple("x86_64-pc-windows-msvc").isOSWindowsOrUEFI());
   EXPECT_TRUE(Triple("x86_64-w64-windows-gnu").isOSWindowsOrUEFI());

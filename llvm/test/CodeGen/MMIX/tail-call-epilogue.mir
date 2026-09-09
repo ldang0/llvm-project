@@ -71,10 +71,10 @@
 --- |
   target triple = "mmix"
   declare void @callee()
-  define void @leaf() { ret void }
-  define void @non_leaf() { ret void }
-  define void @framed() { ret void }
-  define void @frame_pointer() { ret void }
+  define void @leaf() nounwind { ret void }
+  define void @non_leaf() nounwind { ret void }
+  define void @framed() nounwind { ret void }
+  define void @frame_pointer() nounwind { ret void }
 ...
 ---
 name: leaf

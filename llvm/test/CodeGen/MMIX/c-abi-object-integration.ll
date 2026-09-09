@@ -91,7 +91,7 @@ define void @call_signed_addend() {
 ; Register-indirect calls use PUSHGO directly and have no call-site symbol.
 ; ASM-LABEL: call_indirect:
 ; ASM:       PUSHGO r31, {{r[0-9]+}}, 0
-define i64 @call_indirect(ptr %callee, i64 %value) {
+define i64 @call_indirect(ptr %callee, i64 %value) nounwind {
   %result = call i64 %callee(i64 %value)
   ret i64 %result
 }

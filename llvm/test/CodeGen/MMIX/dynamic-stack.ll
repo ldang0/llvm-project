@@ -17,7 +17,7 @@ declare i64 @consume17(i64, i64, i64, i64, i64, i64, i64, i64, i64,
 ; ASM:       OR r254, r253, 0
 ; ASM-NEXT:  NEGU r255, 0, 8
 ; ASM-NEXT:  LDOU r253, r253, r255
-define i64 @dynamic_alloca(i64 %count) {
+define i64 @dynamic_alloca(i64 %count) nounwind {
   %storage = alloca i64, i64 %count, align 8
   store volatile i64 1, ptr %storage
   %value = load volatile i64, ptr %storage

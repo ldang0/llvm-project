@@ -81,7 +81,7 @@ define i64 @k17(i64, i64, i64, i64, i64, i64, i64, i64,
 ; PEI:       $r253 = frame-setup ADDUI $r254, 152
 ; PEI-NOT:   ADJCALLSTACK
 ; PEI:       DIRECT_CALL_STATE @stack_callee
-define void @k0_with_frame(...) #0 {
+define void @k0_with_frame(...) nounwind #0 {
   %local = alloca i64, align 8
   store volatile i64 1, ptr %local, align 8
   call void @stack_callee(i64 0, i64 1, i64 2, i64 3, i64 4, i64 5,

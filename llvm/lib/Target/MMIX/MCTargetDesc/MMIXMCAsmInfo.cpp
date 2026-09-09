@@ -31,8 +31,7 @@ MMIXMCAsmInfo::MMIXMCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   SupportsDebugInformation =
       Options.OutputAsmVariant.value_or(MMIXII::CanonicalAsmVariant) !=
       MMIXII::MMIXALAsmVariant;
-  // Explicit unwind tables do not yet enable C++ exception transfers.
-  UsesCFIWithoutEH = SupportsDebugInformation;
+  ExceptionsType = ExceptionHandling::DwarfCFI;
 }
 
 void MMIXMCAsmInfo::printSpecifierExpr(raw_ostream &OS,

@@ -6,7 +6,7 @@ target triple = "mmix"
 ; CHECK-LABEL: multiply:
 ; CHECK:       MULU r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define i64 @multiply(i64 %lhs, i64 %rhs) {
+define i64 @multiply(i64 %lhs, i64 %rhs) nounwind {
   %result = mul i64 %lhs, %rhs
   ret i64 %result
 }
@@ -14,7 +14,7 @@ define i64 @multiply(i64 %lhs, i64 %rhs) {
 ; CHECK-LABEL: multiply_immediate:
 ; CHECK:       MULU r231, r231, 255
 ; CHECK-NEXT:  POP 0, 0
-define i64 @multiply_immediate(i64 %value) {
+define i64 @multiply_immediate(i64 %value) nounwind {
   %result = mul i64 %value, 255
   ret i64 %result
 }
@@ -23,7 +23,7 @@ define i64 @multiply_immediate(i64 %value) {
 ; CHECK-LABEL: multiply_nsw:
 ; CHECK:       MULU r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define i64 @multiply_nsw(i64 %lhs, i64 %rhs) {
+define i64 @multiply_nsw(i64 %lhs, i64 %rhs) nounwind {
   %result = mul nsw i64 %lhs, %rhs
   ret i64 %result
 }
@@ -35,7 +35,7 @@ define i64 @multiply_nsw(i64 %lhs, i64 %rhs) {
 ; MIR-LABEL:  name: multiply_high_unsigned
 ; MIR:        MULU {{.*}}implicit-def $rh
 ; MIR-NEXT:   %{{[0-9]+}}:fpr64codegen = GET $rh
-define i64 @multiply_high_unsigned(i64 %lhs, i64 %rhs) {
+define i64 @multiply_high_unsigned(i64 %lhs, i64 %rhs) nounwind {
   %lhs.wide = zext i64 %lhs to i128
   %rhs.wide = zext i64 %rhs to i128
   %product = mul i128 %lhs.wide, %rhs.wide
@@ -52,7 +52,7 @@ define i64 @multiply_high_unsigned(i64 %lhs, i64 %rhs) {
 ; CHECK-NEXT:  GET [[UNSIGNEDHIGH:r[0-9]+]], rH
 ; CHECK:       SUBU r231,
 ; CHECK-NEXT:  POP 0, 0
-define i64 @multiply_high_signed(i64 %lhs, i64 %rhs) {
+define i64 @multiply_high_signed(i64 %lhs, i64 %rhs) nounwind {
   %lhs.wide = sext i64 %lhs to i128
   %rhs.wide = sext i64 %rhs to i128
   %product = mul i128 %lhs.wide, %rhs.wide
@@ -67,7 +67,7 @@ define i64 @multiply_high_signed(i64 %lhs, i64 %rhs) {
 ; CHECK-NEXT:  GET [[PAIRHIGH:r[0-9]+]], rH
 ; CHECK-NEXT:  XOR r231, [[PAIRLOW]], [[PAIRHIGH]]
 ; CHECK-NEXT:  POP 0, 0
-define i64 @multiply_low_high_unsigned(i64 %lhs, i64 %rhs) {
+define i64 @multiply_low_high_unsigned(i64 %lhs, i64 %rhs) nounwind {
   %lhs.wide = zext i64 %lhs to i128
   %rhs.wide = zext i64 %rhs to i128
   %product = mul i128 %lhs.wide, %rhs.wide
@@ -85,7 +85,7 @@ define i64 @multiply_low_high_unsigned(i64 %lhs, i64 %rhs) {
 ; MIR-LABEL:  name: divide_unsigned
 ; MIR:        SET_RD_ZERO implicit-def $rd
 ; MIR-NEXT:   %{{[0-9]+}}:fpr64codegen = DIVU {{.*}}implicit-def dead $rr, implicit $rd
-define i64 @divide_unsigned(i64 %dividend, i64 %divisor) {
+define i64 @divide_unsigned(i64 %dividend, i64 %divisor) nounwind {
   %quotient = udiv i64 %dividend, %divisor
   ret i64 %quotient
 }
@@ -95,7 +95,7 @@ define i64 @divide_unsigned(i64 %dividend, i64 %divisor) {
 ; CHECK-NEXT:  DIVU [[UQUOT:r[0-9]+]], r231, r232
 ; CHECK-NEXT:  GET r231, rR
 ; CHECK-NEXT:  POP 0, 0
-define i64 @remainder_unsigned(i64 %dividend, i64 %divisor) {
+define i64 @remainder_unsigned(i64 %dividend, i64 %divisor) nounwind {
   %remainder = urem i64 %dividend, %divisor
   ret i64 %remainder
 }
@@ -111,7 +111,7 @@ define i64 @remainder_unsigned(i64 %dividend, i64 %divisor) {
 ; MIR:        SET_RD_ZERO implicit-def $rd
 ; MIR-NEXT:   %[[UQM:[0-9]+]]:fpr64codegen = DIVU {{.*}}implicit-def $rr, implicit $rd
 ; MIR-NEXT:   %[[URM:[0-9]+]]:fpr64codegen = GET $rr
-define i64 @divide_remainder_unsigned(i64 %dividend, i64 %divisor) {
+define i64 @divide_remainder_unsigned(i64 %dividend, i64 %divisor) nounwind {
   %quotient = udiv i64 %dividend, %divisor
   %remainder = urem i64 %dividend, %divisor
   %result = add i64 %quotient, %remainder
@@ -124,7 +124,7 @@ define i64 @divide_remainder_unsigned(i64 %dividend, i64 %divisor) {
 ; CHECK-NEXT:  GET {{.*}}, rH
 ; CHECK-NEXT:  SRU r231,
 ; CHECK-NEXT:  POP 0, 0
-define i64 @divide_unsigned_immediate(i64 %dividend) {
+define i64 @divide_unsigned_immediate(i64 %dividend) nounwind {
   %quotient = udiv i64 %dividend, 255
   ret i64 %quotient
 }
@@ -141,7 +141,7 @@ define i64 @divide_unsigned_immediate(i64 %dividend) {
 ; MIR-LABEL:  name: divide_signed
 ; MIR:        DIV {{.*}}implicit-def $rr
 ; MIR-NEXT:   %{{[0-9]+}}:fpr64codegen = GET $rr
-define i64 @divide_signed(i64 %dividend, i64 %divisor) {
+define i64 @divide_signed(i64 %dividend, i64 %divisor) nounwind {
   %quotient = sdiv i64 %dividend, %divisor
   ret i64 %quotient
 }
@@ -152,7 +152,7 @@ define i64 @divide_signed(i64 %dividend, i64 %divisor) {
 ; CHECK:       AND {{.*}}, r232,
 ; CHECK-NEXT:  SUBU r231, [[FLOORSREM]],
 ; CHECK-NEXT:  POP 0, 0
-define i64 @remainder_signed(i64 %dividend, i64 %divisor) {
+define i64 @remainder_signed(i64 %dividend, i64 %divisor) nounwind {
   %remainder = srem i64 %dividend, %divisor
   ret i64 %remainder
 }
@@ -164,7 +164,7 @@ define i64 @remainder_signed(i64 %dividend, i64 %divisor) {
 ; CHECK-NOT:   DIV
 ; CHECK:       ADDU r231,
 ; CHECK-NEXT:  POP 0, 0
-define i64 @divide_remainder_signed(i64 %dividend, i64 %divisor) {
+define i64 @divide_remainder_signed(i64 %dividend, i64 %divisor) nounwind {
   %quotient = sdiv i64 %dividend, %divisor
   %remainder = srem i64 %dividend, %divisor
   %result = add i64 %quotient, %remainder
@@ -174,7 +174,7 @@ define i64 @divide_remainder_signed(i64 %dividend, i64 %divisor) {
 ; CHECK-LABEL: multiply_i32:
 ; CHECK:       MULU r231, r231, r232
 ; CHECK-NEXT:  POP 0, 0
-define i32 @multiply_i32(i32 %lhs, i32 %rhs) {
+define i32 @multiply_i32(i32 %lhs, i32 %rhs) nounwind {
   %result = mul i32 %lhs, %rhs
   ret i32 %result
 }
@@ -186,7 +186,7 @@ define i32 @multiply_i32(i32 %lhs, i32 %rhs) {
 ; CHECK:       PUT rD, 0
 ; CHECK-NEXT:  DIVU r231,
 ; CHECK-NEXT:  POP 0, 0
-define i32 @divide_unsigned_i32(i32 %dividend, i32 %divisor) {
+define i32 @divide_unsigned_i32(i32 %dividend, i32 %divisor) nounwind {
   %quotient = udiv i32 %dividend, %divisor
   ret i32 %quotient
 }

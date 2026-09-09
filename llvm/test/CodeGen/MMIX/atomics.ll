@@ -31,7 +31,7 @@ define i64 @cmp_monotonic(ptr %p, i64 %expected, i64 %new) {
 ; CHECK:       GET
 ; CHECK:       SYNC 3
 ; CHECK-NEXT:  POP 0, 0
-define i1 @cmp_acquire(ptr %p, i64 %expected, i64 %new) {
+define i1 @cmp_acquire(ptr %p, i64 %expected, i64 %new) nounwind {
   %pair = cmpxchg ptr %p, i64 %expected, i64 %new acquire acquire
   %ok = extractvalue { i64, i1 } %pair, 1
   ret i1 %ok
@@ -53,7 +53,7 @@ define i1 @cmp_release(ptr %p, i64 %expected, i64 %new) {
 ; CHECK:       CSWAP
 ; CHECK:       SYNC 3
 ; CHECK-NEXT:  POP 0, 0
-define i1 @cmp_acqrel(ptr %p, i64 %expected, i64 %new) {
+define i1 @cmp_acqrel(ptr %p, i64 %expected, i64 %new) nounwind {
   %pair = cmpxchg ptr %p, i64 %expected, i64 %new acq_rel acquire
   %ok = extractvalue { i64, i1 } %pair, 1
   ret i1 %ok
@@ -64,7 +64,7 @@ define i1 @cmp_acqrel(ptr %p, i64 %expected, i64 %new) {
 ; CHECK:       CSWAP
 ; CHECK:       SYNC 3
 ; CHECK-NEXT:  POP 0, 0
-define i1 @cmp_seqcst(ptr %p, i64 %expected, i64 %new) {
+define i1 @cmp_seqcst(ptr %p, i64 %expected, i64 %new) nounwind {
   %pair = cmpxchg ptr %p, i64 %expected, i64 %new seq_cst seq_cst
   %ok = extractvalue { i64, i1 } %pair, 1
   ret i1 %ok
@@ -342,7 +342,7 @@ define void @store_release_i16(ptr %p, i16 %value) {
 ; CHECK-NEXT:  SYNC 3
 ; CHECK-NEXT:  SYNC 3
 ; CHECK-NEXT:  POP 0, 0
-define void @fences() {
+define void @fences() nounwind {
   fence acquire
   fence release
   fence acq_rel

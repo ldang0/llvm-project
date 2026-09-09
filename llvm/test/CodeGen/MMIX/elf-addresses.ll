@@ -138,7 +138,7 @@ target triple = "mmix-unknown-elf"
 
 declare void @external_function()
 
-define internal void @defined_function() {
+define internal void @defined_function() nounwind {
   ret void
 }
 
@@ -146,25 +146,25 @@ define internal void @defined_function() {
 ; MIR:       $r231 = LOAD_ADDR @defined_data
 ; ASM-LABEL: defined_data_address:
 ; ASM:       GETA r231, %geta(defined_data)
-define ptr @defined_data_address() {
+define ptr @defined_data_address() nounwind {
   ret ptr @defined_data
 }
 
 ; MIR-LABEL: name: external_data_address
 ; MIR:       $r231 = LOAD_ADDR @external_data
-define ptr @external_data_address() {
+define ptr @external_data_address() nounwind {
   ret ptr @external_data
 }
 
 ; MIR-LABEL: name: defined_function_address
 ; MIR:       $r231 = LOAD_ADDR @defined_function
-define ptr @defined_function_address() {
+define ptr @defined_function_address() nounwind {
   ret ptr @defined_function
 }
 
 ; MIR-LABEL: name: external_function_address
 ; MIR:       $r231 = LOAD_ADDR @external_function
-define ptr @external_function_address() {
+define ptr @external_function_address() nounwind {
   ret ptr @external_function
 }
 
@@ -174,7 +174,7 @@ define ptr @external_function_address() {
 ; MIR:       $r231 = LOAD_ADDR @defined_data + 4660
 ; ASM-LABEL: positive_address_offset:
 ; ASM:       GETA r231, %geta(defined_data+4660)
-define ptr @positive_address_offset() {
+define ptr @positive_address_offset() nounwind {
   ret ptr getelementptr (i8, ptr @defined_data, i64 4660)
 }
 
@@ -185,13 +185,13 @@ define ptr @positive_address_offset() {
 ; MIR-NEXT:  [[NEGATIVE_OFFSET]] = NEGU 0, [[NEGATIVE_OFFSET]]
 ; MIR-NEXT:  [[NEGATIVE_BASE:\$r[0-9]+]] = LOAD_ADDR @external_data
 ; MIR-NEXT:  $r231 = ADDU killed [[NEGATIVE_BASE]], killed [[NEGATIVE_OFFSET]]
-define ptr @negative_address_offset() {
+define ptr @negative_address_offset() nounwind {
   ret ptr getelementptr (i8, ptr @external_data, i64 -4660)
 }
 
 ; MIR-LABEL: name: block_address
 ; MIR:       $r231 = LOAD_ADDR blockaddress(@block_address, %ir-block.target)
-define ptr @block_address() {
+define ptr @block_address() nounwind {
 entry:
   br label %target
 
@@ -209,7 +209,7 @@ target:
 ; ASM:       GETA [[CALL_TARGET:r[0-9]+]], %geta(external_function)
 ; ASM:       PUSHGO r31, [[CALL_TARGET]], 0
 ; ASM-NOT:   PUSHJ
-define void @direct_call() {
+define void @direct_call() nounwind {
   call void @external_function()
   ret void
 }
@@ -219,7 +219,7 @@ define void @direct_call() {
 ; MIR-NOT:   LOAD_ADDR
 ; MIR-NOT:   LOAD_CALL_ADDR
 ; MIR:       PseudoPUSHGO
-define void @indirect_call(ptr %callee) {
+define void @indirect_call(ptr %callee) nounwind {
   call void %callee()
   ret void
 }
