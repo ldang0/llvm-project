@@ -80,6 +80,11 @@ public:
 
   bool hasInt128Type() const override { return false; }
 
+  int getEHDataRegisterNumber(unsigned RegNo) const override {
+    // DWARF numbers for the exception pointer ($231) and selector ($232).
+    return RegNo < 2 ? 7 + RegNo : -1;
+  }
+
   // LLVM libc uses dependent bounded _BitInt aliases in vector support
   // headers. CodeGen retains its separate target-owned _BitInt boundary.
   bool hasBitIntType() const override { return true; }
