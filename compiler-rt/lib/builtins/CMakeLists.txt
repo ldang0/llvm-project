@@ -1189,7 +1189,7 @@ else ()
                               PARENT_TARGET builtins)
 
       if (arch STREQUAL "mmix")
-        add_mmix_crtdso()
+        add_mmix_crt_objects()
         add_compiler_rt_runtime(clang_rt.atomic
                                 STATIC
                                 ARCHS ${arch}

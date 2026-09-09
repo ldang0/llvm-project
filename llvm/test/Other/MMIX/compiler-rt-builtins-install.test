@@ -25,6 +25,15 @@
 # RUN: cmp %t.dir/installed.a \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.builtins.a
 # RUN: find %t.dir/resource -type f | count 4
+# The replacement CRT has independent preparation targets until Driver migration.
+# RUN: ninja -C %t.dir/build -j 4 install-mmix-crt > %t.dir-crt-install.log
+# RUN: find %t.dir/resource -type f | count 6
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/clang_rt.crtbegin.o %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtbegin.o
+# RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/clang_rt.crtend.o %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtend.o
+# RUN: llvm-readobj --file-headers --sections --relocations --symbols %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtbegin.o | FileCheck %s --check-prefix=CRTBEGIN --implicit-check-not=__register_frame --implicit-check-not=__deregister_frame --implicit-check-not=.ctors --implicit-check-not=.dtors
+# RUN: llvm-nm --undefined-only --format=posix %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtbegin.o | FileCheck %s --check-prefix=CRTBEGIN-UNDEFINED
+# RUN: llvm-readobj --file-headers --sections --symbols --hex-dump=.eh_frame %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtend.o | FileCheck %s --check-prefix=CRTEND --implicit-check-not=.ctors --implicit-check-not=.dtors
+# RUN: llvm-nm --undefined-only %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtend.o | count 0
 # RUN: cmp %t.dir/build/lib/mmix-unknown-unknown/clang_rt.crtdso.o \
 # RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtdso.o
 # RUN: llvm-readobj --file-headers --sections --relocations --symbols \
@@ -119,3 +128,25 @@
 # CRTDSO: STV_HIDDEN
 # CRTDSO-EXPORT: {{^}}__dso_handle{{$}}
 # CRTDSO-EXPORT-NOT: {{.}}
+# CRTBEGIN: Format: elf64-mmix
+# CRTBEGIN: DataEncoding: BigEndian
+# CRTBEGIN: Machine: EM_MMIX
+# CRTBEGIN: Name: .init_array
+# CRTBEGIN: Type: SHT_INIT_ARRAY
+# CRTBEGIN: Name: .fini_array
+# CRTBEGIN: Type: SHT_FINI_ARRAY
+# CRTBEGIN: Name: __dso_handle
+# CRTBEGIN: Size: 8
+# CRTBEGIN: Binding: Global
+# CRTBEGIN: STV_HIDDEN
+# CRTBEGIN-UNDEFINED: {{^}}__cxa_finalize w 0 0{{$}}
+# CRTBEGIN-UNDEFINED-NOT: {{.}}
+# CRTEND: Format: elf64-mmix
+# CRTEND: DataEncoding: BigEndian
+# CRTEND: Machine: EM_MMIX
+# CRTEND: Name: .eh_frame
+# CRTEND: Size: 4
+# CRTEND: Name: __EH_FRAME_LIST_END__
+# CRTEND: STV_HIDDEN
+# CRTEND: Hex dump of section '.eh_frame':
+# CRTEND: 00000000
