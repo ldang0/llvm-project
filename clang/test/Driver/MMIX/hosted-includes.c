@@ -33,7 +33,7 @@
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
 // RUN:   -nobuiltininc -fsyntax-only %s 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=NEWLIB-ONLY \
-// RUN:       --implicit-check-not=%t.dir/resource/include
+// RUN:       --implicit-check-not='"%t.dir/resource/include"'
 // RUN: %clang -### --target=mmix-unknown-unknown \
 // RUN:   --cstdlib=newlib \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
@@ -66,6 +66,7 @@
 // PATHS-SAME: "-I" "[[EXPLICIT:[^"]+]]"
 // PATHS-SAME: "-isysroot" "[[SYSROOT:[^"]+]]"
 // PATHS-SAME: "-internal-isystem" "[[RESOURCE:[^"]+]]"
+// PATHS-SAME: "-internal-isystem" "{{[^"]+}}{{/|\\}}resource{{/|\\}}include"
 // PATHS-SAME: "-internal-isystem" "[[SYSROOT]]{{/|\\}}usr{{/|\\}}include"
 // PATHS-NOT: {{[/\\](gcc|include/c\+\+|usr/local/include)[/\\]}}
 

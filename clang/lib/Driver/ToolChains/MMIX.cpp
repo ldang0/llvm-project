@@ -29,13 +29,6 @@ using namespace llvm::opt;
 
 namespace {
 
-bool hasExplicitExceptions(const ArgList &Args) {
-  return Args.hasFlag(options::OPT_fexceptions, options::OPT_fno_exceptions,
-                      false) ||
-         Args.hasFlag(options::OPT_fcxx_exceptions,
-                      options::OPT_fno_cxx_exceptions, false);
-}
-
 class UnsupportedAssembler final : public Tool {
 public:
   UnsupportedAssembler(const ToolChain &TC)
@@ -112,7 +105,8 @@ static bool diagnoseUnsupportedLinkMode(Compilation &C, const ToolChain &TC,
     }
     if (const Arg *A = Args.getLastArg(options::OPT_unwindlib_EQ)) {
       Args.claimAllArgs(options::OPT_unwindlib_EQ);
-      if (StringRef(A->getValue()) != "none")
+      if (StringRef(A->getValue()) != "none" &&
+          StringRef(A->getValue()) != "libunwind")
         return Diagnose("unwind library selection for MMIX");
     }
     return false;
@@ -168,13 +162,6 @@ public:
         !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
     const bool AddCXXRuntime =
         AddDefaultLibraries && TC.ShouldLinkCXXStdlib(Args);
-    // Preparation links must name the exception runtime explicitly until the
-    // complete CRT and archive replacement is qualified.
-    if (AddCXXRuntime && hasExplicitExceptions(Args)) {
-      D.Diag(diag::err_drv_clang_unsupported)
-          << "automatic MMIX exception runtime selection; use explicit runtime inputs and -nostdlib++";
-      return;
-    }
     ToolChain::CStdlibType CStdlib = TC.GetCStdlibType(Args);
 
     if (IsHosted && !isDirectory(TC, D.SysRoot)) {
@@ -188,7 +175,9 @@ public:
     std::string TerminationFile;
     SmallVector<std::string, 1> PlatformLibraries;
     std::string CXXRuntime;
-    std::string DSORuntime;
+    std::string CRTBegin;
+    std::string CRTEnd;
+    std::string UnwindRuntime;
     std::string LibC;
     std::string Builtins;
     std::string Atomic;
@@ -253,10 +242,21 @@ public:
             D.Diag(diag::err_drv_no_such_file) << CXXRuntime;
             InputsValid = false;
           }
-          // DSO identity follows C++ default-runtime and startup suppression.
+          if (Args.getLastArgValue(options::OPT_unwindlib_EQ) != "none") {
+            SmallString<128> UnwindPath(TC.getCompilerRTPath());
+            llvm::sys::path::append(UnwindPath, "libunwind.a");
+            UnwindRuntime = std::string(UnwindPath);
+            if (!isRegularFile(TC, UnwindRuntime)) {
+              D.Diag(diag::err_drv_no_such_file) << UnwindRuntime;
+              InputsValid = false;
+            }
+          }
+          // CRT lifecycle follows C++ default-runtime and startup suppression.
           if (!Args.hasArg(options::OPT_nostartfiles)) {
-            DSORuntime = TC.getCompilerRT(Args, "crtdso", ToolChain::FT_Object);
-            InputsValid &= isRegularFile(TC, DSORuntime);
+            CRTBegin = TC.getCompilerRT(Args, "crtbegin", ToolChain::FT_Object);
+            CRTEnd = TC.getCompilerRT(Args, "crtend", ToolChain::FT_Object);
+            InputsValid &= isRegularFile(TC, CRTBegin);
+            InputsValid &= isRegularFile(TC, CRTEnd);
           }
         }
         Builtins = TC.getCompilerRT(Args, "builtins", ToolChain::FT_Static);
@@ -293,8 +293,8 @@ public:
     }
     for (const std::string &StartFile : StartFiles)
       CmdArgs.push_back(Args.MakeArgString(StartFile));
-    if (!DSORuntime.empty())
-      CmdArgs.push_back(Args.MakeArgString(DSORuntime));
+    if (!CRTBegin.empty())
+      CmdArgs.push_back(Args.MakeArgString(CRTBegin));
     if (auto LTO = TC.getLTOMode(Args); LTO != LTOK_None)
       tools::addLTOOptions(TC, Args, CmdArgs, Output, Inputs,
                            LTO == LTOK_Thin);
@@ -303,6 +303,8 @@ public:
       CmdArgs.push_back("--start-group");
       if (AddCXXRuntime)
         CmdArgs.push_back(Args.MakeArgString(CXXRuntime));
+      if (!UnwindRuntime.empty())
+        CmdArgs.push_back(Args.MakeArgString(UnwindRuntime));
       CmdArgs.push_back(Args.MakeArgString(LibC));
       for (const std::string &PlatformLibrary : PlatformLibraries)
         CmdArgs.push_back(Args.MakeArgString(PlatformLibrary));
@@ -311,6 +313,8 @@ public:
       CmdArgs.push_back(Args.MakeArgString(StackProtector));
       CmdArgs.push_back("--end-group");
     }
+    if (!CRTEnd.empty())
+      CmdArgs.push_back(Args.MakeArgString(CRTEnd));
     if (!TerminationFile.empty())
       CmdArgs.push_back(Args.MakeArgString(TerminationFile));
     CmdArgs.push_back("-o");
@@ -326,9 +330,8 @@ public:
 } // namespace
 
 llvm::ExceptionHandling
-MMIXToolChain::GetExceptionModel(const ArgList &Args) const {
-  return hasExplicitExceptions(Args) ? llvm::ExceptionHandling::DwarfCFI
-                                     : llvm::ExceptionHandling::None;
+MMIXToolChain::GetExceptionModel(const ArgList &) const {
+  return llvm::ExceptionHandling::DwarfCFI;
 }
 
 MMIXToolChain::MMIXToolChain(const Driver &D, const llvm::Triple &Triple,
@@ -419,6 +422,11 @@ void MMIXToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
   if (D.SysRoot.empty() || DriverArgs.hasArg(options::OPT_nostdinc))
     return;
 
+  if (!DriverArgs.hasArg(options::OPT_nostdlibinc)) {
+    SmallString<128> UnwindInclude(D.ResourceDir);
+    llvm::sys::path::append(UnwindInclude, "include", "mmix-unknown-unknown");
+    addSystemInclude(DriverArgs, CC1Args, UnwindInclude);
+  }
   if (!isDirectory(*this, D.SysRoot)) {
     D.Diag(diag::err_missing_sysroot) << D.SysRoot;
     return;

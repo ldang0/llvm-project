@@ -72,9 +72,9 @@
 // RUN:   | FileCheck %s --check-prefix=TLS
 // RUN: not test -s %t.tls.o
 
-// Default exception production remains closed until runtime selection changes.
+// Explicitly disabling exceptions retains the ordinary language diagnostic.
 // RUN: not %clangxx --target=mmix-unknown-unknown -ffreestanding -std=c++17 \
-// RUN:   -DTEST_EXCEPTION \
+// RUN:   -DTEST_EXCEPTION -fno-exceptions \
 // RUN:   -c %S/Inputs/unsupported-source.cpp -o %t.exception.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=EXCEPTION
 // RUN: not test -s %t.exception.o
@@ -95,4 +95,4 @@
 // MULTIVERSIONING: error: function multiversioning is not supported on the current target
 // CALLING-CONVENTION: error: 'fastcall' calling convention is not supported for this target
 // TLS: error: thread-local storage is not supported for the current target
-// EXCEPTION: error: MMIX does not support C++ exceptions
+// EXCEPTION: error: cannot use 'throw' with exceptions disabled

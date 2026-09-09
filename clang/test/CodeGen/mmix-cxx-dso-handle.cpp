@@ -4,7 +4,7 @@
 // RUN:   -mrelocation-model static -emit-obj -O2 -o %t.user.o %t/user.cpp
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -std=c11 -ffreestanding \
 // RUN:   -mrelocation-model static -emit-obj -O2 -o %t.dso.o \
-// RUN:   %S/../../../compiler-rt/lib/builtins/mmix/crtdso.c
+// RUN:   -DCRT_HAS_INITFINI_ARRAY %S/../../../compiler-rt/lib/builtins/crtbegin.c
 // RUN: llvm-readobj --symbols --relocations %t.dso.o \
 // RUN:   | FileCheck %s --check-prefix=DSO-OBJECT
 // RUN: llvm-ar rc %t.runtime.a %t.dso.o
@@ -35,6 +35,7 @@ int __cxa_atexit(void (*callback)(void *), void *payload, void *dso) {
 }
 
 void observe(void *object) { (void)object; }
+void __cxa_finalize(void *dso) { (void)dso; }
 
 // DSO-OBJECT: R_MMIX_64 __dso_handle 0x0
 // DSO-OBJECT: Name: __dso_handle
