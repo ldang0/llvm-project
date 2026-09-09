@@ -128,6 +128,15 @@ static bool isSupportedMMIXCXXNewExpr(const CXXNewExpr &E) {
     return false;
   if (OperatorNew->isReservedGlobalPlacementOperator())
     return true;
+  // Typed single-object placement is used by runtimes with caller-owned storage.
+  if (isa<CXXMethodDecl>(OperatorNew) && !E.isArray() && !E.passAlignment() &&
+      E.getNumPlacementArgs() == 1 && OperatorNew->getNumParams() == 2) {
+    QualType StorageType = OperatorNew->getParamDecl(1)->getType();
+    if (StorageType->isPointerType() &&
+        OperatorNew->getASTContext().hasSameType(
+            StorageType->getPointeeType(), E.getAllocatedType()))
+      return true;
+  }
   return E.getNumPlacementArgs() == 0 && !E.passAlignment() &&
          OperatorNew->isReplaceableGlobalAllocationFunction();
 }

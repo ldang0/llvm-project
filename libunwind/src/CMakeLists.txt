@@ -27,6 +27,10 @@ set_source_files_properties(${LIBUNWIND_C_SOURCES}
                               # libunwind.  See #56825 and #120657 for context.
                               COMPILE_FLAGS "-std=c99 -fexceptions")
 
+if(CMAKE_C_COMPILER_TARGET MATCHES "^mmix(-|$)")
+  include(mmix/CompileOptions.cmake)
+endif()
+
 set(LIBUNWIND_ASM_SOURCES
     UnwindRegistersRestore.S
     UnwindRegistersSave.S

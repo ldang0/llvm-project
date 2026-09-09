@@ -1,0 +1,31 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: clang --target=mmix -ffreestanding -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_IS_NATIVE_ONLY -I %t -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -fsyntax-only %t/config.c
+# RUN: clang --target=mmix -ffreestanding -Xclang -fexceptions -S -emit-llvm %t/transfer.c -o - | FileCheck %s --implicit-check-not=nounwind
+# RUN: not clang --target=mmix -fexceptions -c %t/transfer.c -o /dev/null 2>&1 | FileCheck %s --check-prefix=DRIVER
+# CHECK: define {{.*}}@transfer(
+# CHECK: call void @may_unwind()
+# DRIVER: unsupported option '-fexceptions' for target 'mmix'
+
+#--- assert.h
+#--- stdio.h
+#--- stdlib.h
+#--- config.c
+#include <stdbool.h>
+#include "config.h"
+#if !defined(_LIBUNWIND_BUILD_ZERO_COST_APIS)
+#error Missing generic Itanium interface implementation
+#endif
+#if !defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+#error Missing DWARF support
+#endif
+#if !defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
+#error Missing optional DWARF index support
+#endif
+#if defined(_LIBUNWIND_BUILD_SJLJ_APIS) || defined(_LIBUNWIND_USE_DL_ITERATE_PHDR)
+#error Unexpected host or excluded exception model
+#endif
+
+#--- transfer.c
+extern void may_unwind(void);
+void transfer(void) { may_unwind(); }
