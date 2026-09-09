@@ -36,6 +36,10 @@ public:
   RuntimeLibType
   GetRuntimeLibType(const llvm::opt::ArgList &Args) const override;
   CStdlibType GetCStdlibType(const llvm::opt::ArgList &Args) const override;
+  CXXStdlibType GetDefaultCXXStdlibType() const override { return CST_Libcxx; }
+  CXXStdlibType GetCXXStdlibType(const llvm::opt::ArgList &) const override {
+    return CST_Libcxx;
+  }
   std::string ComputeEffectiveClangTriple(
       const llvm::opt::ArgList &Args, BoundArch BA = {},
       types::ID InputType = types::TY_INVALID) const override;

@@ -339,6 +339,15 @@ MMIXToolChain::MMIXToolChain(const Driver &D, const llvm::Triple &Triple,
     : ToolChain(D, Triple, Args) {
   getProgramPaths().push_back(getDriver().Dir);
   (void)GetCStdlibType(Args);
+  if (const Arg *A = Args.getLastArg(options::OPT_stdlib_EQ)) {
+    StringRef Name = A->getValue();
+    if (Name == "libstdc++")
+      getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
+          << A->getAsString(Args) << getTripleString();
+    else if (Name != "libc++" && Name != "platform")
+      getDriver().Diag(diag::err_drv_invalid_stdlib_name)
+          << A->getAsString(Args);
+  }
 }
 
 ToolChain::RuntimeLibType
@@ -413,6 +422,8 @@ void MMIXToolChain::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
     return;
   SmallString<128> Path(getDriver().ResourceDir);
   llvm::sys::path::append(Path, "include", "mmix-unknown-unknown", "c++", "v1");
+  // libc++ and its provider-specific __config_site are installed together.
+  // Do not fall back to host or build-tree headers for an incomplete resource.
   addSystemInclude(DriverArgs, CC1Args, Path);
 }
 
