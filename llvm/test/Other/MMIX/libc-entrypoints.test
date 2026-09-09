@@ -16,6 +16,7 @@ if(NOT config MATCHES "LIBC_MATH_NO_EXCEPT")
 endif()
 
 set(expected_libc
+    libc.src.assert.__assert_fail
     libc.src.ctype.isalnum
     libc.src.ctype.isalpha
     libc.src.ctype.isblank
@@ -383,7 +384,7 @@ endif()
 
 foreach(entrypoint IN LISTS TARGET_LIBC_ENTRYPOINTS)
   if(NOT entrypoint MATCHES
-      "^libc[.]src[.](ctype|inttypes|locale|setjmp|stdlib|stdio|string|time|wchar|wctype|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
+      "^libc[.]src[.](assert|ctype|inttypes|locale|setjmp|stdlib|stdio|string|time|wchar|wctype|errno|__support[.]OSUtil[.]baremetal[.]mmix)[.]")
     message(FATAL_ERROR "unreviewed MMIX libc family: ${entrypoint}")
   endif()
 endforeach()

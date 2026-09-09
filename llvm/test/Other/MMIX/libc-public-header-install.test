@@ -29,6 +29,16 @@
 # RUN:   -isystem %t.dir/install/include/mmix-unknown-unknown \
 # RUN:   -fsyntax-only %t.dir/installed.c
 
+# RUN: clang --target=mmix -std=c17 -ffreestanding -nostdinc \
+# RUN:   -isystem %t.dir/install/include/mmix-unknown-unknown \
+# RUN:   -c %t.dir/assert.c -o %t.dir/assert.o
+# RUN: llvm-nm -u %t.dir/assert.o | FileCheck %s --check-prefix=ASSERT
+# RUN: clang --target=mmix -std=c17 -ffreestanding -nostdinc -DNDEBUG \
+# RUN:   -isystem %t.dir/install/include/mmix-unknown-unknown \
+# RUN:   -c %t.dir/assert.c -o %t.dir/ndebug.o
+# RUN: llvm-nm -u %t.dir/ndebug.o | count 0
+# ASSERT: U __assert_fail
+
 # HEADERS:      __llvm-libc-common.h
 # HEADERS-NEXT: assert.h
 # HEADERS-NEXT: complex.h
@@ -90,3 +100,7 @@ _Static_assert(sizeof(mbstate_t) == 8 && _Alignof(mbstate_t) == 4,
 _Static_assert(sizeof(wchar_t) == 4 && sizeof(wint_t) == 4, "wide types");
 
 bool header_probe(void) { return EOF < 0 && WEOF != 0; }
+
+#--- assert.c
+#include <assert.h>
+void require_nonzero(int value) { assert(value); }

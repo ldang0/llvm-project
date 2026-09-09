@@ -832,12 +832,16 @@ add_entrypoint_object(
     ${exit_deps}
 )
 
+set(abort_utils_dep .${LIBC_TARGET_OS}.abort_utils)
+if(LIBC_TARGET_ARCHITECTURE_IS_MMIX)
+  set(abort_utils_dep .baremetal.mmix.abort_utils)
+endif()
 add_header_library(
   abort_utils
   HDRS
     abort_utils.h
   DEPENDS
-    .${LIBC_TARGET_OS}.abort_utils
+    ${abort_utils_dep}
 )
 
 add_entrypoint_object(

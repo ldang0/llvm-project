@@ -11,6 +11,10 @@
 # RUN:   -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
 # RUN:   -DLIBC_ENABLE_USE_BY_CLANG=ON -DCMAKE_BUILD_TYPE=Release
 # RUN: ninja -C %t.dir/build -j 4 libc libm
+# RUN: llvm-nm --undefined-only --demangle \
+# RUN:   %t.dir/build/libc/src/assert/generic/CMakeFiles/libc.src.assert.generic.__assert_fail.dir/__assert_fail.cpp.o | \
+# RUN:   FileCheck %s --check-prefix=ASSERT-ABORT
+# ASSERT-ABORT: U {{.*}}::abort()
 # RUN: llvm-ar t %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
 # RUN:   FileCheck %s --check-prefix=LIBC-MEMBERS
 # RUN: llvm-ar t %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
@@ -38,12 +42,15 @@
 # RUN:   not grep -E 'SHT_TLS|R_MMIX_TLS|Name: [.](tdata|tbss)'
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libc.a | \
-# RUN:   grep 'Machine: EM_MMIX' | count 183
+# RUN:   grep 'Machine: EM_MMIX' | count 184
 # RUN: llvm-readobj --file-headers \
 # RUN:   %t.dir/build/lib/mmix-unknown-unknown/libm.a | \
 # RUN:   grep 'Machine: EM_MMIX' | count 147
 
-# LIBC-MEMBERS: isalnum.cpp.o
+# LIBC-MEMBERS: io.cpp.o
+# LIBC-MEMBERS-NEXT: exit.cpp.o
+# LIBC-MEMBERS-NEXT: __assert_fail.cpp.o
+# LIBC-MEMBERS-NEXT: isalnum.cpp.o
 # LIBC-MEMBERS-NEXT: isalpha.cpp.o
 # LIBC-MEMBERS-NEXT: isblank.cpp.o
 # LIBC-MEMBERS-NEXT: iscntrl.cpp.o
@@ -100,8 +107,6 @@
 # LIBC-MEMBERS-NEXT: wcstombs.cpp.o
 # LIBC-MEMBERS-NEXT: wctomb.cpp.o
 # LIBC-MEMBERS-NEXT: libc_errno.cpp.o
-# LIBC-MEMBERS-NEXT: io.cpp.o
-# LIBC-MEMBERS-NEXT: exit.cpp.o
 # LIBC-MEMBERS-NEXT: _Exit.cpp.o
 # LIBC-MEMBERS-NEXT: atexit.cpp.o
 # LIBC-MEMBERS-NEXT: process_utilities.cpp.o
@@ -227,6 +232,7 @@
 # LIBC-MEMBERS-NEXT: strtok.cpp.o
 # LIBC-MEMBERS-NEXT: strxfrm.cpp.o
 
+# SELECTED-SYMBOLS-DAG: T __assert_fail
 # SELECTED-SYMBOLS-DAG: T abs
 # SELECTED-SYMBOLS-DAG: T atof
 # SELECTED-SYMBOLS-DAG: T atoi
