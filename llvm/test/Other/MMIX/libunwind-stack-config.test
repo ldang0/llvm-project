@@ -1,0 +1,11 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: cmake -DMMIX_SOURCE=%S/../../../.. -P %t/check.cmake
+
+# Native DWARF state covers the complete MMIX register file. Keeping multiple
+# remember_state entries on the software stack can overwrite register windows.
+#--- check.cmake
+include("${MMIX_SOURCE}/libunwind/cmake/caches/MMIX.cmake")
+if(NOT LIBUNWIND_IS_BAREMETAL OR NOT LIBUNWIND_REMEMBER_HEAP_ALLOC)
+  message(FATAL_ERROR "MMIX unwinding requires heap-backed remembered CFI states")
+endif()
