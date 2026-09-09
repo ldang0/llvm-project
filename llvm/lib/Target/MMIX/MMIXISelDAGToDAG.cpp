@@ -156,6 +156,14 @@ private:
       SDValue Base;
       SDValue Offset;
       selectAddress(Op, Base, Offset, SDLoc(Op));
+      if (isa<FrameIndexSDNode>(Base)) {
+        // Inline asm has no register-offset opcode to select after frame
+        // layout. Allocate each frame address before register allocation.
+        SDValue Zero = CurDAG->getTargetConstant(0, SDLoc(Op), MVT::i64);
+        Base = SDValue(CurDAG->getMachineNode(MMIX::ADDUI, SDLoc(Op), MVT::i64,
+                                            Base, Zero),
+                       0);
+      }
       OutOps.push_back(Base);
       OutOps.push_back(Offset);
       return false;

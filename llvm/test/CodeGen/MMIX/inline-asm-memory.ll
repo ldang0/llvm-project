@@ -16,8 +16,9 @@ define i64 @general_memory(ptr %p) {
 
 define void @offsettable_stack(i64 %value) {
 ; CHECK-LABEL: offsettable_stack:
+; CHECK:       ADDU [[ADDRESS:r[0-9]+]], r254, [[OFFSET:[0-9]+]]
 ; CHECK:       #APP
-; CHECK-NEXT:  STOU [[VALUE:r[0-9]+]], r254, [[OFFSET:[0-9]+]]
+; CHECK-NEXT:  STOU [[VALUE:r[0-9]+]], [[ADDRESS]], 0
 ; CHECK:       #NO_APP
   %slot = alloca i64, align 8
   call void asm sideeffect "STOU $1, $0", "=*o,r"(
