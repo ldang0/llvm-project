@@ -1,0 +1,45 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: cmake -S %t -B %t/llvm -DCMAKE_SYSROOT=%t -DPROVIDER=llvm-libc -DMMIX=%S/../../../../libcxx/cmake/Modules/MMIX
+# RUN: cmake -S %t -B %t/newlib-build -DCMAKE_SYSROOT=%t -DPROVIDER=newlib -DMMIX=%S/../../../../libcxx/cmake/Modules/MMIX
+# RUN: not cmake -S %t -B %t/conflict -DCMAKE_SYSROOT=%t -DPROVIDER=llvm-libc -DRUNTIMES_USE_LIBC=newlib -DMMIX=%S/../../../../libcxx/cmake/Modules/MMIX 2>&1 | FileCheck %s --check-prefix=CONFLICT
+# RUN: not cmake -S %t -B %t/mixed -DCMAKE_SYSROOT=%t -DPROVIDER=llvm-libc -DCXX_PROVIDER=newlib -DMMIX=%S/../../../../libcxx/cmake/Modules/MMIX 2>&1 | FileCheck %s --check-prefix=MIXED
+# RUN: not cmake -S %t -B %t/unknown-build -DCMAKE_SYSROOT=%t -DPROVIDER=unknown -DMMIX=%S/../../../../libcxx/cmake/Modules/MMIX 2>&1 | FileCheck %s --check-prefix=UNKNOWN
+# RUN: not cmake -S %t -B %t/no-sysroot -DPROVIDER=llvm-libc -DMMIX=%S/../../../../libcxx/cmake/Modules/MMIX 2>&1 | FileCheck %s --check-prefix=SYSROOT
+
+# CONFLICT: RUNTIMES_USE_LIBC conflicts with the MMIX compiler C provider
+# MIXED: MMIX C and C++ compilers select different C providers
+# UNKNOWN: requires installed LLVM libc or newlib headers
+# SYSROOT: MMIX installed runtimes require CMAKE_SYSROOT
+
+# Synthetic headers test provider dispatch only, not installed libc support.
+#--- llvm-libc/errno.h
+#define __LLVM_LIBC__ 1
+#--- newlib/errno.h
+#define __NEWLIB__ 4
+#--- unknown/errno.h
+extern int errno;
+#--- CMakeLists.txt
+cmake_minimum_required(VERSION 3.20)
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_C_COMPILER_TARGET mmix-unknown-unknown)
+set(CMAKE_CXX_COMPILER_TARGET mmix-unknown-unknown)
+if(NOT DEFINED CXX_PROVIDER)
+  set(CXX_PROVIDER "${PROVIDER}")
+endif()
+set(CMAKE_C_FLAGS "-nostdinc -I${CMAKE_CURRENT_SOURCE_DIR}/${PROVIDER}")
+set(CMAKE_CXX_FLAGS "-nostdinc -I${CMAKE_CURRENT_SOURCE_DIR}/${CXX_PROVIDER}")
+set(CMAKE_PROJECT_Runtimes_INCLUDE "${MMIX}/InstalledLibc.cmake")
+project(Runtimes NONE)
+if(NOT RUNTIMES_USE_LIBC STREQUAL PROVIDER)
+  message(FATAL_ERROR "Wrong C provider")
+endif()
+foreach(name headers static shared)
+  if(NOT TARGET runtimes-libc-${name})
+    message(FATAL_ERROR "Missing C library interface")
+  endif()
+endforeach()
+if(TARGET libc-headers)
+  message(FATAL_ERROR "Installed provider must not create in-tree libc dependencies")
+endif()

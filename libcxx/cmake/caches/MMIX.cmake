@@ -8,6 +8,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE OFF CACHE BOOL "")
 set(CMAKE_C_FLAGS "-ffreestanding" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "-fexceptions" CACHE STRING "")
 set(LLVM_ENABLE_RUNTIMES "libcxx;libcxxabi;libunwind" CACHE STRING "")
+set(CMAKE_PROJECT_Runtimes_INCLUDE
+  "${CMAKE_CURRENT_LIST_DIR}/../Modules/MMIX/InstalledLibc.cmake" CACHE FILEPATH "")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../libunwind/cmake/caches/MMIX.cmake")
 set(LIBCXX_ENABLE_STATIC ON CACHE BOOL "")
 set(LIBCXX_ENABLE_SHARED OFF CACHE BOOL "")

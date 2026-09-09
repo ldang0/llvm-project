@@ -141,6 +141,10 @@ if (LIBCXX_ENABLE_NEW_DELETE_DEFINITIONS)
     )
 endif()
 
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "mmix")
+  include(support/mmix/Sources.cmake)
+endif()
+
 if (APPLE AND LLVM_USE_SANITIZER)
   if (("${LLVM_USE_SANITIZER}" STREQUAL "Address") OR
       ("${LLVM_USE_SANITIZER}" STREQUAL "Address;Undefined") OR
