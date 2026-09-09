@@ -56,6 +56,9 @@
 #include "libunwind.h"
 #include "libunwind_ext.h"
 #include "Registers.hpp"
+#if defined(__mmix__)
+#include "mmix/DwarfStep.hpp"
+#endif
 #include "RWMutex.hpp"
 #include "Unwind-EHABI.h"
 
@@ -1076,7 +1079,11 @@ private:
 #else
     typename R::link_reg_t pc = this->getReg(UNW_REG_IP);
 #endif
+#if defined(__mmix__)
+    return stepWithMMIXDwarf(
+#else
     return DwarfInstructions<A, R>::stepWithDwarf(
+#endif
         _addressSpace, pc, (pint_t)_info.unwind_info, _registers,
         _isSignalFrame, stage2);
   }

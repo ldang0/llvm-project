@@ -14,6 +14,12 @@
 #define _LIBUNWIND_MMIX_CURSOR_SIZE 278
 #define _LIBUNWIND_MMIX_HIGHEST_DWARF_REGISTER 304
 
+// Public storage must fit the native register file without build macros.
+#define _LIBUNWIND_TARGET_MMIX 1
+#define _LIBUNWIND_CONTEXT_SIZE _LIBUNWIND_MMIX_CONTEXT_SIZE
+#define _LIBUNWIND_CURSOR_SIZE _LIBUNWIND_MMIX_CURSOR_SIZE
+#define _LIBUNWIND_HIGHEST_DWARF_REGISTER _LIBUNWIND_MMIX_HIGHEST_DWARF_REGISTER
+
 // Byte offsets shared with native capture/restore assembly.
 #define MMIX_UNWIND_GPR_OFFSET(N) ((N) * 8)
 #define MMIX_UNWIND_RD_OFFSET 2048

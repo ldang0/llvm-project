@@ -1,11 +1,9 @@
 # REQUIRES: mmix-registered-target
 # RUN: split-file %s %t
 # RUN: clang --target=mmix -ffreestanding -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_IS_NATIVE_ONLY -I %t -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -fsyntax-only %t/config.c
-# RUN: clang --target=mmix -ffreestanding -Xclang -fexceptions -S -emit-llvm %t/transfer.c -o - | FileCheck %s --implicit-check-not=nounwind
-# RUN: not clang --target=mmix -fexceptions -c %t/transfer.c -o /dev/null 2>&1 | FileCheck %s --check-prefix=DRIVER
+# RUN: clang --target=mmix -ffreestanding -fexceptions -S -emit-llvm %t/transfer.c -o - | FileCheck %s --implicit-check-not=nounwind
 # CHECK: define {{.*}}@transfer(
 # CHECK: call void @may_unwind()
-# DRIVER: unsupported option '-fexceptions' for target 'mmix'
 
 #--- assert.h
 #--- stdio.h

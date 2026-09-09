@@ -381,6 +381,8 @@ public:
   }
 
   bool VisitCXXThrowExpr(CXXThrowExpr *E) {
+    if (CGM.getCodeGenOpts().hasDWARFExceptions())
+      return true;
     return !diagnoseUnsupportedMMIXCXXFeature(CGM, E->getExprLoc(),
                                               MMIXCXXFeature::Exceptions);
   }

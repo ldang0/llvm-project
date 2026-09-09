@@ -72,10 +72,9 @@
 // RUN:   | FileCheck %s --check-prefix=TLS
 // RUN: not test -s %t.tls.o
 
-// MMIX has no exception producer. Explicit exception producers stop at the
-// target Driver boundary and do not emit an object.
+// Default exception production remains closed until runtime selection changes.
 // RUN: not %clangxx --target=mmix-unknown-unknown -ffreestanding -std=c++17 \
-// RUN:   -fexceptions -fcxx-exceptions -DTEST_EXCEPTION \
+// RUN:   -DTEST_EXCEPTION \
 // RUN:   -c %S/Inputs/unsupported-source.cpp -o %t.exception.o 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=EXCEPTION
 // RUN: not test -s %t.exception.o
@@ -96,4 +95,4 @@
 // MULTIVERSIONING: error: function multiversioning is not supported on the current target
 // CALLING-CONVENTION: error: 'fastcall' calling convention is not supported for this target
 // TLS: error: thread-local storage is not supported for the current target
-// EXCEPTION: error: unsupported option '-fcxx-exceptions' for target 'mmix-unknown-unknown'
+// EXCEPTION: error: MMIX does not support C++ exceptions

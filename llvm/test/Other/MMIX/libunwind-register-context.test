@@ -2,13 +2,19 @@
 # RUN: split-file %s %t
 # RUN: clang --target=mmix -ffreestanding -std=c++17 -D_LIBUNWIND_IS_NATIVE_ONLY -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -fsyntax-only %t/layout.cpp
 # RUN: clang --target=mmix -ffreestanding -D_LIBUNWIND_IS_NATIVE_ONLY -I %S/../../../../libunwind/include -x c -fsyntax-only %t/public.c
+# Public consumers must not need libunwind's internal build definitions.
+# RUN: clang --target=mmix -ffreestanding -I %S/../../../../libunwind/include -x c -fsyntax-only %t/public.c
+# RUN: clang --target=mmix -ffreestanding -std=c++17 -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -fsyntax-only %t/layout.cpp
 # Pure storage/access tests run through the host-endian interpreter, not MMIX
 # execution. Native capture, restore and register-window traversal are separate.
 # RUN: clang --target=x86_64-unknown-linux-gnu -std=c++17 -O1 -fno-exceptions -fno-rtti -D__mmix__ -D_LIBUNWIND_IS_NATIVE_ONLY -D_LIBUNWIND_IS_BAREMETAL -DNDEBUG -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -emit-llvm -c %t/access.cpp -o %t/access.bc
 # RUN: lli -force-interpreter=true %t/access.bc
+# RUN: clang --target=x86_64-unknown-linux-gnu -std=c++17 -O1 -fno-exceptions -fno-rtti -D__mmix__ -D_LIBUNWIND_IS_BAREMETAL -DNDEBUG -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -emit-llvm -c %t/access.cpp -o %t/access-public.bc
+# RUN: lli -force-interpreter=true %t/access-public.bc
 # Instantiate the shared cursor with the MMIX register class without linking
 # the native capture and restore entrypoints.
 # RUN: clang --target=x86_64-unknown-linux-gnu -std=c++17 -fno-exceptions -fno-rtti -D__mmix__ -D_LIBUNWIND_IS_NATIVE_ONLY -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_HAS_NO_THREADS -DNDEBUG -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -emit-llvm -c %S/../../../../libunwind/src/libunwind.cpp -o %t/cursor.bc
+# RUN: clang --target=x86_64-unknown-linux-gnu -std=c++17 -fno-exceptions -fno-rtti -D__mmix__ -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_HAS_NO_THREADS -DNDEBUG -I %S/../../../../libunwind/include -I %S/../../../../libunwind/src -emit-llvm -c %S/../../../../libunwind/src/libunwind.cpp -o %t/cursor-public.bc
 
 #--- layout.cpp
 #include <libunwind.h>
@@ -34,6 +40,11 @@ static_assert(sizeof(UnwindCursor<LocalAddressSpace, Registers_mmix>) <=
                   sizeof(unw_cursor_t), "cursor must fit opaque storage");
 static_assert(alignof(UnwindCursor<LocalAddressSpace, Registers_mmix>) <=
                   alignof(unw_cursor_t), "cursor alignment");
+
+struct WindowMemory {
+  uint64_t words[64]{};
+  uint64_t get64(uint64_t address) { return words[address / 8]; }
+};
 
 int main() {
   MMIXUnwindContext context{};
@@ -94,5 +105,27 @@ int main() {
     return 11;
   Registers_mmix empty;
   if (empty.getSP() || empty.getIP() || empty.getRegisterWindow()) return 12;
+  WindowMemory memory;
+  memory.words[63] = 31;
+  for (unsigned i = 0; i < 31; ++i) memory.words[32 + i] = 1000 + i;
+  Registers_mmix current;
+  current.setRegisterWindow(512);
+  current.setRegister(UNW_MMIX_RG, 32);
+  Registers_mmix caller = current;
+  caller.setSP(4096);
+  if (restoreMMIXWindow(memory, current, caller) != UNW_STEP_SUCCESS ||
+      caller.getRegisterWindow() != 256 || caller.getSP() != 4096 ||
+      current.getRegisterWindow() != 512 ||
+      caller.getRegister(UNW_MMIX_RL) != 31) return 13;
+  for (int i = 0; i < 31; ++i)
+    if (caller.getRegister(UNW_MMIX_R0 + i) != 1000u + i) return 14;
+  memory.words[63] = 33;
+  if (restoreMMIXWindow(memory, current, caller) != UNW_EBADFRAME ||
+      caller.getRegisterWindow() != 256) return 15;
+  current.setRegisterWindow(7);
+  if (restoreMMIXWindow(memory, current, caller) != UNW_EBADFRAME) return 16;
+  current.setRegisterWindow(8);
+  memory.words[0] = 31;
+  if (restoreMMIXWindow(memory, current, caller) != UNW_EBADFRAME) return 17;
   return 0;
 }

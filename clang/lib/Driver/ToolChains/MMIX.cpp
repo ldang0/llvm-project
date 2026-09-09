@@ -29,6 +29,13 @@ using namespace llvm::opt;
 
 namespace {
 
+bool hasExplicitExceptions(const ArgList &Args) {
+  return Args.hasFlag(options::OPT_fexceptions, options::OPT_fno_exceptions,
+                      false) ||
+         Args.hasFlag(options::OPT_fcxx_exceptions,
+                      options::OPT_fno_cxx_exceptions, false);
+}
+
 class UnsupportedAssembler final : public Tool {
 public:
   UnsupportedAssembler(const ToolChain &TC)
@@ -161,6 +168,13 @@ public:
         !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
     const bool AddCXXRuntime =
         AddDefaultLibraries && TC.ShouldLinkCXXStdlib(Args);
+    // Preparation links must name the exception runtime explicitly until the
+    // complete CRT and archive replacement is qualified.
+    if (AddCXXRuntime && hasExplicitExceptions(Args)) {
+      D.Diag(diag::err_drv_clang_unsupported)
+          << "automatic MMIX exception runtime selection; use explicit runtime inputs and -nostdlib++";
+      return;
+    }
     ToolChain::CStdlibType CStdlib = TC.GetCStdlibType(Args);
 
     if (IsHosted && !isDirectory(TC, D.SysRoot)) {
@@ -311,6 +325,12 @@ public:
 
 } // namespace
 
+llvm::ExceptionHandling
+MMIXToolChain::GetExceptionModel(const ArgList &Args) const {
+  return hasExplicitExceptions(Args) ? llvm::ExceptionHandling::DwarfCFI
+                                     : llvm::ExceptionHandling::None;
+}
+
 MMIXToolChain::MMIXToolChain(const Driver &D, const llvm::Triple &Triple,
                              const ArgList &Args)
     : ToolChain(D, Triple, Args) {
@@ -459,8 +479,7 @@ void MMIXToolChain::addClangTargetOptions(const ArgList &DriverArgs,
 
   if (const Arg *A = DriverArgs.getLastArg(
           options::OPT_funwind_tables, options::OPT_funwind_tables_EQ,
-          options::OPT_fasynchronous_unwind_tables, options::OPT_fexceptions,
-          options::OPT_fcxx_exceptions))
+          options::OPT_fasynchronous_unwind_tables))
     DiagnoseUnsupported(A);
 
   if (const Arg *A = DriverArgs.getLastArg(

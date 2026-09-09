@@ -32,20 +32,16 @@
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_S390X     83
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_LOONGARCH 64
 
-#if defined(_LIBUNWIND_IS_NATIVE_ONLY)
+#if defined(__mmix__)
+# include "mmix/UnwindConfig.h"
+#elif defined(_LIBUNWIND_IS_NATIVE_ONLY)
 # if defined(__linux__)
 #  define _LIBUNWIND_TARGET_LINUX 1
 # endif
 # if defined(__HAIKU__)
 #  define _LIBUNWIND_TARGET_HAIKU 1
 # endif
-# if defined(__mmix__)
-#  include "mmix/UnwindConfig.h"
-#  define _LIBUNWIND_TARGET_MMIX 1
-#  define _LIBUNWIND_CONTEXT_SIZE _LIBUNWIND_MMIX_CONTEXT_SIZE
-#  define _LIBUNWIND_CURSOR_SIZE _LIBUNWIND_MMIX_CURSOR_SIZE
-#  define _LIBUNWIND_HIGHEST_DWARF_REGISTER _LIBUNWIND_MMIX_HIGHEST_DWARF_REGISTER
-# elif defined(__i386__)
+# if defined(__i386__)
 #  define _LIBUNWIND_TARGET_I386
 #  define _LIBUNWIND_CONTEXT_SIZE 8
 #  define _LIBUNWIND_CURSOR_SIZE 15
