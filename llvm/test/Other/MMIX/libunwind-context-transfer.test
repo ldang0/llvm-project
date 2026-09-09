@@ -1,0 +1,84 @@
+# REQUIRES: mmix-registered-target
+# RUN: clang --target=mmix -I %S/../../../../libunwind/include -c %S/../../../../libunwind/src/UnwindRegistersSave.S -o %t.save.o
+# RUN: clang --target=mmix -I %S/../../../../libunwind/include -c %S/../../../../libunwind/src/UnwindRegistersRestore.S -o %t.restore.o
+# RUN: llvm-readobj --symbols %t.save.o | FileCheck %s --check-prefix=SYMBOLS
+# RUN: llvm-objdump -d %t.save.o | FileCheck %s --check-prefix=SAVE --implicit-check-not='PUT rO' --implicit-check-not='PUT rS' --implicit-check-not='PUT rG'
+# RUN: llvm-objdump -d %t.restore.o | FileCheck %s --check-prefix=RESTORE --implicit-check-not='PUT rO' --implicit-check-not='PUT rS' --implicit-check-not='PUT rG' --implicit-check-not=UNSAVE
+# RUN: llvm-dwarfdump --debug-frame %t.save.o | FileCheck %s --check-prefix=SAVE-CFI
+# RUN: llvm-dwarfdump --debug-frame %t.restore.o | FileCheck %s --check-prefix=RESTORE-CFI
+
+# Native execution is covered by the installed dual-provider context runner.
+# These checks enforce the caller-window and register-transfer object contract.
+# SYMBOLS: Name: __unw_getcontext
+# SYMBOLS: Value: 0x0
+# SYMBOLS: Type: Function
+# SYMBOLS: Name: unw_getcontext
+# SYMBOLS: Value: 0x0
+# SYMBOLS: Binding: Weak
+
+# SAVE: AND r0, r231, 0x7
+# SAVE: BZ r231,
+# SAVE: GET r0, rG
+# SAVE: STOU r251, r0, 0xd8
+# SAVE-NEXT: {{.*}}STOU r252, r0, 0xe0
+# SAVE-NEXT: {{.*}}STOU r255, r0, 0xf8
+# SAVE: GET r252, rJ
+# SAVE-NEXT: {{.*}}STOU r252, r0, 0x18
+# SAVE-NEXT: {{.*}}STOU r252, r0, 0x48
+# SAVE: POP 0x0, 0x0
+# SAVE-NEXT: {{.*}}SAVE r255
+# SAVE-NEXT: {{.*}}UNSAVE r255
+# SAVE: STOU r0, r251, 0x0
+# SAVE: STOU r31, r251, 0xf8
+# SAVE-NEXT: {{.*}}INCL r251, 0x100
+# SAVE-NEXT: {{.*}}STOU r32, r251, 0x0
+# SAVE: STOU r231, r251, 0x38
+# SAVE-NEXT: {{.*}}STOU r232, r251, 0x40
+# SAVE: STOU r253, r251, 0xe8
+# SAVE-NEXT: {{.*}}STOU r254, r251, 0xf0
+# SAVE: GET r255, rO
+# SAVE-NEXT: {{.*}}STOU r255, r251, 0x28
+# SAVE-NEXT: {{.*}}GET r255, rS
+# SAVE-NEXT: {{.*}}STOU r255, r251, 0x30
+# SAVE: PUT rJ, r252
+# SAVE-NEXT: {{.*}}GO r255, r252, 0x0
+# SAVE: NEG r231, 0x0, r231
+# SAVE-NEXT: {{.*}}POP 0x0, 0x0
+
+# RESTORE: AND r0, r231, 0x7
+# RESTORE: BZ r231,
+# RESTORE: LDOU r1, r0, 0x48
+# RESTORE-NEXT: {{.*}}BZ r1,
+# RESTORE-NEXT: {{.*}}AND r1, r1, 0x3
+# RESTORE: GET r2, rG
+# RESTORE: AND r1, r252, 0x7
+# RESTORE: AND r1, r1, 0x7
+# RESTORE: GET r250, rO
+# RESTORE: POP 0x0, 0x0
+# RESTORE-NEXT: {{.*}}GET r250, rO
+# RESTORE-NEXT: {{.*}}CMPU r250, r250, r255
+# RESTORE-NEXT: {{.*}}BNN r250,
+# RESTORE: LDOU r0, r255, 0x0
+# RESTORE: LDOU r31, r255, 0xf8
+# RESTORE-NEXT: {{.*}}INCL r255, 0x100
+# RESTORE-NEXT: {{.*}}LDOU r32, r255, 0x0
+# RESTORE: LDOU r231, r255, 0x38
+# RESTORE-NEXT: {{.*}}LDOU r232, r255, 0x40
+# RESTORE: LDOU r253, r255, 0xe8
+# RESTORE-NEXT: {{.*}}LDOU r254, r255, 0xf0
+# RESTORE: PUT rD, r250
+# RESTORE: PUT rE, r250
+# RESTORE: PUT rH, r250
+# RESTORE: PUT rJ, r250
+# RESTORE: PUT rR, r250
+# RESTORE: PUT rL, r250
+# RESTORE-NEXT: {{.*}}LDOU r250, r255, 0x48
+# RESTORE-NEXT: {{.*}}GO r255, r250, 0x0
+# RESTORE-NEXT: {{.*}}TRAP 0xff, 0x0, 0x0
+
+# SAVE-CFI: DW_CFA_def_cfa: R254 +0
+# SAVE-CFI: DW_CFA_same_value: RJ
+# SAVE-CFI: DW_CFA_register: RJ R252
+# SAVE-CFI: DW_CFA_restore_state:
+# RESTORE-CFI: DW_CFA_def_cfa: R254 +0
+# RESTORE-CFI: DW_CFA_undefined: RJ

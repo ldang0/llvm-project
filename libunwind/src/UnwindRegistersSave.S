@@ -26,7 +26,9 @@
 
 #if !defined(__USING_SJLJ_EXCEPTIONS__)
 
-#if defined(__i386__)
+#if defined(__mmix__)
+#include "mmix/UnwindRegistersSave.S"
+#elif defined(__i386__)
 .att_syntax
 
 #
