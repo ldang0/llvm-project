@@ -1,0 +1,84 @@
+# REQUIRES: mmix-registered-target
+# RUN: split-file %s %t
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/entry.s -o %t/entry.o
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/other.s -o %t/other.o
+# RUN: ld.lld -static -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld %t/entry.o %t/other.o -o %t/plain
+# RUN: ld.lld -static --gc-sections -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld %t/entry.o %t/other.o -o %t/gc
+# RUN: ld.lld -static --eh-frame-hdr -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld %t/entry.o %t/other.o -o %t/index
+# RUN: llvm-nm %t/gc | FileCheck %s --check-prefix=SYMS --implicit-check-not=dead
+# RUN: llvm-dwarfdump --eh-frame %t/plain | FileCheck %s --check-prefix=THREE
+# RUN: llvm-dwarfdump --eh-frame %t/gc | FileCheck %s --check-prefix=TWO
+# RUN: llvm-readobj --sections %t/gc | FileCheck %s --check-prefix=LOAD
+# RUN: llvm-readelf -l %t/gc | FileCheck %s --check-prefix=MAPPING
+# RUN: llvm-readobj --sections --symbols %t/index | FileCheck %s --check-prefix=INDEX
+# RUN: llvm-mc -triple=mmix -filetype=obj %t/empty.s -o %t/empty.o
+# RUN: ld.lld -static -T %S/../../../../libc/config/baremetal/mmix/mmix-qemu.ld %t/empty.o -o %t/empty
+# RUN: llvm-nm %t/empty | FileCheck %s --check-prefix=EMPTY
+
+# SYMS: {{[0-9a-f]+}} R __eh_frame_end
+# SYMS: 0000000000000000 A __eh_frame_hdr_end
+# SYMS: 0000000000000000 A __eh_frame_hdr_start
+# SYMS: {{[0-9a-f]+}} R __eh_frame_start
+# THREE-COUNT-3: FDE cie=
+# THREE-NOT: FDE cie=
+# TWO-COUNT-2: FDE cie=
+# TWO-NOT: FDE cie=
+# LOAD: Name: .eh_frame
+# LOAD: SHF_ALLOC
+# LOAD-NOT: SHF_WRITE
+# LOAD: AddressAlignment: 8
+# LOAD: Name: .gcc_except_table
+# LOAD: SHF_ALLOC
+# LOAD-NOT: SHF_WRITE
+# LOAD: AddressAlignment: 8
+# MAPPING: Section to Segment mapping:
+# MAPPING: .eh_frame {{.*}}.gcc_except_table
+# INDEX: Name: .eh_frame_hdr
+# INDEX: SHF_ALLOC
+# INDEX-NOT: SHF_WRITE
+# INDEX: Address: 0x[[#%X,INDEX_START:]]
+# INDEX: Size: [[#INDEX_SIZE:]]
+# INDEX: AddressAlignment: 8
+# INDEX: Name: __eh_frame_hdr_start
+# INDEX-NEXT: Value: 0x[[#%X,INDEX_START]]
+# INDEX: Name: __eh_frame_hdr_end
+# INDEX-NEXT: Value: 0x[[#%X,INDEX_START + INDEX_SIZE]]
+# EMPTY: [[END:[0-9a-f]+]] {{[A-Za-z]}} __eh_frame_end
+# EMPTY: 0000000000000000 A __eh_frame_hdr_end
+# EMPTY: 0000000000000000 A __eh_frame_hdr_start
+# EMPTY: [[END]] {{[A-Za-z]}} __eh_frame_start
+
+#--- entry.s
+.section .text.init.enter,"ax",@progbits
+.globl _start
+_start:
+.cfi_startproc
+.cfi_def_cfa 30,0
+.cfi_lsda 0, lsda
+  JMP other
+.cfi_endproc
+.section .gcc_except_table,"a",@progbits
+lsda:
+.quad other
+
+#--- other.s
+.section .text.other,"ax",@progbits
+.globl other
+other:
+.cfi_startproc
+.cfi_def_cfa 30,0
+  POP 0,0
+.cfi_endproc
+.section .text.dead,"ax",@progbits
+.globl dead
+dead:
+.cfi_startproc
+.cfi_def_cfa 30,0
+  POP 0,0
+.cfi_endproc
+
+#--- empty.s
+.section .text.init.enter,"ax",@progbits
+.globl _start
+_start:
+  TRAP 0,0,0

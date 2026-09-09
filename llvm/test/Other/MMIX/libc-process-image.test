@@ -17,8 +17,7 @@
 # RUN: llvm-readobj --sections %t.dir/image | \
 # RUN:   FileCheck %s --check-prefix=FORBIDDEN \
 # RUN:   --implicit-check-not='.dynamic' --implicit-check-not='.interp' \
-# RUN:   --implicit-check-not='.tdata' --implicit-check-not='.tbss' \
-# RUN:   --implicit-check-not='.eh_frame'
+# RUN:   --implicit-check-not='.tdata' --implicit-check-not='.tbss'
 # RUN: llvm-nm --format=posix %t.dir/image | \
 # RUN:   FileCheck %s --check-prefix=SYMBOLS
 # RUN: llvm-readobj --program-headers %t.dir/image | \

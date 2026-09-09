@@ -17,8 +17,25 @@ SECTIONS {
     *(.text .text.*)
   } :text
 
+  . = ALIGN(0x2000);
   .rodata : ALIGN(0x2000) {
     *(.rodata .rodata.*)
+  } :rodata
+
+  /* Static bare-metal libunwind uses these bounds without frame registration. */
+  .eh_frame : ALIGN(8) {
+    __eh_frame_start = .;
+    KEEP(*(.eh_frame .eh_frame.*))
+    __eh_frame_end = .;
+  } :rodata
+  .eh_frame_hdr : ALIGN(8) {
+    KEEP(*(.eh_frame_hdr))
+  } :rodata
+  __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) ? ADDR(.eh_frame_hdr) : 0;
+  __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) ?
+      ADDR(.eh_frame_hdr) + SIZEOF(.eh_frame_hdr) : 0;
+  .gcc_except_table : ALIGN(8) {
+    *(.gcc_except_table .gcc_except_table.*)
   } :rodata
 
   .preinit_array : ALIGN(8) {
@@ -83,11 +100,6 @@ SECTIONS {
   .plt : { *(.plt .plt.*) } :NONE
   .tdata : { *(.tdata .tdata.*) } :NONE
   .tbss (NOLOAD) : { *(.tbss .tbss.*) } :NONE
-  .eh_frame : { *(.eh_frame) } :NONE
-  .eh_frame_hdr : { *(.eh_frame_hdr) } :NONE
-  .gcc_except_table : {
-    *(.gcc_except_table .gcc_except_table.*)
-  } :NONE
 
   ASSERT(_start == 0x00100000,
          "MMIX LLVM libc process entry moved")
@@ -98,8 +110,7 @@ SECTIONS {
          "MMIX LLVM libc process image exceeds the legacy QEMU ELF window")
   ASSERT(SIZEOF(.dynamic) + SIZEOF(.dynsym) + SIZEOF(.dynstr) +
              SIZEOF(.interp) + SIZEOF(.got) + SIZEOF(.plt) +
-             SIZEOF(.tdata) + SIZEOF(.tbss) + SIZEOF(.eh_frame) +
-             SIZEOF(.eh_frame_hdr) + SIZEOF(.gcc_except_table) == 0,
+             SIZEOF(.tdata) + SIZEOF(.tbss) == 0,
          "MMIX LLVM libc process image contains unsupported sections")
 
   /DISCARD/ : { *(.comment) *(.note.GNU-stack) }
