@@ -23,11 +23,15 @@ public:
   MMIXFrameLowering();
 
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
+  bool hasBasePointer(const MachineFunction &MF) const;
   bool enableCFIFixup(const MachineFunction &MF) const override;
   StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
                                      Register &FrameReg) const override;
   void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
                             RegScavenger *RS = nullptr) const override;
+  bool assignCalleeSavedSpillSlots(
+      MachineFunction &MF, const TargetRegisterInfo *TRI,
+      std::vector<CalleeSavedInfo> &CSI) const override;
   void processFunctionBeforeFrameFinalized(
       MachineFunction &MF, RegScavenger *RS = nullptr) const override;
   MMIXTailCallFrameState analyzeTailCallFrame(const MachineFunction &MF) const;

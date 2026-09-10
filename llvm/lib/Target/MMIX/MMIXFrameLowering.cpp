@@ -54,6 +54,11 @@ bool MMIXFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
   return !MF.getFrameInfo().hasVarSizedObjects();
 }
 
+bool MMIXFrameLowering::hasBasePointer(const MachineFunction &MF) const {
+  return MF.getFrameInfo().hasVarSizedObjects() &&
+         MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF);
+}
+
 StackOffset
 MMIXFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
                                           Register &FrameReg) const {
@@ -62,9 +67,9 @@ MMIXFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
   if (MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF) &&
       !MFI.isFixedObjectIndex(FI) && !MFI.isCalleeSavedObjectIndex(FI)) {
-    // Locals move with the aligned SP; incoming arguments and saved registers
-    // retain their offsets from the entry SP held in FP.
-    FrameReg = MMIX::R254;
+    // BP keeps the aligned fixed-frame base stable across dynamic allocations.
+    // Incoming arguments and saved registers retain entry-SP-relative offsets.
+    FrameReg = hasBasePointer(MF) ? MMIX::R29 : MMIX::R254;
     Offset += MFI.getStackSize();
   } else if (hasFP(MF)) {
     FrameReg = MMIX::R253;
@@ -91,10 +96,38 @@ void MMIXFrameLowering::determineCalleeSaves(MachineFunction &MF,
 
   if (MF.getFrameInfo().hasCalls() && needsCFI(MF)) {
     auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
-    if (!MMFI->hasUnwindReturnAddressFrameIndex())
-      MMFI->setUnwindReturnAddressFrameIndex(
-          MF.getFrameInfo().CreateStackObject(8, Align(8), false));
+    if (!MMFI->hasUnwindReturnAddressFrameIndex()) {
+      MachineFrameInfo &MFI = MF.getFrameInfo();
+      int FI;
+      if (MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF)) {
+        // Keep rJ below the old FP and any variadic register saves.
+        // A shifted local slot cannot be described by a constant CFA offset.
+        int64_t Offset = 0;
+        for (int I = MFI.getObjectIndexBegin(); I < 0; ++I)
+          Offset = std::min(Offset, MFI.getObjectOffset(I));
+        FI = MFI.CreateFixedSpillStackObject(8, Offset - 16);
+      } else {
+        FI = MFI.CreateStackObject(8, Align(8), false);
+      }
+      MMFI->setUnwindReturnAddressFrameIndex(FI);
+    }
   }
+}
+
+bool MMIXFrameLowering::assignCalleeSavedSpillSlots(
+    MachineFunction &MF, const TargetRegisterInfo *TRI,
+    std::vector<CalleeSavedInfo> &CSI) const {
+  auto *MMFI = MF.getInfo<MMIXMachineFunctionInfo>();
+  if (!TRI->hasStackRealignment(MF) ||
+      !MMFI->hasUnwindReturnAddressFrameIndex())
+    return false;
+  // The fixed rJ slot must not push the traditional old-FP slot downward.
+  assert(CSI.size() == 1 && CSI.front().getReg() == MMIX::R253);
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  int64_t Offset =
+      MFI.getObjectOffset(MMFI->getUnwindReturnAddressFrameIndex()) + 8;
+  CSI.front().setFrameIdx(MFI.CreateFixedSpillStackObject(8, Offset));
+  return true;
 }
 
 void MMIXFrameLowering::processFunctionBeforeFrameFinalized(
@@ -109,15 +142,9 @@ void MMIXFrameLowering::processFunctionBeforeFrameFinalized(
 static void validateFrame(const MachineFunction &MF) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   if (MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF)) {
-    // FIXME: Extend realignment to dynamic frames and CFI before admitting
-    // these combinations or removing Clang's automatic-alignment diagnostic.
     StringRef Reason;
-    if (MFI.hasVarSizedObjects())
-      Reason = " with dynamic stack objects";
-    else if (MFI.hasOpaqueSPAdjustment())
+    if (MFI.hasOpaqueSPAdjustment())
       Reason = " with opaque stack adjustments";
-    else if (needsCFI(MF))
-      Reason = " with unwind or debug information";
     else if (MF.getTarget().getMCAsmInfo().getOutputAssemblerDialect() !=
              MMIXII::CanonicalAsmVariant)
       Reason = " for MMIXAL output";
@@ -161,6 +188,17 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
   assert(&MBB == &MF.front() && "MMIX does not support shrink wrapping");
   validateFrame(MF);
+
+  if (hasBasePointer(MF))
+    for (const MachineBasicBlock &Block : MF)
+      for (const MachineInstr &MI : Block)
+        if (MI.isInlineAsm() &&
+            (MI.readsRegister(MMIX::R29, MF.getSubtarget().getRegisterInfo()) ||
+             MI.modifiesRegister(MMIX::R29,
+                                 MF.getSubtarget().getRegisterInfo())))
+          reportFatalUsageError(
+              Twine("MMIX inline assembly cannot use r29 in a realigned ") +
+              "dynamic frame in function '" + MF.getName() + "'");
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   uint64_t StackSize = MFI.getStackSize();
@@ -246,6 +284,9 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
           .addReg(MMIX::R255, RegState::Kill)
           .setMIFlag(MachineInstr::FrameSetup);
     }
+    if (hasBasePointer(MF))
+      MMIXII.adjustReg(MBB, MBBI, DL, MMIX::R29, MMIX::R254, 0,
+                       MachineInstr::FrameSetup);
   }
 }
 

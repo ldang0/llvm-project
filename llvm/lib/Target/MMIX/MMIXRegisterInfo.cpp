@@ -47,6 +47,10 @@ BitVector MMIXRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   if (MF.getFrameInfo().hasCalls())
     Reserved.set(MMIX::R30);
 
+  if (static_cast<const MMIXFrameLowering *>(getFrameLowering(MF))
+          ->hasBasePointer(MF))
+    Reserved.set(MMIX::R29);
+
   return Reserved;
 }
 
