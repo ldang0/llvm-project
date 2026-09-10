@@ -5,6 +5,7 @@
 """Installed static MMIX libc++ testing, with no host execution probes."""
 
 import json
+import math
 import os
 from pathlib import Path
 import shlex
@@ -48,6 +49,8 @@ def configure(config, lit_config):
     cxx = Path(config.mmix_compiler).absolute()
     output = Path(config.mmix_output).resolve()
     provider, opt = config.mmix_provider, config.mmix_optimization
+    qemu = getattr(config, "mmix_qemu", None)
+    timeout = getattr(config, "mmix_timeout", 30)
     library = config.mmix_library
     if library not in ("libcxx", "libcxxabi"):
         lit_config.fatal("MMIX supports the libcxx and libcxxabi test roots")
@@ -58,6 +61,10 @@ def configure(config, lit_config):
                  ("libc++.a", "libc++abi.a", "libunwind.a", "clang_rt.crtbegin.o", "clang_rt.crtend.o")]
     if not sysroot.is_dir() or not all(p.is_file() for p in required) or not os.access(cxx, os.X_OK):
         lit_config.fatal("MMIX requires a complete installed compiler, sysroot and C++ resource")
+    if qemu and (not Path(qemu).is_file() or not os.access(qemu, os.X_OK)):
+        lit_config.fatal("MMIX requires the selected installed QEMU executor")
+    if not math.isfinite(timeout) or timeout <= 0:
+        lit_config.fatal("MMIX requires a finite positive execution timeout")
     output.mkdir(parents=True, exist_ok=True)
     config.name = f"MMIX-{library}-{provider}-{opt}"
     config.test_source_root = str(source / library / "test")
@@ -82,6 +89,11 @@ def configure(config, lit_config):
         ("%{target-include-dir}", shlex.quote(str(resource / f"include/{TRIPLE}/c++/v1"))),
         ("%{lib-dir}", shlex.quote(str(resource / f"lib/{TRIPLE}"))),
     ]
+    if qemu:
+        executor = shlex.join([sys.executable, "-B", str(source / "libcxx/utils/mmix/qemu.py"),
+                              "--qemu", str(Path(qemu).resolve()), "--timeout", str(timeout)])
+        config.substitutions = [(name, executor + " --execdir %{temp} --" if name == "%{exec}" else value)
+                                for name, value in config.substitutions]
     macros = compilerMacros(config)
     try:
         config.available_features = validate_profile(macros, provider, opt)
@@ -99,8 +111,8 @@ def configure(config, lit_config):
         lit_config.fatal("MMIX installed libc++ compile/link probe failed")
     (output / "mmix-configuration.json").write_text(json.dumps({
         "features": sorted(config.available_features), "substitutions": config.substitutions,
-        "provider": provider, "optimization": opt, "execution": "disabled",
+        "provider": provider, "optimization": opt, "execution": "qemu" if qemu else "disabled",
         "macros": {name: value for name, value in macros.items()
                    if name.startswith(("_LIBCPP_", "__cpp_")) or name in ("__mmix__", "__cplusplus")},
     }, indent=2) + "\n")
-    lit_config.note(f"{config.name}: installed compile/link configuration; guest execution disabled")
+    lit_config.note(f"{config.name}: installed configuration; guest execution {'uses QEMU' if qemu else 'disabled'}")
