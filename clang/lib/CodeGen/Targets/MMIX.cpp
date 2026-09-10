@@ -330,7 +330,9 @@ class MMIXCodeGenBoundaryVisitor
   }
 
   bool diagnoseAutomaticObjectAlignment(VarDecl *VD) {
-    if (!VD->hasLocalStorage() ||
+    // Generic lambda parameters have no layout until their specialization is
+    // emitted; that specialization is checked through the same visitor.
+    if (VD->getType()->isDependentType() || !VD->hasLocalStorage() ||
         CGM.getContext().getDeclAlign(VD) <= CharUnits::fromQuantity(8))
       return true;
 
@@ -694,6 +696,11 @@ static bool diagnoseUnsupportedMMIXVariadicSignature(CodeGenModule &CGM,
   }
 
   QualType LastNamedType = FD->getParamDecl(FD->getNumParams() - 1)->getType();
+  // C++ empty records use the ordinary Ignore/indirect classification. The
+  // variadic cursor follows actual ABI slots, not the final source parameter.
+  // Keep the GNU C empty-record boundary separate from this C++ support.
+  if (LastNamedType->getAsCXXRecordDecl())
+    return false;
   if (!isEmptyRecord(CGM.getContext(), LastNamedType, /*AllowArrays=*/true))
     return false;
 
