@@ -1,0 +1,77 @@
+# RUN: split-file %s %t
+# RUN: cmake -S %t -B %t/build -DLLVM_SOURCE=%S/../../.. -DPython3_EXECUTABLE=%python -DTEST_CASE=1
+# RUN: cmake -S %t -B %t/build -DTEST_CASE=2
+# RUN: cmake -S %t -B %t/build -DTEST_CASE=3
+# RUN: cmake -S %t -B %t/build -DTEST_CASE=4
+# RUN: cmake -S %t -B %t/build -DTEST_CASE=5
+# RUN: cmake -S %t -B %t/build -DTEST_CASE=6
+
+# Exercise the actual configuration module using a host compiler for its
+# unrelated system probes. This tests target registration, not a cross-build.
+#--- CMakeLists.txt
+cmake_minimum_required(VERSION 3.20)
+project(NativeArchitecture C CXX)
+get_filename_component(LLVM_MAIN_SRC_DIR "${LLVM_SOURCE}" ABSOLUTE)
+set(PROJECT_SOURCE_DIR "${LLVM_MAIN_SRC_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${LLVM_MAIN_SRC_DIR}/cmake/modules"
+  "${LLVM_MAIN_SRC_DIR}/../cmake/Modules")
+set(LLVM_ENABLE_THREADS OFF)
+set(LLVM_ENABLE_BINDINGS OFF)
+set(LLVM_INCLUDE_TESTS OFF)
+set(LLVM_ENABLE_ZLIB OFF)
+set(LLVM_ENABLE_ZSTD OFF)
+set(LLVM_ENABLE_LIBXML2 OFF)
+set(LLVM_ENABLE_CURL OFF)
+set(LLVM_ENABLE_LIBEDIT OFF)
+
+function(check_native triple arch targets expected selected)
+  set(LLVM_HOST_TRIPLE "${triple}" CACHE STRING "Test host triple" FORCE)
+  set(LLVM_DEFAULT_TARGET_TRIPLE "${triple}")
+  set(LLVM_TARGET_ARCH "${arch}")
+  set(LLVM_TARGETS_TO_BUILD "${targets}")
+  include("${LLVM_MAIN_SRC_DIR}/cmake/config-ix.cmake")
+  if(NOT LLVM_NATIVE_ARCH STREQUAL expected)
+    message(FATAL_ERROR "Wrong native architecture: ${LLVM_NATIVE_ARCH}")
+  endif()
+  foreach(keyword host Native)
+    if(keyword IN_LIST LLVM_TARGETS_TO_BUILD)
+      message(FATAL_ERROR "Unexpanded native target keyword: ${keyword}")
+    endif()
+  endforeach()
+  foreach(entry TARGET TARGETINFO TARGETMC ASMPRINTER ASMPARSER DISASSEMBLER)
+    if(selected)
+      if(NOT DEFINED LLVM_NATIVE_${entry})
+        message(FATAL_ERROR "Missing native ${entry}")
+      endif()
+    elseif(DEFINED LLVM_NATIVE_${entry})
+      message(FATAL_ERROR "Unexpected native ${entry} for excluded target")
+    endif()
+  endforeach()
+  if(selected)
+    if(NOT LLVM_NATIVE_TARGET STREQUAL "LLVMInitialize${expected}Target" OR
+       NOT LLVM_NATIVE_TARGETINFO STREQUAL "LLVMInitialize${expected}TargetInfo" OR
+       NOT LLVM_NATIVE_TARGETMC STREQUAL "LLVMInitialize${expected}TargetMC" OR
+       NOT LLVM_NATIVE_ASMPRINTER STREQUAL "LLVMInitialize${expected}AsmPrinter" OR
+       NOT LLVM_NATIVE_ASMPARSER STREQUAL "LLVMInitialize${expected}AsmParser" OR
+       NOT LLVM_NATIVE_DISASSEMBLER STREQUAL "LLVMInitialize${expected}Disassembler")
+      message(FATAL_ERROR "Wrong native initialization functions")
+    endif()
+    if(NOT LLVM_TARGETS_TO_BUILD STREQUAL expected)
+      message(FATAL_ERROR "Wrong expanded target list: ${LLVM_TARGETS_TO_BUILD}")
+    endif()
+  endif()
+endfunction()
+
+if(TEST_CASE EQUAL 1)
+  check_native(mmix-unknown-unknown host MMIX MMIX ON)
+elseif(TEST_CASE EQUAL 2)
+  check_native(mmix-unknown-elf host "host;Native;MMIX" MMIX ON)
+elseif(TEST_CASE EQUAL 3)
+  check_native(mmix-unknown-unknown-elf host Native MMIX ON)
+elseif(TEST_CASE EQUAL 4)
+  check_native(x86_64-unknown-linux-gnu MMIX host MMIX ON)
+elseif(TEST_CASE EQUAL 5)
+  check_native(mmix-unknown-unknown host X86 MMIX OFF)
+elseif(TEST_CASE EQUAL 6)
+  check_native(x86_64-unknown-linux-gnu host Native X86 ON)
+endif()
