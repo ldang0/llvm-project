@@ -1,0 +1,33 @@
+# RUN: split-file %s %t
+# RUN: %python %t/check.py %S/../../../../libcxx/utils/libcxx/test/mmix.py
+
+#--- check.py
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("mmix_lit", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+macros = {"__mmix__": "1", "__cpp_exceptions": "199711L", "__cpp_rtti": "199711L",
+          "__cplusplus": "201703L", "_LIBCPP_ABI_VERSION": "1", "_LIBCPP_ABI_NAMESPACE": "__1",
+          "_LIBCPP_LIBC_LLVM_LIBC": "1", "_LIBCPP_LIBC_NEWLIB": "0"}
+for name in ("THREADS", "FILESYSTEM", "LOCALIZATION", "RANDOM_DEVICE",
+             "MONOTONIC_CLOCK", "TIME_ZONE_DATABASE", "UNICODE", "WIDE_CHARACTERS"):
+    macros["_LIBCPP_HAS_" + name] = "0"
+assert "c++17" in module.validate_profile(macros, "llvm-libc", "O0")
+assert "optimization=speed" in module.validate_profile(macros, "llvm-libc", "O2")
+newlib = dict(macros, _LIBCPP_LIBC_NEWLIB="1", _LIBCPP_LIBC_LLVM_LIBC="0")
+assert "stdlib=libc++" in module.validate_profile(newlib, "newlib", "O2")
+for invalid, provider, opt in ((macros, "newlib", "O0"), (macros, "system", "O0"),
+                              (macros, "llvm-libc", "O3"),
+                              (dict(macros, NDEBUG="1"), "llvm-libc", "O0"),
+                              (dict(macros, __cplusplus="202002L"), "llvm-libc", "O0"),
+                              (dict(macros, _LIBCPP_HAS_THREADS="1"), "llvm-libc", "O0"),
+                              ({k: v for k, v in macros.items() if k != "__mmix__"}, "llvm-libc", "O0"),
+                              ({k: v for k, v in macros.items() if k != "__cpp_rtti"}, "llvm-libc", "O0")):
+    try:
+        module.validate_profile(invalid, provider, opt)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid installed profile was accepted")
