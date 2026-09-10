@@ -1,0 +1,41 @@
+# RUN: llc -mtriple=mmix -run-pass=prolog-epilog -verify-machineinstrs -o - %s | FileCheck %s
+
+# Incoming arguments and saved FP remain relative to entry SP. Ordinary and
+# spilled locals use the runtime-aligned SP, including large displacements.
+# CHECK-LABEL: name: aligned_frame
+# CHECK: stackSize: 4224
+# CHECK: $r254 = frame-setup SUBU $r254, killed $r255
+# CHECK: STOU killed $r253, $r254, killed $r255
+# CHECK: $r253 = frame-setup ADDU $r254, killed $r255
+# CHECK-NEXT: $r254 = frame-setup ANDNI $r254, 63
+# CHECK: $r250 = LDOUI $r253, 0
+# CHECK: STOUI $r250, $r254, 64
+# CHECK: STOUI $r250, $r254, 56
+# CHECK: $r250 = LDOUI $r254, 56
+# CHECK: $r255 = SETL 4064
+# CHECK: $r250 = LDOU $r254, killed $r255
+# CHECK: $r254 = frame-destroy ORI $r253, 0
+# CHECK-NEXT: $r255 = NEGUI 0, 8
+# CHECK-NEXT: $r253 = LDOU $r253, killed $r255
+# CHECK-NEXT: POP 0, 0
+
+--- |
+  define void @aligned_frame() nounwind { ret void }
+...
+---
+name: aligned_frame
+tracksRegLiveness: true
+fixedStack:
+  - { id: 0, offset: 0, size: 8, alignment: 8, isImmutable: true }
+stack:
+  - { id: 0, size: 4096, alignment: 64 }
+  - { id: 1, type: spill-slot, size: 8, alignment: 8 }
+body: |
+  bb.0:
+    $r250 = LDOUI %fixed-stack.0, 0
+    STOUI $r250, %stack.0, 0
+    STOUI $r250, %stack.1, 0
+    $r250 = LDOUI %stack.1, 0
+    $r250 = LDOUI %stack.0, 4000
+    POP 0, 0
+...

@@ -60,7 +60,13 @@ MMIXFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   int64_t Offset = MFI.getObjectOffset(FI) + MFI.getOffsetAdjustment();
 
-  if (hasFP(MF)) {
+  if (MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF) &&
+      !MFI.isFixedObjectIndex(FI) && !MFI.isCalleeSavedObjectIndex(FI)) {
+    // Locals move with the aligned SP; incoming arguments and saved registers
+    // retain their offsets from the entry SP held in FP.
+    FrameReg = MMIX::R254;
+    Offset += MFI.getStackSize();
+  } else if (hasFP(MF)) {
     FrameReg = MMIX::R253;
   } else {
     FrameReg = MMIX::R254;
@@ -100,12 +106,25 @@ void MMIXFrameLowering::processFunctionBeforeFrameFinalized(
   }
 }
 
-static void validateFrame(const MachineFunction &MF,
-                          const MMIXFrameLowering &TFI) {
+static void validateFrame(const MachineFunction &MF) {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  if (MFI.getMaxAlign() > TFI.getStackAlign())
-    reportFatalUsageError(Twine("MMIX does not support stack realignment in ") +
-                          "function '" + MF.getName() + "'");
+  if (MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF)) {
+    // FIXME: Extend realignment to dynamic frames and CFI before admitting
+    // these combinations or removing Clang's automatic-alignment diagnostic.
+    StringRef Reason;
+    if (MFI.hasVarSizedObjects())
+      Reason = " with dynamic stack objects";
+    else if (MFI.hasOpaqueSPAdjustment())
+      Reason = " with opaque stack adjustments";
+    else if (needsCFI(MF))
+      Reason = " with unwind or debug information";
+    else if (MF.getTarget().getMCAsmInfo().getOutputAssemblerDialect() !=
+             MMIXII::CanonicalAsmVariant)
+      Reason = " for MMIXAL output";
+    if (!Reason.empty())
+      reportFatalUsageError(Twine("MMIX does not support stack realignment") +
+                            Reason + " in function '" + MF.getName() + "'");
+  }
   if (MF.shouldSplitStack())
     reportFatalUsageError(
         Twine("MMIX does not support split stacks in function '") +
@@ -129,7 +148,8 @@ MMIXFrameLowering::analyzeTailCallFrame(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   MMIXTailCallFrameState State;
   State.HasDynamicStack = MFI.hasVarSizedObjects();
-  State.RequiresStackRealignment = MFI.getMaxAlign() > getStackAlign();
+  State.RequiresStackRealignment =
+      MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF);
   State.CanRestoreFrame =
       !MFI.hasOpaqueSPAdjustment() && !MF.shouldSplitStack() &&
       !MF.getFunction().hasFnAttribute("probe-stack") &&
@@ -140,7 +160,7 @@ MMIXFrameLowering::analyzeTailCallFrame(const MachineFunction &MF) const {
 void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
   assert(&MBB == &MF.front() && "MMIX does not support shrink wrapping");
-  validateFrame(MF, *this);
+  validateFrame(MF);
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   uint64_t StackSize = MFI.getStackSize();
@@ -211,6 +231,22 @@ void MMIXFrameLowering::emitPrologue(MachineFunction &MF,
                   nullptr, TRI->getDwarfRegNum(MMIX::R253, true), 0),
               MachineInstr::FrameSetup);
   }
+  if (TRI->hasStackRealignment(MF)) {
+    uint64_t Mask = std::max(MFI.getMaxAlign(), getStackAlign()).value() - 1;
+    if (isUInt<8>(Mask)) {
+      BuildMI(MBB, MBBI, DL, TII->get(MMIX::ANDNI), MMIX::R254)
+          .addReg(MMIX::R254)
+          .addImm(Mask)
+          .setMIFlag(MachineInstr::FrameSetup);
+    } else {
+      MMIXII.loadImmediate(MBB, MBBI, DL, MMIX::R255, Mask,
+                           MachineInstr::FrameSetup);
+      BuildMI(MBB, MBBI, DL, TII->get(MMIX::ANDN), MMIX::R254)
+          .addReg(MMIX::R254)
+          .addReg(MMIX::R255, RegState::Kill)
+          .setMIFlag(MachineInstr::FrameSetup);
+    }
+  }
 }
 
 void MMIXFrameLowering::emitCallerStateRestore(
@@ -233,7 +269,7 @@ void MMIXFrameLowering::emitCallerStateRestore(
                 nullptr, TRI->getDwarfRegNum(MMIX::RJ, true),
                 TRI->getDwarfRegNum(MMIX::R30, true)),
             MachineInstr::FrameDestroy);
-  if (MF.getFrameInfo().hasVarSizedObjects()) {
+  if (MF.getFrameInfo().hasVarSizedObjects() || TRI->hasStackRealignment(MF)) {
     MMIXII.adjustReg(MBB, FirstRestore, DL, MMIX::R254, MMIX::R253, 0,
                      MachineInstr::FrameDestroy);
     if (NeedsCFI)
@@ -309,7 +345,8 @@ MachineBasicBlock::iterator MMIXFrameLowering::eliminateCallFramePseudoInstr(
 bool MMIXFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
+         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
+         MF.getSubtarget().getRegisterInfo()->hasStackRealignment(MF);
 }
 
 bool MMIXFrameLowering::enableCFIFixup(const MachineFunction &MF) const {

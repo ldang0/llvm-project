@@ -1,0 +1,49 @@
+# RUN: split-file %s %t
+# RUN: not llc -mtriple=mmix -run-pass=prolog-epilog %t/dynamic.mir -o /dev/null 2>&1 | FileCheck %s --check-prefix=DYNAMIC
+# DYNAMIC: MMIX does not support stack realignment with dynamic stack objects
+# RUN: not llc -mtriple=mmix -run-pass=prolog-epilog %t/opaque.mir -o /dev/null 2>&1 | FileCheck %s --check-prefix=OPAQUE
+# OPAQUE: MMIX does not support stack realignment with opaque stack adjustments
+# RUN: not llc -mtriple=mmix -run-pass=prolog-epilog %t/unwind.mir -o /dev/null 2>&1 | FileCheck %s --check-prefix=UNWIND
+# UNWIND: MMIX does not support stack realignment with unwind or debug information
+
+#--- dynamic.mir
+--- |
+  define void @dynamic() nounwind { ret void }
+...
+---
+name: dynamic
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+  - { id: 1, type: variable-sized, alignment: 8 }
+body: |
+  bb.0:
+    POP 0, 0
+...
+
+#--- opaque.mir
+--- |
+  define void @opaque() nounwind { ret void }
+...
+---
+name: opaque
+frameInfo:
+  hasOpaqueSPAdjustment: true
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+body: |
+  bb.0:
+    POP 0, 0
+...
+
+#--- unwind.mir
+--- |
+  define void @unwind()  { ret void }
+...
+---
+name: unwind
+stack:
+  - { id: 0, size: 16, alignment: 16 }
+body: |
+  bb.0:
+    POP 0, 0
+...

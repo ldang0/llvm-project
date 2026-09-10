@@ -1,7 +1,8 @@
 # RUN: not llc -mtriple=mmix -run-pass=prolog-epilog \
 # RUN:   -o /dev/null %s 2>&1 | FileCheck %s
 
-# CHECK: MMIX does not support stack realignment
+# Unwind-enabled frames remain unsupported until their CFI describes realignment.
+# CHECK: MMIX does not support stack realignment with unwind or debug information
 
 --- |
   define void @overaligned_object() {

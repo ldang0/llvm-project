@@ -55,7 +55,7 @@
 ; ALTERNATE-CC: LLVM ERROR: MMIXAL output variant 1 requires the C calling convention for calls in function 'alternate_cc_owner'
 ; MUSTTAIL: MMIXAL output variant 1 does not support required tail calls in function 'musttail_owner'
 ; DYNAMIC-ALLOCA: LLVM ERROR: MMIXAL output variant 1 does not support dynamic stack allocation in function 'dynamic_owner'
-; STACK-REALIGNMENT: LLVM ERROR: MMIX does not support stack realignment in function 'realignment_owner'
+; STACK-REALIGNMENT: LLVM ERROR: MMIX does not support stack realignment for MMIXAL output in function 'realignment_owner'
 ; COROUTINE: LLVM ERROR: MMIX does not support coroutines in function 'coroutine_owner'
 ; NONLOCAL-STACK: LLVM ERROR: MMIXAL output variant 1 does not support dynamic stack state in function 'stack_owner'
 
