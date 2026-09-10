@@ -28,8 +28,20 @@
 # DIS-NEXT:  {{ *}}c: f1 ff ff fd{{.*}}JMPB -3
 # DIS-NEXT:  {{ *}}10: f0 00 00 00{{.*}}JMP 0
 
+# CHECK-LABEL: conditional_self:
+# CHECK: [[CONDITIONAL:.LBB[0-9]+_0]]:
+# CHECK: #NO_APP
+# CHECK-NEXT: BNZ r1, [[CONDITIONAL]]
+# CHECK-NEXT: JMPB [[CONDITIONAL]]
+# DIS-LABEL: <conditional_self>:
+# DIS-NEXT: {{.*}}4a 01 00 00{{.*}}BNZ r1, 0
+# DIS-NEXT: {{.*}}f1 ff ff ff{{.*}}JMPB -1
+
 --- |
   define void @branch_directions() nounwind {
+    ret void
+  }
+  define void @conditional_self() nounwind {
     ret void
   }
 ...
@@ -55,4 +67,19 @@ body:             |
 
   bb.3:
     PseudoJMP %bb.3
+...
+---
+name:            conditional_self
+alignment:       4
+tracksRegLiveness: true
+selected:        true
+liveins:
+  - { reg: '$r1' }
+body:             |
+  bb.0:
+    liveins: $r1
+
+    INLINEASM &"", 1
+    PseudoB $r1, %bb.0, 5
+    PseudoJMP %bb.0
 ...

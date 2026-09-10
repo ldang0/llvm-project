@@ -13,6 +13,8 @@
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
@@ -27,10 +29,12 @@ static bool branchesBackward(const MachineInstr &MI) {
   const MachineBasicBlock *Target =
       MI.getOperand(MI.getOpcode() == MMIX::PseudoB ? 1 : 0).getMBB();
   if (Source == Target) {
+    const TargetInstrInfo *TII = Source->getParent()->getSubtarget().getInstrInfo();
     for (const MachineInstr &Prior : *Source) {
       if (&Prior == &MI)
         return false;
-      if (!Prior.isMetaInstruction())
+      // An empty inline asm is not a meta instruction, but emits no bytes.
+      if (!Prior.isMetaInstruction() && TII->getInstSizeInBytes(Prior) != 0)
         return true;
     }
     llvm_unreachable("branch is not in its parent MachineBasicBlock");
