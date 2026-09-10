@@ -174,6 +174,7 @@ public:
     SmallVector<std::string, 3> StartFiles;
     std::string TerminationFile;
     SmallVector<std::string, 1> PlatformLibraries;
+    std::string CXXStdlib;
     std::string CXXRuntime;
     std::string CRTBegin;
     std::string CRTEnd;
@@ -235,6 +236,13 @@ public:
 
       if (AddDefaultLibraries) {
         if (AddCXXRuntime) {
+          SmallString<128> StdlibPath(TC.getCompilerRTPath());
+          llvm::sys::path::append(StdlibPath, "libc++.a");
+          CXXStdlib = std::string(StdlibPath);
+          if (!isRegularFile(TC, CXXStdlib)) {
+            D.Diag(diag::err_drv_no_such_file) << CXXStdlib;
+            InputsValid = false;
+          }
           SmallString<128> Path(TC.getCompilerRTPath());
           llvm::sys::path::append(Path, "libc++abi.a");
           CXXRuntime = std::string(Path);
@@ -301,8 +309,10 @@ public:
     tools::AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
     if (AddDefaultLibraries) {
       CmdArgs.push_back("--start-group");
-      if (AddCXXRuntime)
+      if (AddCXXRuntime) {
+        CmdArgs.push_back(Args.MakeArgString(CXXStdlib));
         CmdArgs.push_back(Args.MakeArgString(CXXRuntime));
+      }
       if (!UnwindRuntime.empty())
         CmdArgs.push_back(Args.MakeArgString(UnwindRuntime));
       CmdArgs.push_back(Args.MakeArgString(LibC));

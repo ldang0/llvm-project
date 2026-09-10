@@ -13,6 +13,7 @@
 // RUN:   %t.dir/sysroot/usr/lib/mmix/libc.a \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/libgloss.a \
 // RUN:   %t.dir/sysroot/usr/lib/mmix/mmix-qemu.ld \
+// RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libc++.a \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libc++abi.a \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtbegin.o \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/clang_rt.crtend.o \
@@ -21,6 +22,22 @@
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.atomic.a \
 // RUN:   %t.dir/resource/lib/mmix-unknown-unknown/libclang_rt.stack_protector.a
 // RUN: echo 'int value;' > %t.dir/input.c
+
+// RUN: %clangxx -### --target=mmix --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource -stdlib=libc++ %s 2>&1 | FileCheck %s --check-prefix=LLVM-LIBC
+// RUN: %clangxx -### --target=mmix --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource %s 2>&1 | grep -o 'libc++.a' | count 1
+// RUN: not %clangxx -### --target=mmix --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource -stdlib=libstdc++ %s 2>&1 | FileCheck %s --check-prefix=BAD-STDLIB
+// BAD-STDLIB: error: unsupported option '-stdlib=libstdc++'
+// RUN: mv %t.dir/resource/lib/mmix-unknown-unknown/libc++.a %t.dir/explicit.a
+// An explicit archive replaces defaults only when their selection is suppressed.
+// RUN: %clangxx -### --target=mmix --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource -nostdlib++ %s %t.dir/explicit.a 2>&1 | FileCheck %s --check-prefix=EXPLICIT
+// EXPLICIT: ld.lld
+// EXPLICIT-SAME: explicit.a
+// EXPLICIT-NOT: libc++.a
+// EXPLICIT-NOT: libc++abi.a
+// RUN: not %clangxx -### --target=mmix --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource %s %t.dir/explicit.a 2>&1 | FileCheck %s --check-prefix=MISSING-STDLIB --implicit-check-not=ld.lld
+// MISSING-STDLIB: error: no such file or directory: '{{.*}}libc++.a'
+// RUN: %clang -### --target=mmix --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource %t.dir/input.c 2>&1 | FileCheck %s --check-prefix=NO-CXX-RUNTIME
+// RUN: mv %t.dir/explicit.a %t.dir/resource/lib/mmix-unknown-unknown/libc++.a
 
 // RUN: %clangxx -### --target=mmix-unknown-unknown \
 // RUN:   --sysroot=%t.dir/sysroot -resource-dir=%t.dir/resource \
@@ -117,6 +134,7 @@
 // LLVM-LIBC-SAME: crt1.o
 // LLVM-LIBC-SAME: "{{[^\"]+}}clang_rt.crtbegin.o"
 // LLVM-LIBC-SAME: "--start-group"
+// LLVM-LIBC-SAME: "{{[^\"]+}}{{/|\\}}libc++.a"
 // LLVM-LIBC-SAME: "{{[^\"]+}}{{/|\\}}libc++abi.a"
 // LLVM-LIBC-SAME: "{{[^\"]+}}{{/|\\}}libunwind.a"
 // LLVM-LIBC-SAME: "[[LIBC:[^\"]+]]{{/|\\}}libc.a"
@@ -127,6 +145,7 @@
 // NEWLIB:      "{{.*}}ld.lld"
 // NEWLIB-SAME: crt0.o
 // NEWLIB-SAME: "{{[^\"]+}}clang_rt.crtbegin.o"
+// NEWLIB-SAME: "{{[^\"]+}}{{/|\\}}libc++.a"
 // NEWLIB-SAME: "{{[^\"]+}}{{/|\\}}libc++abi.a"
 // NEWLIB-SAME: "{{[^\"]+}}{{/|\\}}libunwind.a"
 // NEWLIB-SAME: "[[NEWLIB:[^\"]+]]{{/|\\}}libc.a"
@@ -136,6 +155,7 @@
 // NEWLIB-SAME: "{{[^\"]+}}clang_rt.crtend.o"
 
 // NO-CXX-RUNTIME-NOT: libc++abi.a
+// NO-CXX-RUNTIME-NOT: libc++.a
 // NO-CXX-RUNTIME-NOT: clang_rt.crtbegin.o
 // NO-CXX-RUNTIME-NOT: clang_rt.crtend.o
 // NO-CXX-RUNTIME-NOT: libunwind.a
