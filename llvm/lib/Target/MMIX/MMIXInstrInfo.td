@@ -2324,9 +2324,11 @@ def : Pat<(atomic_fence timm, timm), (SYNC 3)>;
 // Call-site lowering records the complete call state until physical registers
 // are assigned. Post-RA expansion then selects the procedure form and supplies
 // the register-stack operand.
+// R251 is reserved but call-clobbered. An explicit def prevents its incoming
+// sret value from being treated as an invariant physical register by sinking.
 def MMIXCallTarget : Operand<i64>;
 let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
-    Defs = [RJ, RL, RO] in {
+    Defs = [RJ, RL, RO, R251] in {
   def CALL_STATE
       : MMIXPseudoInstruction<(outs), (ins MMIXCallTarget:$callee),
                               "# CALL_STATE $callee">;
@@ -2385,7 +2387,7 @@ let isCall = true, isReturn = true, isTerminator = true, isBarrier = true,
 // Direction is a layout property, so direct calls remain neutral until MC
 // lowering. Indirect calls use the immediate-zero PUSHGO form.
 let isCall = true, hasSideEffects = true, Uses = [R254, RG, RL, RO],
-    Defs = [RJ, RL, RO] in {
+    Defs = [RJ, RL, RO, R251] in {
   def PseudoPUSHJ
       : MMIXPseudoInstruction<(outs),
                               (ins GPR64Op:$count,

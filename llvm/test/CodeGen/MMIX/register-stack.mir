@@ -25,7 +25,7 @@ tracksRegLiveness: true
 body: |
   bb.0:
     ; CHECK-LABEL: name: direct
-    ; CHECK: PseudoPUSHJ $r31, @callee, csr_mmix, implicit-def $rj, implicit-def $rl, implicit-def $ro, implicit $r254, implicit $rg, implicit $rl, implicit $ro
+    ; CHECK: PseudoPUSHJ $r31, @callee, csr_mmix, implicit-def $rj, implicit-def $rl, implicit-def $ro, implicit-def $r251, implicit $r254, implicit $rg, implicit $rl, implicit $ro
     CALL_STATE @callee, csr_mmix
     RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
 ...
@@ -36,7 +36,7 @@ body: |
   bb.0:
     liveins: $r250
     ; CHECK-LABEL: name: indirect
-    ; CHECK: PseudoPUSHGO $r31, $r250, 0, csr_mmix, implicit-def $rj, implicit-def $rl, implicit-def $ro, implicit $r254, implicit $rg, implicit $rl, implicit $ro
+    ; CHECK: PseudoPUSHGO $r31, $r250, 0, csr_mmix, implicit-def $rj, implicit-def $rl, implicit-def $ro, implicit-def $r251, implicit $r254, implicit $rg, implicit $rl, implicit $ro
     CALL_STATE $r250, csr_mmix
     RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
 ...
@@ -47,7 +47,7 @@ body: |
   bb.0:
     ; CHECK-LABEL: name: unresolved_direct
     ; CHECK: $r249 = LOAD_CALL_ADDR @callee - 12
-    ; CHECK-NEXT: PseudoDirectCall $r31, @callee - 12, killed $r249, csr_mmix, implicit-def $rj, implicit-def $rl, implicit-def $ro, implicit $r254, implicit $rg, implicit $rl, implicit $ro
+    ; CHECK-NEXT: PseudoDirectCall $r31, @callee - 12, killed $r249, csr_mmix, implicit-def $rj, implicit-def $rl, implicit-def $ro, implicit-def $r251, implicit $r254, implicit $rg, implicit $rl, implicit $ro
     $r249 = LOAD_CALL_ADDR @callee - 12
     DIRECT_CALL_STATE @callee - 12, killed $r249, csr_mmix
     RET implicit $rj, implicit $rl, implicit $ro, implicit $rg
