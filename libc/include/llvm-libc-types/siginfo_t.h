@@ -15,6 +15,15 @@
 #include "union_sigval.h"
 
 #define SI_MAX_SIZE 128
+#ifdef __linux__
+// The ordinary Linux LP64/ILP32 prefix includes three ints and ABI padding.
+// FIXME: Architecture-specific layouts such as x86 x32 need separate support.
+#if __SIZEOF_POINTER__ == 8
+#define SI_PREAMBLE_SIZE 16
+#else
+#define SI_PREAMBLE_SIZE 12
+#endif
+#endif
 
 typedef struct {
   int si_signo; /* Signal number.  */
@@ -22,7 +31,11 @@ typedef struct {
                    this signal, as defined in <errno.h>.  */
   int si_code;  /* Signal code.  */
   union {
+#ifdef __linux__
+    int _si_pad[(SI_MAX_SIZE - SI_PREAMBLE_SIZE) / sizeof(int)];
+#else
     int _si_pad[SI_MAX_SIZE / sizeof(int)];
+#endif
 
     /* kill() */
     struct {
@@ -84,6 +97,9 @@ typedef struct {
 } siginfo_t;
 
 #undef SI_MAX_SIZE
+#ifdef SI_PREAMBLE_SIZE
+#undef SI_PREAMBLE_SIZE
+#endif
 
 #define si_pid _sifields._kill.si_pid
 #define si_uid _sifields._kill.si_uid

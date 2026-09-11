@@ -1,6 +1,23 @@
 add_custom_target(libc_include_tests)
 add_dependencies(check-libc libc_include_tests-build)
 
+if(LIBC_TARGET_OS_IS_LINUX)
+  foreach(language IN ITEMS c cpp)
+    add_libc_test(
+      siginfo_layout_${language}_test
+      C_TEST
+      SUITE
+        libc_include_tests
+      SRCS
+        siginfo_layout_test.${language}
+      HDRS
+        siginfo_layout_test.h
+      DEPENDS
+        libc.include.llvm-libc-types.siginfo_t
+    )
+  endforeach()
+endif()
+
 add_libc_test(
   alloca_test
   SUITE
