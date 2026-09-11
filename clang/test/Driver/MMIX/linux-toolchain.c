@@ -1,7 +1,7 @@
 // REQUIRES: mmix-registered-target
 // RUN: %clang --target=mmix-unknown-linux -### -c %s 2>&1 | FileCheck %s --check-prefix=COMPILE --implicit-check-not="-internal-externc-isystem" --implicit-check-not="/usr/include" --implicit-check-not="mmix-unknown-unknown"
 // RUN: %clang --target=mmix-unknown-linux-unknown -### -c %s 2>&1 | FileCheck %s --check-prefix=ALIAS
-// RUN: %clang --target=mmix-unknown-linux --sysroot=%t.sysroot -### -c %s 2>&1 | FileCheck %s --check-prefix=COMPILE --implicit-check-not="/usr/include"
+// RUN: %clang --target=mmix-unknown-linux --sysroot=%t.sysroot -nostdlibinc -### -c %s 2>&1 | FileCheck %s --check-prefix=COMPILE --implicit-check-not="/usr/include"
 // RUN: %clang --target=mmix-unknown-linux -nostdinc -### -c %s 2>&1 | FileCheck %s --check-prefix=COMPILE --implicit-check-not="-internal-isystem"
 // RUN: %clang --target=mmix-unknown-linux -nobuiltininc -### -c %s 2>&1 | FileCheck %s --check-prefix=COMPILE --implicit-check-not="-internal-isystem"
 // RUN: %clang --target=mmix-unknown-linux -nostdlibinc -### -c %s 2>&1 | FileCheck %s --check-prefix=BUILTIN
@@ -48,6 +48,6 @@
 // REJECT: error: unsupported option '{{.*}}' for target 'mmix-unknown-linux'
 // BARE: "{{.*}}ld.lld{{.*}}"
 
-// Only builtin headers are discovered until Linux sysroot discovery is ready.
+// No sysroot is needed for freestanding use of builtin headers.
 #include <stddef.h>
 long add(long a, long b) { return a + b; }

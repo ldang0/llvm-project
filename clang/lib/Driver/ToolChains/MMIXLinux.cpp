@@ -14,6 +14,7 @@
 #include "clang/Options/Options.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/VirtualFileSystem.h"
 
 using namespace clang;
 using namespace clang::driver;
@@ -21,6 +22,14 @@ using namespace clang::driver::toolchains;
 using namespace llvm::opt;
 
 namespace {
+bool diagnoseMissing(const ToolChain &TC, StringRef Path, bool Directory) {
+  auto Status = TC.getVFS().status(Path);
+  if (Status && (Directory ? Status->isDirectory() : Status->isRegularFile()))
+    return false;
+  TC.getDriver().Diag(diag::err_drv_no_such_file) << Path;
+  return true;
+}
+
 class UnavailableTool final : public Tool {
   const char *Operation;
 
@@ -41,13 +50,17 @@ MMIXLinuxToolChain::MMIXLinuxToolChain(
     const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   // Linux's constructor probes GCC and installs distribution search paths.
-  // Keep Linux resource discovery isolated until target-owned inputs exist.
-  // FIXME: Honor explicit sysroots and allow native MMIX Linux system paths
-  // without implicit host fallback when cross-compiling. Native system paths
-  // must not require GCC discovery or change the LLVM provider defaults.
+  // FIXME: Add native MMIX Linux system paths without implicit host fallback
+  // when cross-compiling, GCC discovery, or changes to LLVM provider defaults.
   getFilePaths().clear();
   getLibraryPaths().clear();
   getProgramPaths().push_back(D.Dir);
+  getLibraryPaths().push_back(getCompilerRTPath());
+  if (!D.SysRoot.empty()) {
+    SmallString<128> Path(D.SysRoot);
+    llvm::sys::path::append(Path, "usr", "lib");
+    getFilePaths().push_back(std::string(Path));
+  }
 
   auto Reject = [&](const Arg *A) {
     D.Diag(diag::err_drv_unsupported_opt_for_target)
@@ -100,11 +113,56 @@ MMIXLinuxToolChain::GetUnwindLibType(const ArgList &Args) const {
 
 void MMIXLinuxToolChain::AddClangSystemIncludeArgs(
     const ArgList &Args, ArgStringList &CC1Args) const {
-  if (Args.hasArg(options::OPT_nostdinc, options::OPT_nobuiltininc))
+  if (Args.hasArg(options::OPT_nostdinc))
     return;
-  llvm::SmallString<128> Path(getDriver().ResourceDir);
-  llvm::sys::path::append(Path, "include");
-  addSystemInclude(Args, CC1Args, Path);
+  const Driver &D = getDriver();
+  if (!Args.hasArg(options::OPT_nobuiltininc)) {
+    SmallString<128> Path(D.ResourceDir);
+    llvm::sys::path::append(Path, "include");
+    if (!diagnoseMissing(*this, Path, /*Directory=*/true))
+      addSystemInclude(Args, CC1Args, Path);
+  }
+  // Without a sysroot, freestanding compilation can still use builtin headers.
+  if (D.SysRoot.empty() || Args.hasArg(options::OPT_nostdlibinc))
+    return;
+  SmallString<128> Path(D.SysRoot);
+  llvm::sys::path::append(Path, "usr", "include");
+  if (!diagnoseMissing(*this, Path, /*Directory=*/true))
+    addExternCSystemInclude(Args, CC1Args, Path);
+}
+
+void MMIXLinuxToolChain::AddClangCXXStdlibIncludeArgs(
+    const ArgList &Args, ArgStringList &CC1Args) const {
+  const Driver &D = getDriver();
+  if (D.SysRoot.empty() ||
+      Args.hasArg(options::OPT_nostdinc, options::OPT_nostdlibinc,
+                  options::OPT_nostdincxx))
+    return;
+  SmallString<128> Path(D.SysRoot);
+  llvm::sys::path::append(Path, "usr", "include", "c++", "v1");
+  SmallString<128> Config(Path);
+  llvm::sys::path::append(Config, "__config_site");
+  // The generated configuration belongs to this libc++ installation, not to
+  // a host or bare-metal resource directory with otherwise matching headers.
+  if (!diagnoseMissing(*this, Config, /*Directory=*/false))
+    addSystemInclude(Args, CC1Args, Path);
+}
+
+std::string MMIXLinuxToolChain::getCompilerRTPath() const {
+  SmallString<128> Path(getDriver().ResourceDir);
+  llvm::sys::path::append(Path, "lib", "mmix-unknown-linux");
+  return std::string(Path);
+}
+
+std::string MMIXLinuxToolChain::getCompilerRT(const ArgList &Args,
+                                           StringRef Component, FileType Type,
+                                           bool IsFortran) const {
+  SmallString<128> Path(getCompilerRTPath());
+  llvm::sys::path::append(
+      Path, buildCompilerRTBasename(Args, Component, Type,
+                                   /*AddArch=*/false, IsFortran));
+  diagnoseMissing(*this, Path, /*Directory=*/false);
+  return std::string(Path);
 }
 
 Tool *MMIXLinuxToolChain::buildAssembler() const {
@@ -112,7 +170,7 @@ Tool *MMIXLinuxToolChain::buildAssembler() const {
 }
 
 Tool *MMIXLinuxToolChain::buildLinker() const {
-  // FIXME: Enable linking after Linux resource discovery and CRT composition
-  // are implemented; no host or bare-metal fallback is valid here.
+  // FIXME: Validate required inputs and compose the Linux CRT/static link;
+  // generic GetFilePath queries are not a validated resource selection API.
   return new UnavailableTool(*this, "linking for MMIX Linux");
 }
