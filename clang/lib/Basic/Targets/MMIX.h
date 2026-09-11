@@ -21,7 +21,7 @@
 namespace clang {
 namespace targets {
 
-class LLVM_LIBRARY_VISIBILITY MMIXTargetInfo final : public TargetInfo {
+class LLVM_LIBRARY_VISIBILITY MMIXTargetInfo : public TargetInfo {
   bool HasBase = true;
   bool HasSystem = true;
   bool HasCache = true;

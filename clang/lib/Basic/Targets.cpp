@@ -286,6 +286,14 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
     return std::make_unique<MSP430TargetInfo>(Triple, Opts);
 
   case llvm::Triple::mmix: {
+    if (Triple.getOS() == llvm::Triple::Linux) {
+      if (Triple.getVendorName() != "unknown" ||
+          Triple.getOSName() != "linux" ||
+          (!Triple.getEnvironmentName().empty() &&
+           Triple.getEnvironmentName() != "unknown"))
+        return nullptr;
+      return std::make_unique<LinuxTargetInfo<MMIXTargetInfo>>(Triple, Opts);
+    }
     auto IsUnknownComponent = [](StringRef Name) {
       return Name.empty() || Name == "unknown" || Name == "none";
     };

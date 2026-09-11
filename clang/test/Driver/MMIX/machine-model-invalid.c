@@ -2,7 +2,7 @@
 // RUN: not %clang --target=mmix-pc-unknown -ffreestanding -fsyntax-only \
 // RUN:   %S/Inputs/machine-model-invalid.c 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=VENDOR
-// RUN: not %clang --target=mmix-unknown-linux -ffreestanding -fsyntax-only \
+// RUN: not %clang --target=mmix-unknown-freebsd -ffreestanding -fsyntax-only \
 // RUN:   %S/Inputs/machine-model-invalid.c 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=OS
 // RUN: not %clang --target=mmix-unknown-unknown-elf -ffreestanding \
@@ -42,7 +42,7 @@
 // RUN: not test -s %t.as.ll
 
 // VENDOR: error: unknown target triple 'mmix-pc-unknown'
-// OS: error: unknown target triple 'mmix-unknown-linux'
+// OS: error: unknown target triple 'mmix-unknown-freebsd'
 // ENVIRONMENT: error: unknown target triple 'mmix-unknown-unknown-elf'
 // ABI: error: unsupported option '-mabi=' for target 'mmix-unknown-unknown'
 // CODE-MODEL: error: unsupported argument 'large' to option '-mcmodel=' for target 'mmix-unknown-unknown'

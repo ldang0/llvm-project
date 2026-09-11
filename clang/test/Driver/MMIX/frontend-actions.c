@@ -44,7 +44,7 @@
 // RUN: not %clang --target=mmix-pc-unknown -ffreestanding -fsyntax-only \
 // RUN:   %S/Inputs/freestanding.c 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=BAD-VENDOR
-// RUN: not %clang --target=mmix-unknown-linux -ffreestanding -fsyntax-only \
+// RUN: not %clang --target=mmix-unknown-freebsd -ffreestanding -fsyntax-only \
 // RUN:   %S/Inputs/freestanding.c 2>&1 \
 // RUN:   | FileCheck %s --check-prefix=BAD-OS
 // RUN: not %clang --target=mmix-unknown-unknown-elf -ffreestanding \
@@ -65,5 +65,5 @@
 // SYNTAX-SAME: "-x" "c" "{{.*}}Inputs{{/|\\}}freestanding.c"
 
 // BAD-VENDOR: error: unknown target triple 'mmix-pc-unknown'
-// BAD-OS: error: unknown target triple 'mmix-unknown-linux'
+// BAD-OS: error: unknown target triple 'mmix-unknown-freebsd'
 // BAD-ENV: error: unknown target triple 'mmix-unknown-unknown-elf'
