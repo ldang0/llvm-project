@@ -8,9 +8,12 @@
 
 #include "MMIXLinux.h"
 #include "clang/Basic/DiagnosticDriver.h"
+#include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
+#include "clang/Driver/Job.h"
 #include "clang/Driver/Tool.h"
+#include "clang/Driver/Types.h"
 #include "clang/Options/Options.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/Path.h"
@@ -44,10 +47,120 @@ public:
     C.getDriver().Diag(diag::err_drv_clang_unsupported) << Operation;
   }
 };
+
+class Linker final : public Tool {
+public:
+  Linker(const ToolChain &TC) : Tool("MMIXLinux::Linker", "linker", TC) {}
+  bool hasIntegratedCPP() const override { return false; }
+  bool isLinkJob() const override { return true; }
+  void ConstructJob(Compilation &C, const JobAction &JA,
+                    const InputInfo &Output, const InputInfoList &Inputs,
+                    const ArgList &Args, const char *) const override {
+    const auto &TC = static_cast<const MMIXLinuxToolChain &>(getToolChain());
+    const Driver &D = TC.getDriver();
+    auto Reject = [&](StringRef Mode) {
+      D.Diag(diag::err_drv_clang_unsupported) << Mode;
+    };
+    // Full Linux LTO qualification follows the ordinary static link boundary.
+    if (TC.getLTOMode(Args) != LTOK_None) {
+      Reject("LTO linking for MMIX Linux");
+      return;
+    }
+    for (const InputInfo &Input : Inputs) {
+      if (types::isLLVMIR(Input.getType())) {
+        Reject("LTO linking for MMIX Linux");
+        return;
+      }
+    }
+    if (Args.hasArg(options::OPT_ld_path_EQ)) {
+      Reject("custom linker selection for MMIX Linux");
+      return;
+    }
+    // Do not let forwarded mode switches override the reviewed static profile.
+    for (const Arg *A :
+         Args.filtered(options::OPT_Wl_COMMA, options::OPT_Xlinker)) {
+      for (StringRef V : A->getValues()) {
+        StringRef Option = V.split('=').first;
+        if (Option == "-shared" || Option == "--shared" || Option == "-pie" ||
+            Option == "--pie" || Option == "-Bdynamic" || Option == "-dy" ||
+            Option == "--dynamic-linker" || Option == "-dynamic-linker" ||
+            Option == "-I" || V.starts_with("-I") || Option == "-plugin" ||
+            Option == "--plugin" || Option == "-r" ||
+            Option == "--relocatable" || Option == "-m" ||
+            V.starts_with("-m") || Option == "--emulation") {
+          D.Diag(diag::err_drv_unsupported_opt_for_target)
+              << A->getAsString(Args) << TC.getTripleString();
+          return;
+        }
+      }
+    }
+
+    const bool Relocatable = Args.hasArg(options::OPT_r);
+    const bool StartFiles =
+        !Relocatable &&
+        !Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles);
+    const bool DefaultLibs =
+        !Relocatable &&
+        !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs);
+    ArgStringList CmdArgs{"-m", "elf64mmix"};
+    CmdArgs.push_back(Relocatable ? "-r" : "-static");
+    if (!Relocatable) {
+      CmdArgs.push_back("--no-dynamic-linker");
+      CmdArgs.push_back("--eh-frame-hdr");
+      // MMIX Linux loads segments with 8192-byte page congruence.
+      CmdArgs.append(
+          {"-z", "max-page-size=8192", "-z", "common-page-size=8192"});
+    }
+    if (!D.SysRoot.empty())
+      CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
+    Args.ClaimAllArgs(options::OPT_r);
+    Args.ClaimAllArgs(options::OPT_static);
+    Args.ClaimAllArgs(options::OPT_no_pie);
+    Args.ClaimAllArgs(options::OPT_g_Group);
+    Args.ClaimAllArgs(options::OPT_emit_llvm);
+    Args.ClaimAllArgs(options::OPT_w);
+    Args.addAllArgs(CmdArgs, {options::OPT_L, options::OPT_s, options::OPT_t,
+                              options::OPT_u_Group});
+    TC.AddFilePathLibArgs(Args, CmdArgs);
+    if (StartFiles) {
+      CmdArgs.push_back(Args.MakeArgString(TC.getSysrootFile("crt1.o")));
+      CmdArgs.push_back(
+          TC.getCompilerRTArgString(Args, "crtbegin", ToolChain::FT_Object));
+    }
+    tools::addLinkerCompressDebugSectionsOption(TC, Args, CmdArgs);
+    tools::AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
+    if (DefaultLibs) {
+      CmdArgs.push_back("--start-group");
+      if (TC.ShouldLinkCXXStdlib(Args)) {
+        TC.AddCXXStdlibLibArgs(Args, CmdArgs);
+        CmdArgs.push_back(Args.MakeArgString(TC.getSysrootFile("libm.a")));
+      }
+      if (TC.GetUnwindLibType(Args) == ToolChain::UNW_CompilerRT)
+        CmdArgs.push_back(Args.MakeArgString(TC.getSysrootFile("libunwind.a")));
+      if (!Args.hasArg(options::OPT_nolibc))
+        CmdArgs.push_back(Args.MakeArgString(TC.getSysrootFile("libc.a")));
+      CmdArgs.push_back(TC.getCompilerRTArgString(Args, "builtins"));
+      CmdArgs.push_back("--end-group");
+    }
+    if (StartFiles)
+      CmdArgs.push_back(
+          TC.getCompilerRTArgString(Args, "crtend", ToolChain::FT_Object));
+    Args.addAllArgs(CmdArgs, {options::OPT_T_Group});
+    CmdArgs.push_back("-o");
+    CmdArgs.push_back(Output.getFilename());
+    const char *Exec = Args.MakeArgString(TC.GetLinkerPath());
+    if (D.getDiags().hasErrorOccurred())
+      return;
+    C.addCommand(std::make_unique<Command>(JA, *this,
+                                           ResponseFileSupport::AtFileCurCP(),
+                                           Exec, CmdArgs, Inputs, Output));
+  }
+};
 } // namespace
 
-MMIXLinuxToolChain::MMIXLinuxToolChain(
-    const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
+MMIXLinuxToolChain::MMIXLinuxToolChain(const Driver &D,
+                                       const llvm::Triple &Triple,
+                                       const ArgList &Args)
     : ToolChain(D, Triple, Args) {
   // Linux's constructor probes GCC and installs distribution search paths.
   // FIXME: Add native MMIX Linux system paths without implicit host fallback
@@ -106,9 +219,33 @@ MMIXLinuxToolChain::MMIXLinuxToolChain(
 ToolChain::UnwindLibType
 MMIXLinuxToolChain::GetUnwindLibType(const ArgList &Args) const {
   const Arg *A = Args.getLastArg(options::OPT_unwindlib_EQ);
-  if (A && StringRef(A->getValue()) == "libunwind")
+  if (A && StringRef(A->getValue()) == "none")
+    return UNW_None;
+  // libc++ retains exception paths even when the application disables them.
+  if ((A && StringRef(A->getValue()) == "libunwind") ||
+      getDriver().CCCIsCXX() ||
+      Args.hasFlag(options::OPT_fexceptions, options::OPT_fno_exceptions,
+                   false))
     return UNW_CompilerRT;
   return UNW_None;
+}
+
+std::string MMIXLinuxToolChain::getSysrootFile(StringRef Name) const {
+  if (getDriver().SysRoot.empty()) {
+    getDriver().Diag(diag::err_drv_clang_unsupported)
+        << "implicit system resources without --sysroot for MMIX Linux";
+    return {};
+  }
+  SmallString<128> Path(getDriver().SysRoot);
+  llvm::sys::path::append(Path, "usr", "lib", Name);
+  diagnoseMissing(*this, Path, /*Directory=*/false);
+  return std::string(Path);
+}
+
+void MMIXLinuxToolChain::AddCXXStdlibLibArgs(const ArgList &Args,
+                                             ArgStringList &CmdArgs) const {
+  CmdArgs.push_back(Args.MakeArgString(getSysrootFile("libc++.a")));
+  CmdArgs.push_back(Args.MakeArgString(getSysrootFile("libc++abi.a")));
 }
 
 void MMIXLinuxToolChain::AddClangSystemIncludeArgs(
@@ -170,7 +307,5 @@ Tool *MMIXLinuxToolChain::buildAssembler() const {
 }
 
 Tool *MMIXLinuxToolChain::buildLinker() const {
-  // FIXME: Validate required inputs and compose the Linux CRT/static link;
-  // generic GetFilePath queries are not a validated resource selection API.
-  return new UnavailableTool(*this, "linking for MMIX Linux");
+  return new Linker(*this);
 }

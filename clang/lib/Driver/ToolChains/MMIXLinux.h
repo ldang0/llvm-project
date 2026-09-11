@@ -22,6 +22,8 @@ public:
   bool isPIEDefault(const llvm::opt::ArgList &) const override { return false; }
   bool isPICDefaultForced() const override { return false; }
   bool HasNativeLLVMSupport() const override { return true; }
+  // Native Linux system and environment search is not implemented yet.
+  bool isCrossCompiling() const override { return true; }
   bool SupportsProfiling() const override { return false; }
   const char *getDefaultLinker() const override { return "ld.lld"; }
   RuntimeLibType GetDefaultRuntimeLibType() const override {
@@ -38,6 +40,9 @@ public:
     return CST_Libcxx;
   }
   UnwindLibType GetUnwindLibType(const llvm::opt::ArgList &Args) const override;
+  std::string getSysrootFile(StringRef Name) const;
+  void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
+                           llvm::opt::ArgStringList &CmdArgs) const override;
   std::string getCompilerRTPath() const override;
   std::string getCompilerRT(const llvm::opt::ArgList &Args,
                             llvm::StringRef Component,

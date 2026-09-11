@@ -16,8 +16,8 @@
 // RUN: llvm-readobj --file-headers %t.o %t.cxx.o %t.asm.o | FileCheck %s --check-prefix=ELF
 // RUN: not %clang --target=mmix-unknown-linux  -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK --implicit-check-not='"-cc1"' --implicit-check-not='"ld"' --implicit-check-not='"ld.lld"'
 // RUN: not %clang --target=mmix-unknown-linux -static -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK --implicit-check-not='"-cc1"' --implicit-check-not='"ld"' --implicit-check-not='"ld.lld"'
-// RUN: not %clang --target=mmix-unknown-linux -r -nostdlib -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK --implicit-check-not='"-cc1"' --implicit-check-not='"ld"' --implicit-check-not='"ld.lld"'
-// RUN: not %clang --target=mmix-unknown-linux -nostartfiles -nodefaultlibs -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK --implicit-check-not='"-cc1"' --implicit-check-not='"ld"' --implicit-check-not='"ld.lld"'
+// RUN: %clang --target=mmix-unknown-linux -r -nostdlib -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK-RELOC
+// RUN: %clang --target=mmix-unknown-linux -nostartfiles -nodefaultlibs -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK-STATIC
 // RUN: not %clang --target=mmix-unknown-linux -fuse-ld=lld -### %t.o 2>&1 | FileCheck %s --check-prefix=LINK --implicit-check-not='"-cc1"' --implicit-check-not='"ld"' --implicit-check-not='"ld.lld"'
 // RUN: not %clang --target=mmix-unknown-linux -fno-integrated-as -### -c %s 2>&1 | FileCheck %s --check-prefix=ASSEMBLER
 // RUN: not %clang --target=mmix-unknown-linux -shared -### -c %s 2>&1 | FileCheck %s --check-prefix=REJECT
@@ -43,7 +43,9 @@
 // ALIAS-SAME: "-mrelocation-model" "static"
 // BUILTIN: "-internal-isystem" "{{.*}}/include"
 // ELF-COUNT-3: Format: elf64-mmix
-// LINK: error: the clang compiler does not support 'linking for MMIX Linux'
+// LINK: error: the clang compiler does not support 'implicit system resources without --sysroot for MMIX Linux'
+// LINK-RELOC: "-m" "elf64mmix" "-r"
+// LINK-STATIC: "-m" "elf64mmix" "-static" "--no-dynamic-linker"
 // ASSEMBLER: error: the clang compiler does not support 'external assembly for MMIX Linux'
 // REJECT: error: unsupported option '{{.*}}' for target 'mmix-unknown-linux'
 // BARE: "{{.*}}ld.lld{{.*}}"
