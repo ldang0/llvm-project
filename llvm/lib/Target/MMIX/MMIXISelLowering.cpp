@@ -456,6 +456,8 @@ MMIXTargetLowering::AsmOperandInfoVector
 MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                      const TargetRegisterInfo *TRI,
                                      const CallBase &Call) const {
+  // An empty constraint list is valid, not an error marker. Stop on rejection
+  // so SelectionDAGBuilder cannot leave consumed asm results without defs.
   const auto *IA = dyn_cast<InlineAsm>(Call.getCalledOperand());
   if (Call.getType()->isVectorTy() ||
       llvm::any_of(Call.args(), [](const Use &Arg) {
@@ -473,10 +475,9 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
       InstructionName += ' ';
       InstructionName += ModuleOnlyInstruction.Operand;
     }
-    Call.getContext().emitError(
-        &Call, Twine("MMIX instruction '") + InstructionName +
-                   "' is only permitted in module-level inline assembly");
-    return {};
+    reportFatalUsageError(
+        Twine("MMIX instruction '") + InstructionName +
+        "' is only permitted in module-level inline assembly");
   }
 
   AsmOperandInfoVector Operands =
@@ -493,9 +494,8 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                                        }),
                         Operand.Codes.end());
     if (HadNonOffsettableMemory && Operand.Codes.empty()) {
-      Call.getContext().emitError(
-          &Call, "MMIX has no non-offsettable inline assembly memory operand");
-      return {};
+      reportFatalUsageError(
+          "MMIX has no non-offsettable inline assembly memory operand");
     }
 
     const auto *PointerTy =
@@ -507,10 +507,9 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
                     [](const std::string &Code) {
                       return Code == "m" || Code == "o" || Code == "p";
                     })) {
-      Call.getContext().emitError(
-          &Call, "MMIX inline assembly does not support memory or address "
-                 "operands in nonzero address spaces");
-      return {};
+      reportFatalUsageError(
+          "MMIX inline assembly does not support memory or address "
+          "operands in nonzero address spaces");
     }
 
     if (Operand.Type != InlineAsm::isClobber)
@@ -522,10 +521,9 @@ MMIXTargetLowering::ParseConstraints(const DataLayout &DL,
       MCRegister Reg = MatchRegisterName(Name);
       if (!Reg || !isUnsafeInlineAsmRegister(Reg))
         continue;
-      Call.getContext().emitError(
-          &Call, Twine("MMIX inline assembly may not clobber register '") +
-                     Name + "' in an ordinary function");
-      return {};
+      reportFatalUsageError(
+          Twine("MMIX inline assembly may not clobber register '") +
+          Name + "' in an ordinary function");
     }
   }
   return Operands;

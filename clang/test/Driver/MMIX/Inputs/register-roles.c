@@ -41,8 +41,10 @@ void stack_pointer_clobber(void) {
   __asm__ volatile("SWYM 0, 0, 0" ::: "sp");
 }
 
+#elif defined(TEST_STATE_WRITE)
 void procedure_state_write(void) { __asm__ volatile("PUT rJ, r0"); }
 
+#elif defined(TEST_PROCEDURE_CALL)
 void procedure_call(void) { __asm__ volatile("PUSHJ r31, target"); }
 #else
 struct Large {

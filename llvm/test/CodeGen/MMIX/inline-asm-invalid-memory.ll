@@ -4,8 +4,8 @@
 ; RUN: not llc -mtriple=mmix -O0 %t/address-space.ll -o /dev/null 2>&1 \
 ; RUN:   | FileCheck %s --check-prefix=ADDRESS-SPACE
 
-; NON-OFFSETTABLE: error: MMIX has no non-offsettable inline assembly memory operand
-; ADDRESS-SPACE: error: MMIX inline assembly does not support memory or address operands in nonzero address spaces
+; NON-OFFSETTABLE: LLVM ERROR: MMIX has no non-offsettable inline assembly memory operand
+; ADDRESS-SPACE: LLVM ERROR: MMIX inline assembly does not support memory or address operands in nonzero address spaces
 
 ;--- non-offsettable.ll
 target triple = "mmix"

@@ -30,6 +30,10 @@
 // RUN:   -DTEST_UNSAFE_STATE -S %S/Inputs/register-roles.c \
 // RUN:   -o %t.unsafe.s 2>&1 | FileCheck %s --check-prefix=UNSAFE
 // RUN: not test -s %t.unsafe.s
+// RUN: not %clang --target=mmix -ffreestanding -DTEST_STATE_WRITE -S \
+// RUN:   %S/Inputs/register-roles.c -o /dev/null 2>&1 | FileCheck %s --check-prefix=WRITE
+// RUN: not %clang --target=mmix -ffreestanding -DTEST_PROCEDURE_CALL -S \
+// RUN:   %S/Inputs/register-roles.c -o /dev/null 2>&1 | FileCheck %s --check-prefix=CALL
 
 // IR: define dso_local i64 @scalar_roles(i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}}, i64 noundef %{{.*}})
 // IR: call i64 @external_many(i64 noundef
@@ -69,6 +73,6 @@
 // RESERVED-DAG: error: could not allocate output register for constraint '{r253}'
 // RESERVED-DAG: error: could not allocate output register for constraint '{r254}'
 // RESERVED-DAG: error: could not allocate output register for constraint '{r255}'
-// UNSAFE-DAG: error: MMIX inline assembly may not clobber register 'r254' in an ordinary function
-// UNSAFE-DAG: error: MMIX instruction 'PUT rJ' is only permitted in module-level inline assembly
-// UNSAFE-DAG: error: MMIX instruction 'PUSHJ' is only permitted in module-level inline assembly
+// UNSAFE: error: error in backend: MMIX inline assembly may not clobber register 'r254' in an ordinary function
+// WRITE: error: error in backend: MMIX instruction 'PUT rJ' is only permitted in module-level inline assembly
+// CALL: error: error in backend: MMIX instruction 'PUSHJ' is only permitted in module-level inline assembly
