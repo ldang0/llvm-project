@@ -80,6 +80,7 @@ add_clang_library(clangDriver
   ToolChains/MipsLinux.cpp
   ToolChains/MinGW.cpp
   ToolChains/MMIX.cpp
+  ToolChains/MMIXLinux.cpp
   ToolChains/MMIXLLVMlibc.cpp
   ToolChains/MMIXNewlib.cpp
   ToolChains/MMIXPlatform.cpp

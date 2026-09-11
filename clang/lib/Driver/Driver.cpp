@@ -32,6 +32,7 @@
 #include "ToolChains/Lanai.h"
 #include "ToolChains/Linux.h"
 #include "ToolChains/MMIX.h"
+#include "ToolChains/MMIXLinux.h"
 #include "ToolChains/MSP430.h"
 #include "ToolChains/MSVC.h"
 #include "ToolChains/Managarm.h"
@@ -6249,7 +6250,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       break;
     case llvm::Triple::Linux:
     case llvm::Triple::ELFIAMCU:
-      if (Target.getArch() == llvm::Triple::hexagon)
+      if (Target.getArch() == llvm::Triple::mmix && Target.isOSLinux())
+        TC = std::make_unique<toolchains::MMIXLinuxToolChain>(*this, Target, Args);
+      else if (Target.getArch() == llvm::Triple::hexagon)
         TC = std::make_unique<toolchains::HexagonToolChain>(*this, Target,
                                                              Args);
       else if ((Target.getVendor() == llvm::Triple::MipsTechnologies) &&
