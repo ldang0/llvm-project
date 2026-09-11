@@ -329,21 +329,6 @@ class MMIXCodeGenBoundaryVisitor
     return !diagnoseUnsupportedMMIXObject(CGM, Loc, Ty);
   }
 
-  bool diagnoseAutomaticObjectAlignment(VarDecl *VD) {
-    // Generic lambda parameters have no layout until their specialization is
-    // emitted; that specialization is checked through the same visitor.
-    if (VD->getType()->isDependentType() || !VD->hasLocalStorage() ||
-        CGM.getContext().getDeclAlign(VD) <= CharUnits::fromQuantity(8))
-      return true;
-
-    unsigned DiagID = CGM.getDiags().getCustomDiagID(
-        DiagnosticsEngine::Error,
-        "MMIX does not support automatic object alignment greater than 8 "
-        "bytes");
-    CGM.getDiags().Report(VD->getLocation(), DiagID);
-    return false;
-  }
-
   bool diagnoseExtendedScalarOperation(SourceLocation Loc, QualType Ty) {
     if (!Ty->isScalarType() ||
         !isUnsupportedMMIXBoundaryScalarType(CGM.getContext(), Ty,
@@ -378,8 +363,7 @@ public:
   explicit MMIXCodeGenBoundaryVisitor(CodeGenModule &CGM) : CGM(CGM) {}
 
   bool VisitVarDecl(VarDecl *VD) {
-    return diagnoseAutomaticObjectAlignment(VD) &&
-           diagnoseObjectType(VD->getLocation(), VD->getType());
+    return diagnoseObjectType(VD->getLocation(), VD->getType());
   }
 
   bool VisitCXXThrowExpr(CXXThrowExpr *E) {

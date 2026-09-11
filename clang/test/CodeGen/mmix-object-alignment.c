@@ -6,10 +6,14 @@
 // RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
 // RUN:   -o - %s | llc -mtriple=mmix -stop-after=prolog-epilog -o - \
 // RUN:   | FileCheck %s --check-prefix=FRAME
-// RUN: not %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
+// RUN: %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
-// RUN:   -DOVERALIGNED -o /dev/null %s 2>&1 \
+// RUN:   -DOVERALIGNED -o - %s \
 // RUN:   | FileCheck %s --check-prefix=OVERALIGNED
+// RUN: %clang_cc1 -triple mmix -std=gnu2x -mrelocation-model static \
+// RUN:   -DOVERALIGNED -emit-obj -o %t.o %s
+// RUN: %clang_cc1 -triple mmix -std=gnu2x -mrelocation-model static \
+// RUN:   -DOVERALIGNED -O2 -emit-obj -o %t.o %s
 // RUN: %clang_cc1 -triple mmix-unknown-unknown -std=gnu2x \
 // RUN:   -mrelocation-model static -emit-llvm -disable-llvm-passes \
 // RUN:   -DVARIABLE -o - %s \
@@ -63,12 +67,18 @@ void fixed_automatic_objects(void) {
 // FRAME-NEXT: alignment: 8,
 
 #ifdef OVERALIGNED
-void unsupported_alignment(void) {
-  char value __attribute__((aligned(16)));
-  value = 0;
+extern void consume(void *, void *, void *);
+void extended_alignment(void) {
+  char a __attribute__((aligned(16))) = 1;
+  char b __attribute__((aligned(32))) = 2;
+  char c __attribute__((aligned(64))) = 3;
+  consume(&a, &b, &c);
 }
 
-// OVERALIGNED: error: MMIX does not support automatic object alignment greater than 8 bytes
+// OVERALIGNED-LABEL: define dso_local void @extended_alignment()
+// OVERALIGNED: alloca i8, align 16
+// OVERALIGNED: alloca i8, align 32
+// OVERALIGNED: alloca i8, align 64
 #endif
 
 #ifdef VARIABLE

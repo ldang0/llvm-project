@@ -1,6 +1,6 @@
 // REQUIRES: mmix-registered-target
 // RUN: %clang_cc1 -triple mmix -mrelocation-model static -std=c++17 -emit-llvm -o - %s | FileCheck %s
-// RUN: %clang_cc1 -triple mmix -mrelocation-model static -std=c++17 -emit-llvm -DINVALID -verify -o /dev/null %s
+// RUN: %clang_cc1 -triple mmix -mrelocation-model static -std=c++17 -emit-obj -o %t.o %s
 
 // CHECK-LABEL: define{{.*}} @_Z5applyi
 int apply(int value) {
@@ -12,13 +12,12 @@ int apply(int value) {
   return local(forward(value));
 }
 
-#ifdef INVALID
 struct alignas(16) Overaligned { long value; };
-void invalid(Overaligned &value) {
+long aligned_copy(Overaligned &value) {
   auto copy = [](auto &arg) {
-    auto local = arg; // expected-error {{MMIX does not support automatic object alignment greater than 8 bytes}}
+    auto local = arg;
     return local.value;
   };
-  copy(value);
+  return copy(value);
 }
-#endif
+// CHECK: alloca %struct.Overaligned, align 16
