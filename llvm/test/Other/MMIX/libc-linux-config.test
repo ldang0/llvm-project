@@ -1,0 +1,77 @@
+# RUN: split-file %s %t
+# RUN: cmake -DLIBC_SOURCE=%S/../../../../libc -DTEST_ROOT=%t -P %t/check.cmake
+# RUN: not cmake -P %S/../../../../libc/cmake/caches/mmix-linux.cmake 2>&1 | FileCheck %s --check-prefix=MISSING
+# RUN: not cmake -DLIBC_KERNEL_HEADERS=%t/missing -P %S/../../../../libc/cmake/caches/mmix-linux.cmake 2>&1 | FileCheck %s --check-prefix=MISSING
+# RUN: cmake -S %t/registration -B %t/without -DLIBC_SOURCE=%S/../../../../libc -DHAVE_OSUTIL=OFF
+# RUN: cmake -S %t/registration -B %t/with -DLIBC_SOURCE=%S/../../../../libc -DHAVE_OSUTIL=ON
+
+# MISSING: MMIX Linux libc requires an explicit LIBC_KERNEL_HEADERS export
+
+#--- check.cmake
+cmake_minimum_required(VERSION 3.20)
+# Synthetic headers test cache validation only, not Linux ABI compatibility.
+file(MAKE_DIRECTORY "${TEST_ROOT}/uapi/asm" "${TEST_ROOT}/uapi/linux")
+foreach(header asm/unistd.h asm/unistd_64.h linux/errno.h)
+  file(WRITE "${TEST_ROOT}/uapi/${header}" "")
+endforeach()
+set(LIBC_KERNEL_HEADERS "${TEST_ROOT}/uapi")
+include(${LIBC_SOURCE}/cmake/caches/mmix-linux.cmake)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+   NOT LIBC_TARGET_TRIPLE STREQUAL "mmix-unknown-linux-unknown" OR
+   NOT CMAKE_C_COMPILER_TARGET STREQUAL "mmix-unknown-linux" OR
+   NOT CMAKE_CXX_COMPILER_TARGET STREQUAL "mmix-unknown-linux" OR
+   NOT CMAKE_TRY_COMPILE_TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR
+   NOT CMAKE_CXX_FLAGS STREQUAL "-nostdinc++" OR
+   NOT LLVM_ENABLE_RUNTIMES STREQUAL "libc" OR
+   NOT LLVM_LIBC_FULL_BUILD OR LLVM_INCLUDE_TESTS)
+  message(FATAL_ERROR "incorrect isolated Linux component profile")
+endif()
+if(DEFINED CMAKE_C_COMPILER_WORKS OR DEFINED CMAKE_CXX_COMPILER_WORKS OR
+   DEFINED LIBC_CONF_ERRNO_MODE OR DEFINED LIBC_CONF_THREAD_MODE)
+  message(FATAL_ERROR "compiler probes or runtime state were overridden")
+endif()
+include(${LIBC_SOURCE}/config/linux/mmix/entrypoints.txt)
+set(expected libc.src.string.memcpy libc.src.string.memmove
+    libc.src.string.memset libc.src.string.memcmp libc.src.string.strlen)
+if(NOT TARGET_LIBC_ENTRYPOINTS STREQUAL expected OR
+   NOT TARGET_LLVMLIBC_ENTRYPOINTS STREQUAL expected)
+  message(FATAL_ERROR "incorrect initial Linux entrypoints")
+endif()
+include(${LIBC_SOURCE}/config/linux/mmix/headers.txt)
+foreach(header libc.include.string libc.include.strings libc.include.stdint)
+  if(NOT header IN_LIST TARGET_PUBLIC_HEADERS)
+    message(FATAL_ERROR "missing primitive header ${header}")
+  endif()
+endforeach()
+file(READ ${LIBC_SOURCE}/config/linux/mmix/config.json config)
+foreach(option LIBC_CONF_STRING_LENGTH_IMPL LIBC_CONF_FIND_FIRST_CHARACTER_IMPL)
+  string(JSON value GET "${config}" string ${option} value)
+  if(NOT value STREQUAL "element")
+    message(FATAL_ERROR "unexpected initial string policy")
+  endif()
+endforeach()
+
+#--- registration/CMakeLists.txt
+cmake_minimum_required(VERSION 3.20)
+project(CheckLinuxRegistration NONE)
+# Execute the real registration files without compiling or faking OSUtil code.
+function(add_header_library)
+endfunction()
+function(add_entrypoint_object)
+endfunction()
+function(add_object_library name)
+  add_custom_target(${name})
+endfunction()
+if(HAVE_OSUTIL)
+  add_custom_target(libc.src.__support.OSUtil.osutil)
+  add_custom_target(libc.src.__support.OSUtil.linux.syscall_wrappers.rt_sigprocmask)
+endif()
+include(${LIBC_SOURCE}/src/setjmp/linux/CMakeLists.txt)
+include(${LIBC_SOURCE}/src/signal/linux/CMakeLists.txt)
+foreach(name sigsetjmp_epilogue __restore)
+  if(HAVE_OSUTIL AND NOT TARGET ${name})
+    message(FATAL_ERROR "missing supported Linux object ${name}")
+  elseif(NOT HAVE_OSUTIL AND TARGET ${name})
+    message(FATAL_ERROR "object ${name} registered without its provider")
+  endif()
+endforeach()

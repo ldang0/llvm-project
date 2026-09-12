@@ -2,6 +2,11 @@
 # RUN: chmod +x %t/compiler
 # RUN: cmake -DCMAKE_CXX_COMPILER=%t/compiler \
 # RUN:   -DLLVM_LIBC_ARCH_MODULE=%S/../../../../libc/cmake/modules/LLVMLibCArchitectures.cmake \
+# RUN:   -DTEST_TRIPLE=mmix-unknown-linux-unknown -DEXPECT_ARCH=mmix \
+# RUN:   -DEXPECT_OS=linux -DEXPECT_MMIX=ON -DEXPECT_CROSSBUILD=ON \
+# RUN:   -P %t/check.cmake
+# RUN: cmake -DCMAKE_CXX_COMPILER=%t/compiler \
+# RUN:   -DLLVM_LIBC_ARCH_MODULE=%S/../../../../libc/cmake/modules/LLVMLibCArchitectures.cmake \
 # RUN:   -DTEST_TRIPLE=mmix-unknown-unknown -DEXPECT_ARCH=mmix \
 # RUN:   -DEXPECT_OS=baremetal -DEXPECT_MMIX=ON -DEXPECT_CROSSBUILD=ON \
 # RUN:   -P %t/check.cmake

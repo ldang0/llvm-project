@@ -1,0 +1,10 @@
+# Start with platform-independent objects; Linux providers are added separately.
+set(TARGET_LIBC_ENTRYPOINTS
+    libc.src.string.memcpy
+    libc.src.string.memmove
+    libc.src.string.memset
+    libc.src.string.memcmp
+    libc.src.string.strlen
+)
+
+set(TARGET_LLVMLIBC_ENTRYPOINTS ${TARGET_LIBC_ENTRYPOINTS})

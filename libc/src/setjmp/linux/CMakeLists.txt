@@ -1,12 +1,14 @@
-add_object_library(
-  sigsetjmp_epilogue
-  HDRS
-    ../sigsetjmp_epilogue.h
-  SRCS
-    sigsetjmp_epilogue.cpp
-  DEPENDS
-    libc.src.__support.common
-    libc.src.__support.OSUtil.linux.syscall_wrappers.rt_sigprocmask
-    libc.hdr.types.sigjmp_buf
-    libc.hdr.types.sigset_t
-)
+if(TARGET libc.src.__support.OSUtil.linux.syscall_wrappers.rt_sigprocmask)
+  add_object_library(
+    sigsetjmp_epilogue
+    HDRS
+      ../sigsetjmp_epilogue.h
+    SRCS
+      sigsetjmp_epilogue.cpp
+    DEPENDS
+      libc.src.__support.common
+      libc.src.__support.OSUtil.linux.syscall_wrappers.rt_sigprocmask
+      libc.hdr.types.sigjmp_buf
+      libc.hdr.types.sigset_t
+  )
+endif()

@@ -39,21 +39,23 @@ add_entrypoint_object(
     libc.src.errno.errno
 )
 
-add_object_library(
-  __restore
-  SRCS
-    __restore.cpp
-  COMPILE_OPTIONS
-    -fomit-frame-pointer
-    ${libc_opt_high_flag}
-    -Wframe-larger-than=0
-    -Wno-attributes
-    # asan creates asan.module_ctor which uses stack space, causing warnings.
-    -fno-sanitize=address
-  DEPENDS
-    libc.include.sys_syscall
-    libc.src.__support.OSUtil.osutil
-)
+if(TARGET libc.src.__support.OSUtil.osutil)
+  add_object_library(
+    __restore
+    SRCS
+      __restore.cpp
+    COMPILE_OPTIONS
+      -fomit-frame-pointer
+      ${libc_opt_high_flag}
+      -Wframe-larger-than=0
+      -Wno-attributes
+      # asan creates asan.module_ctor which uses stack space, causing warnings.
+      -fno-sanitize=address
+    DEPENDS
+      libc.include.sys_syscall
+      libc.src.__support.OSUtil.osutil
+  )
+endif()
 
 add_entrypoint_object(
   sigaction
