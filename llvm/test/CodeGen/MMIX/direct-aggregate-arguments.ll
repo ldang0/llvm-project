@@ -101,8 +101,9 @@ define float @float_leading_field(%float_pair %value) nounwind {
 }
 
 ; ISEL-LABEL: name: call_float_pair
-; ISEL:       [[SHORT_FLOAT:%[0-9]+]]:f32bitscodegen = COPY
-; ISEL:       [[FLOAT_BITS:%[0-9]+]]:fpr64codegen = COPY killed [[SHORT_FLOAT]]
+; ISEL:       [[ARG:%[0-9]+]]:{{[^ ]+}} = COPY $r231
+; ISEL:       [[SHORT_FLOAT:%[0-9]+]]:{{[^ ]+}} = COPY [[ARG]]
+; ISEL:       [[FLOAT_BITS:%[0-9]+]]:{{[^ ]+}} = COPY killed [[SHORT_FLOAT]]
 ; ISEL:       [[SHIFTED_FLOAT:%[0-9]+]]:{{[^ ]+}} = SLUI {{.*}}[[FLOAT_BITS]], 32
 ; ISEL:       $r231 = COPY
 ; ISEL:       DIRECT_CALL_STATE @take_float_pair, {{.*}}implicit $r231

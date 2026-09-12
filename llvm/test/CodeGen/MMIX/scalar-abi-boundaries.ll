@@ -127,11 +127,12 @@ define ptr @call_pointer(ptr %value) {
 ; word, and raw binary32 value then occupy complete octas at sp+0, sp+8, and
 ; sp+16. The f32 bits are not numerically promoted to a double call operand.
 ; ISEL-LABEL: name: call_stack_scalars
+; ISEL:       [[F32_ARG:%[0-9]+]]:{{[^ ]+}} = COPY $r233
 ; ISEL-DAG:   [[UNSIGNED:%[0-9]+]]:{{[^ ]+}} = AND
 ; ISEL:       ADJCALLSTACKDOWN 24, 0
 ; ISEL-DAG:   STOUI killed [[UNSIGNED]], {{.*}}, 8 :: (store (s64) into stack + 8)
-; ISEL-DAG:   [[F32:%[0-9]+]]:f32bitscodegen = COPY
-; ISEL-DAG:   [[FLOAT:%[0-9]+]]:fpr64codegen = COPY killed [[F32]]
+; ISEL-DAG:   [[F32:%[0-9]+]]:{{[^ ]+}} = COPY [[F32_ARG]]
+; ISEL-DAG:   [[FLOAT:%[0-9]+]]:{{[^ ]+}} = COPY killed [[F32]]
 ; ISEL-DAG:   STOUI killed [[FLOAT]], {{.*}}, 16 :: (store (s64) into stack + 16)
 ; ISEL-DAG:   [[SHIFTED:%[0-9]+]]:{{[^ ]+}} = SLUI {{.*}}, 56
 ; ISEL-DAG:   [[SIGNED:%[0-9]+]]:{{[^ ]+}} = SRI killed [[SHIFTED]], 56

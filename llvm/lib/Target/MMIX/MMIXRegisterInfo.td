@@ -21,26 +21,31 @@ class MMIXReg<bits<8> Encoding, string Name> : Register<Name> {
 foreach I = 0-255 in
   def R#I : MMIXReg<I, "r"#I>;
 
-def GPR64 : RegisterClass<"MMIX", [i64], 64,
+// Class intersections depend on physical registers and spill properties, not
+// value types. All views must accept the same scalar types; keep the preferred
+// type first. Even raw binary32 values use full-octa spills.
+let Size = 64 in {
+def GPR64 : RegisterClass<"MMIX", [i64, f64, f32], 64,
                           (sequence "R%u", 0, 255)>;
 
 // MMIX uses the same 64-bit registers for integer and floating-point values.
-def FPR64 : RegisterClass<"MMIX", [f64], 64,
+def FPR64 : RegisterClass<"MMIX", [f64, i64, f32], 64,
                           (sequence "R%u", 0, 255)>;
 
 // CodeGen uses only registers whose roles are fixed by the MMIX C ABI.
 // Caller-clobbered globals precede hardware-preserved locals in allocation
 // order. The architectural classes above remain complete for MC operands.
-def GPR64CodeGen : RegisterClass<"MMIX", [i64], 64,
+def GPR64CodeGen : RegisterClass<"MMIX", [i64, f64, f32], 64,
     (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
 
-def FPR64CodeGen : RegisterClass<"MMIX", [f64], 64,
+def FPR64CodeGen : RegisterClass<"MMIX", [f64, i64, f32], 64,
     (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
 
 // Binary32 values held in registers are raw low-tetra encodings. Numerical
 // operations first convert them to FPR64CodeGen through short-float memory.
-def F32BitsCodeGen : RegisterClass<"MMIX", [f32], 64,
+def F32BitsCodeGen : RegisterClass<"MMIX", [f32, i64, f64], 64,
     (add (sequence "R%u", 250, 231), (sequence "R%u", 0, 30))>;
+}
 
 // MMIX special-register encodings are the values accepted by GET and PUT.
 class MMIXSpecialReg<bits<5> Encoding, string Name,

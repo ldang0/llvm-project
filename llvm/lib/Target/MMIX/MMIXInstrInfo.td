@@ -928,18 +928,18 @@ defm : MMIXLoadPatterns<load, LDOU, LDOUI>;
 
 multiclass MMIXStorePatterns<PatFrag StoreOp, Instruction RegOp,
                              Instruction ImmOp> {
-  def : Pat<(StoreOp GPR64:$value, GPR64:$base),
+  def : Pat<(StoreOp (i64 GPR64:$value), GPR64:$base),
             (ImmOp GPR64:$value, GPR64:$base, 0)>;
-  def : Pat<(StoreOp GPR64:$value, (i64 frameindex:$base)),
+  def : Pat<(StoreOp (i64 GPR64:$value), (i64 frameindex:$base)),
             (ImmOp GPR64:$value, (i64 (to_tframeindex $base)), 0)>;
-  def : Pat<(StoreOp GPR64:$value,
+  def : Pat<(StoreOp (i64 GPR64:$value),
                      (add GPR64:$base, mmix_uimm8:$offset)),
             (ImmOp GPR64:$value, GPR64:$base, mmix_uimm8:$offset)>;
-  def : Pat<(StoreOp GPR64:$value,
+  def : Pat<(StoreOp (i64 GPR64:$value),
                      (add (i64 frameindex:$base), mmix_uimm8:$offset)),
             (ImmOp GPR64:$value, (i64 (to_tframeindex $base)),
                    mmix_uimm8:$offset)>;
-  def : Pat<(StoreOp GPR64:$value, (add GPR64:$base, GPR64:$offset)),
+  def : Pat<(StoreOp (i64 GPR64:$value), (add GPR64:$base, GPR64:$offset)),
             (RegOp GPR64:$value, GPR64:$base, GPR64:$offset)>;
 }
 
@@ -1724,19 +1724,19 @@ multiclass MMIXShortFloatLoadPatterns<Instruction RegOp, Instruction ImmOp> {
 }
 
 multiclass MMIXShortFloatStorePatterns<Instruction RegOp, Instruction ImmOp> {
-  def : Pat<(truncstoref32 FPR64:$value, GPR64:$base),
+  def : Pat<(truncstoref32 (f64 FPR64:$value), GPR64:$base),
             (ImmOp FPR64:$value, GPR64:$base, 0)>;
-  def : Pat<(truncstoref32 FPR64:$value, (i64 frameindex:$base)),
+  def : Pat<(truncstoref32 (f64 FPR64:$value), (i64 frameindex:$base)),
             (ImmOp FPR64:$value, (i64 (to_tframeindex $base)), 0)>;
-  def : Pat<(truncstoref32 FPR64:$value,
+  def : Pat<(truncstoref32 (f64 FPR64:$value),
                           (add GPR64:$base, mmix_uimm8:$offset)),
             (ImmOp FPR64:$value, GPR64:$base, mmix_uimm8:$offset)>;
-  def : Pat<(truncstoref32 FPR64:$value,
+  def : Pat<(truncstoref32 (f64 FPR64:$value),
                           (add (i64 frameindex:$base),
                                mmix_uimm8:$offset)),
             (ImmOp FPR64:$value, (i64 (to_tframeindex $base)),
                    mmix_uimm8:$offset)>;
-  def : Pat<(truncstoref32 FPR64:$value,
+  def : Pat<(truncstoref32 (f64 FPR64:$value),
                           (add GPR64:$base, GPR64:$offset)),
             (RegOp FPR64:$value, GPR64:$base, GPR64:$offset)>;
 }

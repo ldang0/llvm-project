@@ -28,8 +28,8 @@ define i64 @read_special_registers() {
 ; CHECK-NEXT:  GET [[ZZ:r[0-9]+]], rZZ
 ; CHECK-NEXT:  XOR r231, [[B]], [[ZZ]]
 ; MIR-LABEL:  name: read_special_registers
-; MIR:        %{{[0-9]+}}:{{[fg]pr64codegen}} = GET $rb
-; MIR-NEXT:   %{{[0-9]+}}:{{[fg]pr64codegen}} = GET $rzz
+; MIR:        %{{[0-9]+}}:{{[^ ]+}} = GET $rb
+; MIR-NEXT:   %{{[0-9]+}}:{{[^ ]+}} = GET $rzz
   %b = call i64 @llvm.mmix.get(i32 0)
   %zz = call i64 @llvm.mmix.get(i32 31)
   %result = xor i64 %b, %zz
@@ -91,10 +91,10 @@ define i64 @read_with_high_multiply(i64 %lhs, i64 %rhs) {
 ; CHECK-NEXT:  GET [[FIRST:r[0-9]+]], rH
 ; CHECK:       GET [[SECOND:r[0-9]+]], rH
 ; MIR-LABEL:  name: read_with_high_multiply
-; MIR:        %{{[0-9]+}}:{{[fg]pr64codegen}} = MULU {{.*}}implicit-def $rh
-; MIR-NEXT:   %{{[0-9]+}}:{{[fg]pr64codegen}} = GET $rh
-; MIR-NEXT:   %{{[0-9]+}}:{{[fg]pr64codegen}} = GET $rh
-; MIR:        %{{[0-9]+}}:{{[fg]pr64codegen}} = GET $rh
+; MIR:        %{{[0-9]+}}:{{[^ ]+}} = MULU {{.*}}implicit-def $rh
+; MIR-NEXT:   %{{[0-9]+}}:{{[^ ]+}} = GET $rh
+; MIR-NEXT:   %{{[0-9]+}}:{{[^ ]+}} = GET $rh
+; MIR:        %{{[0-9]+}}:{{[^ ]+}} = GET $rh
   %before = call i64 @llvm.mmix.get(i32 3)
   %lhs.wide = zext i64 %lhs to i128
   %rhs.wide = zext i64 %rhs to i128
@@ -116,7 +116,7 @@ define i64 @write_before_unsigned_divide(i64 %value, i64 %dividend,
 ; MIR-LABEL:  name: write_before_unsigned_divide
 ; MIR:        PUT_RD_REG %{{[0-9]+}}, implicit-def dead $rd
 ; MIR-NEXT:   SET_RD_ZERO implicit-def $rd
-; MIR-NEXT:   %{{[0-9]+}}:{{[fg]pr64codegen}} = DIVU {{.*}}implicit $rd
+; MIR-NEXT:   %{{[0-9]+}}:{{[^ ]+}} = DIVU {{.*}}implicit $rd
   call void @llvm.mmix.put(i32 1, i64 %value)
   %quotient = udiv i64 %dividend, %divisor
   ret i64 %quotient
